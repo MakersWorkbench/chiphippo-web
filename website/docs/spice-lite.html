@@ -238,7 +238,8 @@ answer is the same however often the desk is redrawn.</li>
 <a href="logic-analyzer.html">logic analyzer</a> is drawn as its wire&#39;s voltage, so a
 charging capacitor curves up toward its supply instead of stepping from LOW
 to HIGH, and a 74LS signal swings between about 0.2 V and 4.4 V. The
-channel&#39;s value reads in volts.</li>
+channel&#39;s value reads in volts. The <strong>Settle gap</strong> also sets what the
+analyzer&#39;s Transitions view counts as a change in a voltage.</li>
 </ul>
 <p>Slow curves cost nothing to run: Spice Lite calculates <em>when</em> a node will
 cross a threshold rather than stepping toward it, so a 10-second RC delay
@@ -834,7 +835,9 @@ bounce. With it off, or on the standard engine, every switch closes cleanly.</p>
 <li><p><strong>Settle gap</strong>: how close a capacitor&#39;s voltage has to get to its final
 value before the probe and the analyzer stop redrawing it (an input watching
 it is told the moment it crosses, whatever this says). 1 % is about five time
-constants. It never holds the circuit up.</p>
+constants. It never holds the circuit up. The analyzer&#39;s Transitions view
+uses the same percentage, of a lane&#39;s full scale, as the smallest change in a
+voltage worth a slice of its own.</p>
 </li>
 <li><p><strong>Switch bounce</strong>: On or Off (Off by default) — see
 <a href="#switch-bounce">Switch bounce</a>.</p>

@@ -237,6 +237,19 @@ test("a steady LED is drawn as the tick left it — nothing averaged", () => {
   cap.stop();
 });
 
+/** The ticks from an edit about to be made on: a reader called after it.
+    Under Spice Lite the board as it stood runs on to the edit's moment first
+    (SimController's #runOnTo) — that tick, on the old netlist, is the board
+    BEFORE the edit, and left out. */
+function afterEdit(ticks) {
+  const from = ticks.length;
+  const was = ticks.at(-1)?.netlist;
+  return () => {
+    const after = ticks.slice(from);
+    return after[0]?.netlist === was ? after.slice(1) : after;
+  };
+}
+
 /** A push button from node N (a 10 kΩ pull-up) to ground, N into a 74LS04
     input: N's level in every tick after the press. */
 function pressButton({ bounce }) {
@@ -257,12 +270,12 @@ function pressButton({ bounce }) {
   const cap = capture();
   sim.start();
   clock.advance(20);
-  const from = cap.ticks.length;
+  const from = afterEdit(cap.ticks);
   window.dispatchEvent(new CustomEvent("chiphippo:part-state", { detail: { id: "s1", ref: "sw-push", state: { pressed: true } } })); // prettier-ignore
   // Past the bounce, and past the next frame's publish.
   clock.advance(100);
-  const levels = cap.ticks.slice(from).map((t) => t.netLevels.get(t.netlist.netOfPoint.get(b.at(u.get(1))))); // prettier-ignore
-  const own = cap.ticks.slice(from).filter((t) => t.ownNetlist).length;
+  const levels = from().map((t) => t.netLevels.get(t.netlist.netOfPoint.get(b.at(u.get(1))))); // prettier-ignore
+  const own = from().filter((t) => t.ownNetlist).length;
   const end = cap.states.at(-1);
   sim.stop();
   cap.stop();
@@ -311,11 +324,11 @@ test("Switch bounce: a slide switch's old throw never re-makes as its new one bo
   const cap = capture();
   sim.start();
   clock.advance(20);
-  const from = cap.ticks.length;
+  const from = afterEdit(cap.ticks);
   desk.setComponentParams("s1", { pos: "2" });
   window.dispatchEvent(new CustomEvent("chiphippo:doc-changed"));
   clock.advance(20);
-  const after = cap.ticks.slice(from);
+  const after = from();
   const level = (t) =>
     t.netLevels.get(t.netlist.netOfPoint.get(b.at(u.get(1))));
   assert.ok(after.filter((t) => t.ownNetlist).length >= 3, "it bounced");

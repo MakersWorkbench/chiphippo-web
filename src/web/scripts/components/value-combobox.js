@@ -52,6 +52,12 @@
 // and the (i) goes, since the value is now standard. The hint is re-asked
 // after every commit, and stands down while the box is red — a value that
 // does not read has to be fixed before it can be near anything.
+//
+// THE ADVICE: a caller's `advice` says something about the value the part
+// holds that is worth knowing but is no fault — a clock's Custom rate past
+// what most desks can tick in real time. The same amber (i) and card, holding
+// that one sentence; re-asked after every commit, standing down while the box
+// is red.
 
 import { el } from "../dom.js";
 import { buildInfoButton } from "./info-button.js";
@@ -96,6 +102,9 @@ const CHEVRON_DOWN =
  *   null when it is one (see the note at the top).
  * @param {string} [opts.hintLabel] - the (i)'s name and tooltip.
  * @param {string} [opts.hintTitle] - the line heading its card.
+ * @param {() => (string|null)} [opts.advice] - a sentence about the value
+ *   the part holds now, or null (see the note at the top).
+ * @param {string} [opts.adviceLabel] - the advice (i)'s name and tooltip.
  * @returns {HTMLElement}
  */
 export function buildValueCombobox({
@@ -110,6 +119,8 @@ export function buildValueCombobox({
   hint = null,
   hintLabel = "",
   hintTitle = "",
+  advice = null,
+  adviceLabel = "",
 }) {
   const id = `value-combobox-${++nextId}`;
   const bare = options.length === 0;
@@ -167,13 +178,31 @@ export function buildValueCombobox({
       })
     : null;
   hintButton?.classList.add("info-btn--advisory", "properties-hint-btn");
+  const advising = typeof advice === "function";
+  const adviceCard = advising
+    ? el("div", {
+        class: "info-card properties-hint properties-advice",
+        id: `${id}-advice`,
+        role: "note",
+        hidden: true,
+      })
+    : null;
+  const adviceButton = advising
+    ? buildInfoButton({
+        target: adviceCard,
+        label: adviceLabel,
+        onToggle: (shown) => shown && placeCard(adviceButton, adviceCard),
+      })
+    : null;
+  adviceButton?.classList.add("info-btn--advisory", "properties-hint-btn");
+  const buttons = [hintButton, adviceButton].filter(Boolean);
   const root = el("span", { class: "properties-combo" }, [
-    hinting
-      ? el("span", { class: "properties-combo-line" }, [field, hintButton])
+    buttons.length
+      ? el("span", { class: "properties-combo-line" }, [field, ...buttons])
       : field,
     note,
     list,
-    ...(hinting ? [hintCard] : []),
+    ...[hintCard, adviceCard].filter(Boolean),
   ]);
 
   let committed = text; // the text of the value the part holds
@@ -190,13 +219,26 @@ export function buildValueCombobox({
 
   const isOpen = () => !list.hidden;
 
-  /** The hint's card, under its (i) and kept on screen. */
-  function placeHint() {
-    const at = hintButton.getBoundingClientRect();
-    const width = hintCard.offsetWidth || 0;
+  /** An (i)'s card, under it and kept on screen. */
+  function placeCard(button, card) {
+    const at = button.getBoundingClientRect();
+    const width = card.offsetWidth || 0;
     const left = Math.max(8, Math.min(at.right - width, window.innerWidth - width - 8)); // prettier-ignore
-    hintCard.style.left = `${left}px`;
-    hintCard.style.top = `${at.bottom + 4}px`;
+    card.style.left = `${left}px`;
+    card.style.top = `${at.bottom + 4}px`;
+  }
+  const placeHint = () => placeCard(hintButton, hintCard);
+
+  /** Re-ask the advice: the (i) and its sentence, or neither. */
+  function refreshAdvice() {
+    if (!advising) return;
+    const text =
+      input.getAttribute("aria-invalid") === "true" ? null : advice();
+    if (!text && !adviceCard.hidden) adviceButton.click();
+    adviceButton.hidden = !text;
+    adviceCard.replaceChildren(
+      ...(text ? [el("span", { class: "properties-hint-title", text })] : []),
+    );
   }
 
   /** Shut the hint's card the way its (i) does, so its dismissal listeners
@@ -317,6 +359,7 @@ export function buildValueCombobox({
     say(null, false);
     onCommit(option.commit);
     refreshHint();
+    refreshAdvice();
   }
 
   function commitTyped() {
@@ -326,6 +369,7 @@ export function buildValueCombobox({
     if (!result.ok) {
       say(result.message, true);
       refreshHint();
+      refreshAdvice();
       return;
     }
     input.value = result.text;
@@ -334,6 +378,7 @@ export function buildValueCombobox({
     say(result.warning ?? null, false);
     onCommit(result.commit);
     refreshHint();
+    refreshAdvice();
   }
 
   input.addEventListener("input", () => open(input.value));
@@ -375,5 +420,6 @@ export function buildValueCombobox({
     }
   });
   refreshHint();
+  refreshAdvice();
   return root;
 }

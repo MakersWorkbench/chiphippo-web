@@ -236,13 +236,25 @@ A clock&#39;s own pause belongs to the run, like its phase: <strong>Run</strong>
 starts every clock going, <strong>Step</strong> passes a paused clock by, and resuming
 the transport after <strong>Pause</strong> leaves it held.</p>
 </li>
+<li><p><strong>Custom…</strong> — any other rate, from <strong>1 Hz to 10 kHz</strong>. Picking it opens a
+<strong>Custom rate</strong> box under the list, filled with the clock&#39;s present rate;
+type the rate and press Enter (or leave the box). Plain hertz, a <code>k</code> for
+kilohertz, and the unit are all fine: <code>1500</code>, <code>1.5k</code>, <code>1.5 kHz</code> and
+<code>1500 Hz</code> are the same rate. A rate that doesn&#39;t read, or lies outside the
+range, turns the box red and says why, and the clock keeps the rate it had.
+The clock runs exactly as a listed rate does — Pause, Step and the speed
+button included. Past <strong>2 kHz</strong> an amber <strong>(i)</strong> appears beside the box: a
+desk may not be able to keep up with an edge that often, and the
+simulation then slows itself as necessary (the speed button shows the speed
+it is actually managing — see <a href="simulation.html">Simulation</a>).</p>
+</li>
 <li><p><strong>Manual</strong> — click-to-toggle. No timer runs it; instead, while the
 simulation is running, clicking the brick&#39;s body flips <code>out</code> from LOW to
 HIGH (or back) once per click — handy for single-stepping a counter or
 flip-flop by hand and watching each edge land.</p>
 </li>
 </ul>
-<p>The rate dropdown, like the PSU&#39;s voltage one, is a live setting — it applies
+<p>The rate, like the PSU&#39;s voltage, is a live setting — it applies
 immediately and stays available while running, so you can retune a clock&#39;s
 speed mid-simulation.</p>
 <p>The card&#39;s <strong>Wave type</strong> is <strong>Square</strong> (the default) or <strong>PWM</strong>. A PWM clock

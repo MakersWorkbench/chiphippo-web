@@ -335,7 +335,8 @@ const refusedMessage = (field) =>
 /**
  * A combo field's reason, in words: a value that does not read, a wrong unit,
  * a value out of range, a part number that is not one — or, as a warning, a
- * transistor's part number that names another type.
+ * transistor's part number that names another type, or as advice, a clock's
+ * Custom rate past what a desk may keep up with.
  * @param {{error?: string, code?: string, unit?: string, got?: string,
  *   min?: string, max?: string, part?: string, type?: string}} m
  */
@@ -349,6 +350,8 @@ function comboMessage(m) {
       return t("properties.combo.notPart");
     case "foreignPart":
       return t(`properties.combo.foreignPart.${m.type}`, { part: m.part });
+    case "fastClock":
+      return t("properties.combo.fastClock");
     default:
       // "notValue", or a required value left empty.
       return t(`properties.combo.notValue.${m.unit ?? "ohm"}`);
@@ -536,6 +539,7 @@ function buildRow(field, value, onChange, onAction, ctx) {
       figureLabel: fieldLabel,
       message: comboMessage,
       toggleLabel: t("properties.combo.show"),
+      adviceLabel: t("properties.combo.adviceLabel"),
     });
   }
   if (field.type === "separator") {

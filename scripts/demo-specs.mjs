@@ -1128,6 +1128,38 @@ export const DEMOS = Object.freeze([
     },
   },
 
+  {
+    ref: "74LS92",
+    title: "Divide-by-12 ripple counter",
+    note:
+      "74LS92 — Divide-by-twelve ripple counter\n" +
+      "A ÷2 on QA and a ÷6 on QB–QD. Wire QA\n" +
+      "into CKB — the blue jumper — for ÷12. The\n" +
+      "÷6 is a ÷3 then a ÷2, so QB–QD skip 3 and\n" +
+      "7, and QD is a square wave at a twelfth\n" +
+      "of the clock. RESET forces 0.",
+    inputs: [{ label: "RESET", pins: [6] }],
+    defaults: [false], // counting
+    links: [[12, 1]], // QA → CKB: the ripple that makes it ÷12
+    ties: [{ pins: [7], rail: "+" }], // R0(2) high, so RESET alone gates the reset
+    clock: { hz: 2, pins: [14] }, // CKA
+    leds: [
+      { pin: 12, label: "QA", color: "green" },
+      { pin: 11, label: "QB", color: "green" },
+      { pin: 9, label: "QC", color: "green" },
+      { pin: 8, label: "QD", color: "green" },
+    ],
+    sequential: {
+      // Falling-edge, like the '90. TI SDLS940A's count sequence: the ÷6
+      // counts (QD QC QB) 000 001 010 100 101 110.
+      expect: (edges) => {
+        const n = (edges - 1) % 12;
+        const v = n >> 1;
+        return [Boolean(n & 1), v % 3 === 1, v % 3 === 2, v >= 3];
+      },
+    },
+  },
+
   // ── Shift register ─────────────────────────────────────────────────────
   {
     ref: "74LS164",

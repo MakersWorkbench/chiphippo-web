@@ -149,12 +149,23 @@ Right-click a clock brick and choose **Properties…** to set its rate:
   A clock's own pause belongs to the run, like its phase: **Run** always
   starts every clock going, **Step** passes a paused clock by, and resuming
   the transport after **Pause** leaves it held.
+- **Custom…** — any other rate, from **1 Hz to 10 kHz**. Picking it opens a
+  **Custom rate** box under the list, filled with the clock's present rate;
+  type the rate and press Enter (or leave the box). Plain hertz, a `k` for
+  kilohertz, and the unit are all fine: `1500`, `1.5k`, `1.5 kHz` and
+  `1500 Hz` are the same rate. A rate that doesn't read, or lies outside the
+  range, turns the box red and says why, and the clock keeps the rate it had.
+  The clock runs exactly as a listed rate does — Pause, Step and the speed
+  button included. Past **2 kHz** an amber **(i)** appears beside the box: a
+  desk may not be able to keep up with an edge that often, and the
+  simulation then slows itself as necessary (the speed button shows the speed
+  it is actually managing — see [Simulation](simulation.md)).
 - **Manual** — click-to-toggle. No timer runs it; instead, while the
   simulation is running, clicking the brick's body flips `out` from LOW to
   HIGH (or back) once per click — handy for single-stepping a counter or
   flip-flop by hand and watching each edge land.
 
-The rate dropdown, like the PSU's voltage one, is a live setting — it applies
+The rate, like the PSU's voltage, is a live setting — it applies
 immediately and stays available while running, so you can retune a clock's
 speed mid-simulation.
 

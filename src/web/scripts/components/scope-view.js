@@ -28,6 +28,14 @@
 // charging capacitor is seen to curve rather than to step. It never drives or stalls the sim — it only reads the per-tick
 // broadcast, so the analyzer adds nothing to the settle loop.
 //
+// The lanes' x axis is one of two modes over the same columns
+// (model/scope-axis.js, the header's Timing | Transitions picker): TIMING puts
+// each column at its simulated moment, at a per-division scale (− / + / Fit,
+// ⌘/Ctrl+wheel); TRANSITIONS gives each change a slice and folds a steady run
+// into a marked break. Only the stretch of the lanes on screen (and a
+// viewport either side) is drawn, so a fine scale over a long trace costs
+// what a coarse one does.
+//
 // Channel resolution and bus decode are the pure helpers in
 // model/scope-recorder.js; channels persist in the document (doc.scopeChannels)
 // so a saved design keeps its instrument setup. All channel mutations route
@@ -36,6 +44,20 @@
 import { clear, el } from "../dom.js";
 import { formatNumber, t } from "../i18n.js";
 import { parseBusName } from "../model/desk-doc.js";
+import {
+  BREAK_PX,
+  SEC_PER_DIV,
+  columnAtX,
+  columnTimes,
+  fitSecPerDiv,
+  joined,
+  minSecPerDiv,
+  normalizeAxisMode,
+  stepSecPerDiv,
+  timingAxis,
+  transitionAxis,
+} from "../model/scope-axis.js";
+import { formatSeconds } from "../model/timing-summary.js";
 import { WIRE_COLORS } from "../model/wire-colors.js";
 import {
   ScopeRecorder,
@@ -46,15 +68,23 @@ import {
   readVolts,
 } from "../model/scope-recorder.js";
 import { PopupManager } from "../popup-manager.js";
+import {
+  DEFAULT_GAP_PERCENT,
+  normalizeSpiceConfig,
+} from "../sim/spice/config.js";
 import { beginPointerGesture } from "./pointer-gesture.js";
+import { buildSegmented } from "./segmented-picker.js";
 
 const SVGNS = "http://www.w3.org/2000/svg";
 
 /** Lane geometry, in CSS px. */
 const LANE_H = 46; // one channel row
 const WAVE_PAD = 10; // top/bottom inset within a lane
-const PX_PER_TICK = 10; // one tick column's width
 const DEFAULT_FULL_SCALE = 5; // volts, for a voltage lane with no supply named
+const FALLBACK_VIEW_PX = 800; // the lanes' width when none is laid out (hidden, jsdom)
+const EDGE_PAD = 2; // px past the drawn window an off-screen point is held at
+const WHEEL_STEP = 40; // wheel delta (px) that makes one zoom step
+const EXPORT_MAX_PX = 16000; // past this an export is what is on screen
 
 /** Panel sizing (the bottom-docked height, in CSS px). */
 const DEFAULT_PANEL_H = 280; // matches the .scope-panel CSS fallback
@@ -125,7 +155,8 @@ export class ScopeView {
   #body;
   #gutter;
   #lanes; // the horizontally-scrolling lanes viewport
-  #svg;
+  #track; // the lanes' full width and height, inside #lanes (what scrolls)
+  #svg; // the drawn window of the track, positioned over its stretch of it
   #empty;
   #delta; // the cursor Δ readout in the header
   #chrome = []; // built-once header/resize labels, for relocalize()
@@ -144,6 +175,18 @@ export class ScopeView {
   #renderScheduled = false;
   #reorder = null; // a gutter row being dragged to another place (#onChanDown)
 
+  #axisMode; // "timing" | "transitions" (model/scope-axis.js)
+  #onAxisModeChange;
+  #axisSlot; // holds the Timing | Transitions picker (rebuilt on relocalize)
+  #zoom = {}; // the timing scale's header controls: group, out, perDiv, in, fit
+  #secPerDiv = null; // the chosen timing scale; null = fit the trace
+  #gapPercent = DEFAULT_GAP_PERCENT; // what counts as a change (Spice Lite's gap)
+  #now = -Infinity; // the latest moment this run has reported (sim-state `at`)
+  #axis = null; // the last render's axis (scope-axis.js, plus its mode)
+  #win = { x0: 0, x1: 0 }; // the stretch of the track drawn, track px
+  #anchor = null; // a zoom's {t, px}: keep moment t (s after t0) at px
+  #wheelAcc = 0; // ⌘/Ctrl+wheel travel not yet turned into a zoom step
+
   /**
    * @param {HTMLElement} container - the app shell (#app, a flex column); the
    *   panel docks along its bottom edge.
@@ -157,6 +200,8 @@ export class ScopeView {
    * @param {number} [opts.height] - restored panel height in CSS px.
    * @param {(height:number)=>void} [opts.onHeightChange] - persist the height
    *   after a resize drag settles.
+   * @param {string} [opts.axisMode] - the restored x-axis mode.
+   * @param {(mode:string)=>void} [opts.onAxisModeChange] - persist the mode.
    */
   constructor(
     container,
@@ -169,6 +214,8 @@ export class ScopeView {
       onMoveChannel,
       height,
       onHeightChange,
+      axisMode,
+      onAxisModeChange,
     },
   ) {
     this.#doc = deskDoc;
@@ -178,6 +225,8 @@ export class ScopeView {
     this.#onRemoveChannel = onRemoveChannel;
     this.#onMoveChannel = onMoveChannel;
     this.#onHeightChange = onHeightChange;
+    this.#axisMode = normalizeAxisMode(axisMode);
+    this.#onAxisModeChange = onAxisModeChange;
 
     this.#buildDom();
     container.append(this.#el);
@@ -186,8 +235,11 @@ export class ScopeView {
     // EVERY tick is a column: `sim-tick` is each one (a batch runs many
     // between two views' updates); `sim-state` only says when a run ends.
     window.addEventListener("chiphippo:sim-tick", (e) => this.#onSim(e.detail));
+    // …and, while one runs, how far it has got: the timing axis reaches the
+    // moment the board was last shown at, not just the last tick's.
     window.addEventListener("chiphippo:sim-state", (e) => {
       if (e.detail.mode === "stopped") this.#onSim(e.detail);
+      else this.#onShownAt(e.detail.at);
     });
     // The channel list / bus definitions may have changed — repaint the gutter.
     window.addEventListener("chiphippo:doc-changed", () => {
@@ -233,6 +285,49 @@ export class ScopeView {
       onClick: () => this.#export(true),
     });
 
+    // The timing scale: − / readout / + / Fit, shown in Timing mode only.
+    const zoomOut = el("button", {
+      class: "scope-btn scope-zoom-btn",
+      type: "button",
+      text: "−",
+      title: t("scope.zoomOut"),
+      "aria-label": t("scope.zoomOut"),
+      onClick: () => this.#zoomBy(1),
+    });
+    const zoomIn = el("button", {
+      class: "scope-btn scope-zoom-btn",
+      type: "button",
+      text: "+",
+      title: t("scope.zoomIn"),
+      "aria-label": t("scope.zoomIn"),
+      onClick: () => this.#zoomBy(-1),
+    });
+    const fitBtn = el("button", {
+      class: "scope-btn",
+      type: "button",
+      text: t("scope.fit"),
+      title: t("scope.fitTitle"),
+      onClick: () => this.#fit(),
+    });
+    const perDiv = el("span", { class: "scope-per-div", text: "" });
+    this.#zoom = {
+      group: el("span", { class: "scope-zoom" }, [
+        zoomOut,
+        perDiv,
+        zoomIn,
+        fitBtn,
+        el("span", { class: "scope-sep" }),
+      ]),
+      out: zoomOut,
+      in: zoomIn,
+      fit: fitBtn,
+      perDiv,
+    };
+    // A holder, as the AI panel's Build/Review: the picker's labels are read
+    // when it is built, so a language change rebuilds it into the same slot.
+    this.#axisSlot = el("div", { class: "scope-axis" });
+    this.#paintAxisPicker();
+
     const title = el("span", { class: "scope-title", text: t("scope.title") });
     const closeBtn = el("button", {
       class: "scope-close",
@@ -244,10 +339,12 @@ export class ScopeView {
     });
     const header = el("div", { class: "scope-header" }, [
       title,
+      this.#axisSlot,
       el("div", { class: "scope-tools" }, [
         addBtn,
         clearBtn,
         el("span", { class: "scope-sep" }),
+        this.#zoom.group,
         svgBtn,
         pngBtn,
         this.#delta,
@@ -261,8 +358,12 @@ export class ScopeView {
     // takes its pointer capture on the GUTTER, not on the row it started on.
     this.#gutter.addEventListener("pointerdown", (e) => this.#onChanDown(e));
     this.#svg = svg("svg", { class: "scope-svg" });
-    this.#lanes = el("div", { class: "scope-lanes" }, [this.#svg]);
+    this.#track = el("div", { class: "scope-track" }, [this.#svg]);
+    this.#lanes = el("div", { class: "scope-lanes" }, [this.#track]);
     this.#lanes.addEventListener("scroll", () => this.#onScroll());
+    this.#lanes.addEventListener("wheel", (e) => this.#onWheel(e), {
+      passive: false,
+    });
     this.#svg.addEventListener("pointerdown", (e) => this.#onCursorDown(e));
     this.#svg.addEventListener("pointermove", (e) => this.#onCursorMove(e));
     this.#svg.addEventListener("pointerup", (e) => this.#onCursorUp(e));
@@ -311,6 +412,9 @@ export class ScopeView {
       [clearBtn, () => t("common.clear"), () => t("scope.clearTitle")],
       [svgBtn, null, () => t("scope.exportSvg")],
       [pngBtn, null, () => t("scope.exportPng")],
+      [zoomOut, null, () => t("scope.zoomOut")],
+      [zoomIn, null, () => t("scope.zoomIn")],
+      [fitBtn, () => t("scope.fit"), () => t("scope.fitTitle")],
       [title, () => t("scope.title"), null],
       [closeBtn, null, () => t("scope.close")],
       [this.#resize, null, () => t("scope.resize")],
@@ -334,6 +438,7 @@ export class ScopeView {
       }
     }
     this.#el.setAttribute("aria-label", t("scope.title"));
+    this.#paintAxisPicker();
     this.#empty.replaceChildren(
       t("scope.emptyBefore"),
       el("button", {
@@ -349,6 +454,50 @@ export class ScopeView {
 
   get element() {
     return this.#el;
+  }
+
+  /** The x-axis mode the lanes are drawn in. */
+  get axisMode() {
+    return this.#axisMode;
+  }
+
+  /**
+   * Draw the lanes in `mode` ("timing" | "transitions"). The recording is
+   * the same in both; only where its columns are put changes.
+   */
+  setAxisMode(mode) {
+    const next = normalizeAxisMode(mode);
+    if (next === this.#axisMode) return;
+    this.#axisMode = next;
+    this.#paintAxisPicker();
+    this.#onAxisModeChange?.(next);
+    if (this.visible) this.#render();
+  }
+
+  /**
+   * Follow Settings ▸ Spice Lite: its settle gap is what Transitions mode
+   * counts as no change in a voltage. Read live — it is how the trace is
+   * drawn, not how the run was simulated.
+   */
+  setSpiceLite(config) {
+    const gap = normalizeSpiceConfig(config).gapPercent;
+    if (gap === this.#gapPercent) return;
+    this.#gapPercent = gap;
+    if (this.visible && this.#axisMode === "transitions") this.#render();
+  }
+
+  #paintAxisPicker() {
+    this.#axisSlot.replaceChildren(
+      buildSegmented({
+        options: [
+          { value: "timing", label: t("scope.axisTiming") },
+          { value: "transitions", label: t("scope.axisTransitions") },
+        ],
+        value: this.#axisMode,
+        ariaLabel: t("scope.axisLabel"),
+        onPick: (mode) => this.setAxisMode(mode),
+      }),
+    );
   }
 
   get visible() {
@@ -442,6 +591,7 @@ export class ScopeView {
       this.#cursorA = null;
       this.#cursorB = null;
       this.#follow = true;
+      this.#now = -Infinity;
     }
     // Nothing to watch, nothing to record: a run with no channels costs the
     // analyzer nothing per tick. (Columns are keyed by channel, so the first
@@ -455,6 +605,14 @@ export class ScopeView {
       at: detail.at,
     });
     if (this.visible) this.#scheduleRender();
+  }
+
+  /** A running board was shown at `at` (simulated seconds): the trace now
+      reaches that far, whether or not a tick has landed there. */
+  #onShownAt(at) {
+    if (!Number.isFinite(at) || at <= this.#now) return;
+    this.#now = at;
+    if (this.visible && this.#recorder.size) this.#scheduleRender();
   }
 
   /** Resolve every channel to its cell value — and, for a net whose voltage
@@ -489,6 +647,7 @@ export class ScopeView {
 
   #clearTrace() {
     this.#recorder.reset();
+    this.#now = -Infinity;
     this.#cursorA = null;
     this.#cursorB = null;
     this.#render();
@@ -518,13 +677,14 @@ export class ScopeView {
     const channels = this.#channels();
     this.#empty.hidden = channels.length > 0;
     this.#body.hidden = channels.length === 0;
-    if (!channels.length) return;
+    if (!channels.length) {
+      this.#zoom.group.hidden = true; // no trace, no scale
+      return;
+    }
     this.#renderGutter(channels);
     this.#renderLanes(channels);
     this.#renderDelta();
-    if (this.#follow && this.#lastMode !== "stopped") {
-      this.#lanes.scrollLeft = this.#lanes.scrollWidth;
-    }
+    this.#renderZoom();
   }
 
   #renderGutter(channels) {
@@ -589,13 +749,31 @@ export class ScopeView {
   }
 
   #renderLanes(channels) {
-    const width = Math.max(1, this.#recorder.size) * PX_PER_TICK;
+    const axis = (this.#axis = this.#axisOf(channels));
+    const width = Math.max(1, Math.ceil(axis.width));
     const height = Math.max(1, channels.length) * LANE_H;
+    this.#track.style.width = `${width}px`;
+    this.#track.style.height = `${height}px`;
+    // Scrolled before drawing: what is drawn is the stretch the scroll shows.
+    const view = this.#lanes.clientWidth;
+    if (this.#anchor) {
+      // A zoom keeps the moment it was made about where it was on screen.
+      const { t: at, px } = this.#anchor;
+      this.#anchor = null;
+      this.#lanes.scrollLeft = at * axis.pxPerSec - px;
+      this.#follow =
+        this.#lanes.scrollLeft + view >= this.#lanes.scrollWidth - 4;
+    } else if (this.#follow && this.#lastMode !== "stopped") {
+      this.#lanes.scrollLeft = this.#lanes.scrollWidth;
+    }
+    const win = (this.#win = this.#windowOf(width));
+    const w = Math.max(1, win.x1 - win.x0);
     clear(this.#svg);
-    this.#svg.setAttribute("width", String(width));
+    this.#svg.setAttribute("width", String(w));
     this.#svg.setAttribute("height", String(height));
-    this.#svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    for (const node of this.#buildLaneNodes(channels, { width, height })) {
+    this.#svg.setAttribute("viewBox", `${win.x0} 0 ${w} ${height}`);
+    this.#svg.style.left = `${win.x0}px`;
+    for (const node of this.#buildLaneNodes(channels, { height })) {
       this.#svg.append(node);
     }
     // The dragged channel's lane is shaded in the row it would land in, behind
@@ -605,9 +783,9 @@ export class ScopeView {
       this.#svg.insertBefore(
         svg("rect", {
           class: "scope-lane-lift",
-          x: 0,
+          x: win.x0,
           y: at * LANE_H,
-          width,
+          width: w,
           height: LANE_H,
         }),
         this.#svg.firstChild?.nextSibling ?? null,
@@ -616,14 +794,88 @@ export class ScopeView {
   }
 
   /**
-   * Build every SVG child of the lanes surface. `colorOf` maps a token/color to
-   * an applied color — identity for live (CSS resolves `var(--…)` in a style),
-   * or a resolved hex for export. Reused by the export path.
+   * Where every retained column goes, in the current mode (scope-axis.js):
+   * TIMING at the chosen scale — or, at Fit, the finest that shows the whole
+   * trace — never finer than the track can hold; TRANSITIONS by change,
+   * against the Spice Lite gap of the lanes' full scale.
    */
-  #buildLaneNodes(channels, { width, height, colorOf = (c) => c } = {}) {
+  #axisOf(channels) {
+    const cols = this.#recorder.columns();
+    if (this.#axisMode === "transitions") {
+      return {
+        mode: "transitions",
+        pxPerSec: 0,
+        ...transitionAxis(
+          cols,
+          channels.map((c) => c.id),
+          {
+            gapPercent: this.#gapPercent,
+            fullScale: this.#recorder.fullScale || DEFAULT_FULL_SCALE,
+            end: this.#now,
+          },
+        ),
+      };
+    }
+    const times = columnTimes(cols);
+    const n = cols.length;
+    const span = n ? Math.max(times[n - 1], this.#now) - times[0] : 0;
+    const floor = minSecPerDiv(span);
+    const secPerDiv =
+      this.#secPerDiv == null
+        ? fitSecPerDiv(span, this.#lanes.clientWidth || FALLBACK_VIEW_PX)
+        : Math.max(this.#secPerDiv, floor);
+    return {
+      mode: "timing",
+      secPerDiv,
+      floor,
+      breaks: [],
+      ...timingAxis(cols, { secPerDiv, end: this.#now }),
+    };
+  }
+
+  /**
+   * The stretch of the track to draw: what the lanes show, and a viewport
+   * either side so a scroll shows drawn lanes until the next render catches
+   * up. All of it where nothing is laid out (hidden, jsdom).
+   */
+  #windowOf(width) {
+    const view = this.#lanes.clientWidth;
+    if (!view) return { x0: 0, x1: width };
+    const left = this.#lanes.scrollLeft;
+    return {
+      x0: Math.max(0, left - view),
+      x1: Math.min(width, left + 2 * view),
+    };
+  }
+
+  /** The timing scale's controls: shown in Timing mode, reading its scale. */
+  #renderZoom() {
+    const z = this.#zoom;
+    const axis = this.#axis;
+    const timing = this.#axisMode === "timing";
+    z.group.hidden = !timing;
+    if (!timing || !axis) return;
+    z.perDiv.textContent = t("scope.perDiv", {
+      time: formatSeconds(axis.secPerDiv),
+    });
+    z.in.disabled = axis.secPerDiv <= Math.max(SEC_PER_DIV[0], axis.floor);
+    z.out.disabled = axis.secPerDiv >= SEC_PER_DIV.at(-1);
+    z.fit.classList.toggle("scope-btn--active", this.#secPerDiv == null);
+    z.fit.setAttribute("aria-pressed", String(this.#secPerDiv == null));
+  }
+
+  /**
+   * Build every SVG child of the drawn window of the lanes (`#win`, in track
+   * px). `colorOf` maps a token/color to an applied color — identity for live
+   * (CSS resolves `var(--…)` in a style), or a resolved hex for export.
+   * Reused by the export path.
+   */
+  #buildLaneNodes(channels, { height, colorOf = (c) => c } = {}) {
     const nodes = [];
+    const { x0, x1 } = this.#win;
     const conflict = colorOf("var(--color-sim-conflict)");
     const gridColor = colorOf("var(--color-overlay)");
+    const bandColor = colorOf("var(--color-text)");
     nodes.push(this.#hatchDefs(conflict));
 
     // Lane separators + a light row background for legibility.
@@ -631,17 +883,20 @@ export class ScopeView {
       const y = i * LANE_H;
       nodes.push(
         svg("line", {
-          x1: 0,
+          x1: x0,
           y1: y,
-          x2: width,
+          x2: x1,
           y2: y,
           style: { stroke: gridColor, strokeWidth: "0.5", opacity: "0.5" },
         }),
       );
     });
+    for (const n of this.#gridNodes(height, gridColor)) nodes.push(n);
+    for (const n of this.#breakNodes(height, gridColor, bandColor)) {
+      nodes.push(n);
+    }
 
     const floatColor = colorOf("var(--color-sim-float)");
-    const bandColor = colorOf("var(--color-text)");
     channels.forEach((ch, i) => {
       const color = colorOf(channelColor(ch, i));
       const runs = this.#runsOf(ch);
@@ -652,7 +907,6 @@ export class ScopeView {
               color,
               floatColor,
               bandColor,
-              width,
               channelId: ch.id,
             });
       for (const n of laneNodes) nodes.push(n);
@@ -663,9 +917,8 @@ export class ScopeView {
       [this.#cursorA, "a"],
       [this.#cursorB, "b"],
     ]) {
-      if (tick == null) continue;
-      const x = this.#xOf(tick);
-      if (x < 0) continue;
+      const x = this.#xRaw(tick);
+      if (x == null || x < x0 - EDGE_PAD || x > x1 + EDGE_PAD) continue;
       const stroke = colorOf(
         cls === "a" ? "var(--color-sim-high)" : "var(--color-info)",
       );
@@ -680,6 +933,81 @@ export class ScopeView {
       );
     }
     return nodes;
+  }
+
+  /**
+   * Timing mode's divisions: a faint line at every whole multiple of the
+   * scale inside the drawn window, so the scale in the header can be read
+   * off the lanes.
+   */
+  #gridNodes(height, color) {
+    const axis = this.#axis;
+    if (axis?.mode !== "timing" || !(axis.pxPerSec > 0)) return [];
+    const { x0, x1 } = this.#win;
+    const step = axis.secPerDiv;
+    const first = Math.ceil((axis.t0 + x0 / axis.pxPerSec) / step - 1e-9);
+    const last = Math.floor((axis.t0 + x1 / axis.pxPerSec) / step + 1e-9);
+    const out = [];
+    for (let k = first; k <= last && out.length < 4000; k += 1) {
+      const x = Math.round((k * step - axis.t0) * axis.pxPerSec * 100) / 100;
+      out.push(
+        svg("line", {
+          class: "scope-grid",
+          x1: x,
+          y1: 0,
+          x2: x,
+          y2: height,
+          style: { stroke: color, strokeWidth: "0.5", opacity: "0.6" },
+        }),
+      );
+    }
+    return out;
+  }
+
+  /**
+   * Transitions mode's folds: where a steady run was cut out, a shaded
+   * break with a dashed seam down its middle — titled with the stretch of
+   * simulated time between the transitions either side of it.
+   */
+  #breakNodes(height, seamColor, shadeColor) {
+    const axis = this.#axis;
+    if (axis?.mode !== "transitions") return [];
+    const { x0, x1 } = this.#win;
+    const out = [];
+    for (const b of axis.breaks) {
+      if (b.x + BREAK_PX < x0 || b.x > x1) continue;
+      const mid = b.x + BREAK_PX / 2;
+      const span = Math.max(0, b.to - b.from);
+      out.push(
+        svg("g", { class: "scope-break" }, [
+          svg("title", {}, [
+            t("scope.folded", {
+              time: formatSeconds(span) || "0 s",
+            }),
+          ]),
+          svg("rect", {
+            x: b.x,
+            y: 0,
+            width: BREAK_PX,
+            height,
+            style: { fill: shadeColor, opacity: "0.08" },
+          }),
+          svg("line", {
+            x1: mid,
+            y1: 0,
+            x2: mid,
+            y2: height,
+            style: {
+              stroke: seamColor,
+              strokeWidth: "1",
+              strokeDasharray: "2 3",
+              opacity: "0.8",
+            },
+          }),
+        ]),
+      );
+    }
+    return out;
   }
 
   /** An amber diagonal hatch pattern for unknown (X / undriven) regions. */
@@ -715,8 +1043,20 @@ export class ScopeView {
     return runs;
   }
 
+  /** A column's left edge (or, for one past the last, the trace's right
+      edge) on the track, px — null for a tick no longer retained. */
+  #xRaw(tick) {
+    if (tick == null || !this.#axis) return null;
+    const x = this.#axis.xs[tick - this.#recorder.firstTick];
+    return x == null ? null : x;
+  }
+
+  /** `#xRaw`, held to just outside the drawn window: whatever lies beyond it
+      collapses onto an edge no one sees, so a path stays one path. */
   #xOf(tick) {
-    return (tick - this.#recorder.firstTick) * PX_PER_TICK;
+    const x = this.#xRaw(tick) ?? 0;
+    const { x0, x1 } = this.#win;
+    return Math.max(x0 - EDGE_PAD, Math.min(x1 + EDGE_PAD, x));
   }
 
   /**
@@ -727,11 +1067,7 @@ export class ScopeView {
    * readers' thresholds — a 555's capacitor between ⅓ and ⅔ of its supply,
    * its whole cycle — and the trace already shows where it stands.
    */
-  #netLane(
-    runs,
-    laneIndex,
-    { color, floatColor, bandColor, width, channelId },
-  ) {
+  #netLane(runs, laneIndex, { color, floatColor, bandColor, channelId }) {
     const top = laneIndex * LANE_H;
     const highY = top + WAVE_PAD;
     const lowY = top + LANE_H - WAVE_PAD;
@@ -749,9 +1085,9 @@ export class ScopeView {
       nodes.push(
         svg("rect", {
           class: "scope-volts-range",
-          x: 0,
+          x: this.#win.x0,
           y: highY,
-          width: Math.max(0, width ?? 0),
+          width: Math.max(0, this.#win.x1 - this.#win.x0),
           height: lowY - highY,
           style: { fill: bandColor, opacity: "0.06" },
         }),
@@ -808,8 +1144,11 @@ export class ScopeView {
   /**
    * The path of a net whose voltage the run knew: 0 V on the bottom rail, the
    * run's full scale (its highest supply) on the top one, each sample joined
-   * straight to the next — the samples come at Spice Lite's display frames
-   * while a node moves, so the joins draw its curve. A column with no volts
+   * straight to the next where it is a display frame on (`joined` — the
+   * samples come at Spice Lite's display frames while a node moves, so the
+   * joins draw its curve), and otherwise held to the next sample's moment and
+   * stepped there: a switch thrown after a quiet second is a step, not a
+   * second-long ramp. A column with no volts
    * (the net was not a node then) steps at its level as `#netLane` would, and
    * a voltage is HELD across its column where the trace turns digital or ends.
    * A flat stretch adds only its ends, so a long trace stays short.
@@ -819,6 +1158,7 @@ export class ScopeView {
     const yOfVolts = (v) =>
       lowY - Math.max(0, Math.min(1, v / scale)) * (lowY - highY);
     const cols = this.#recorder.columns();
+    const times = this.#axis?.times ?? columnTimes(cols);
     const voltsOf = (k) => cols[k]?.volts?.get(channelId) ?? null;
     // A column's level, or undefined for one that is not a level column (a
     // voltage, or off either end) — never equal to a real level, null included.
@@ -832,13 +1172,19 @@ export class ScopeView {
     };
     cols.forEach((col, k) => {
       const x0 = this.#xOf(col.tick);
-      const x1 = x0 + PX_PER_TICK;
+      const x1 = this.#xOf(col.tick + 1);
       const v = voltsOf(k);
       if (v != null) {
-        // A sample is a point where a stretch at one voltage starts, or where
-        // it ends and the line leaves for the next sample.
+        // A sample is a point where the trace starts or moves — held at the
+        // last voltage to here first, unless the two are one curve — or where
+        // a flat stretch ends and the line leaves straight for the next.
+        const prev = voltsOf(k - 1);
         const next = voltsOf(k + 1);
-        if (voltsOf(k - 1) !== v || (next != null && next !== v)) {
+        if (prev == null) to(x0, yOfVolts(v));
+        else if (prev !== v) {
+          if (!joined(times, k)) to(x0, yOfVolts(prev));
+          to(x0, yOfVolts(v));
+        } else if (next != null && next !== v && joined(times, k + 1)) {
           to(x0, yOfVolts(v));
         }
         if (next == null) to(x1, yOfVolts(v));
@@ -966,8 +1312,10 @@ export class ScopeView {
   // ── Cursors ─────────────────────────────────────────────────────────────────
 
   #tickFromEvent(e) {
-    const x = e.offsetX;
-    const tick = this.#recorder.firstTick + Math.floor(x / PX_PER_TICK);
+    // The svg is the drawn window, so its own x is that far into the track.
+    const x = this.#win.x0 + (e.offsetX ?? 0);
+    const k = this.#axis ? columnAtX(this.#axis.xs, x) : 0;
+    const tick = this.#recorder.firstTick + k;
     return Math.max(
       this.#recorder.firstTick,
       Math.min(this.#recorder.lastTick, tick),
@@ -1006,6 +1354,51 @@ export class ScopeView {
     this.#follow = nearEnd;
     // Keep the gutter's rows aligned with the lanes when scrolled vertically.
     this.#gutter.scrollTop = this.#lanes.scrollTop;
+    // Scrolled past what was drawn: draw the stretch now on screen.
+    const left = this.#lanes.scrollLeft;
+    const { x0, x1 } = this.#win;
+    if (left < x0 || left + this.#lanes.clientWidth > x1) {
+      if (this.visible) this.#scheduleRender();
+    }
+  }
+
+  // ── The timing scale (− / + / Fit, ⌘/Ctrl+wheel) ────────────────────────────
+
+  /**
+   * One ladder step coarser (`dir` 1) or finer (-1), about the screen x `px`
+   * into the lanes — by default the live edge while following, else the
+   * middle — so what was under it stays under it.
+   */
+  #zoomBy(dir, px = null) {
+    const axis = this.#axis;
+    if (axis?.mode !== "timing") return;
+    const next = stepSecPerDiv(axis.secPerDiv, dir, axis.floor);
+    if (next === axis.secPerDiv) return;
+    const view = this.#lanes.clientWidth;
+    const at = px ?? (this.#follow ? view : view / 2);
+    this.#anchor = { t: (this.#lanes.scrollLeft + at) / axis.pxPerSec, px: at };
+    this.#secPerDiv = next;
+    this.#render();
+  }
+
+  /** Back to fitting the whole trace in the panel, following the live edge. */
+  #fit() {
+    this.#secPerDiv = null;
+    this.#follow = true;
+    this.#render();
+  }
+
+  /** ⌘/Ctrl+wheel (a trackpad pinch arrives as one) zooms about the pointer;
+      a plain wheel still scrolls the lanes. */
+  #onWheel(e) {
+    if (this.#axisMode !== "timing" || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    this.#wheelAcc += e.deltaY;
+    if (Math.abs(this.#wheelAcc) < WHEEL_STEP) return;
+    const dir = Math.sign(this.#wheelAcc);
+    this.#wheelAcc = 0;
+    const px = e.clientX - this.#lanes.getBoundingClientRect().left;
+    this.#zoomBy(dir, px);
   }
 
   // ── Reordering (drag a channel's gutter row up or down) ─────────────────────
@@ -1254,7 +1647,18 @@ export class ScopeView {
   #buildExportSvg(channels) {
     const resolve = (c) => this.#resolveColor(c);
     const labelW = 150;
-    const lanesW = Math.max(1, this.#recorder.size) * PX_PER_TICK;
+    this.#axis = this.#axisOf(channels);
+    // The whole trace at the scale on screen — or, where that is wider than
+    // an image can sensibly be (a fine scale over a long run), what is on
+    // screen.
+    const trackW = Math.max(1, Math.ceil(this.#axis?.width ?? 0));
+    const left = this.#lanes.scrollLeft;
+    const view = this.#lanes.clientWidth || trackW;
+    const win =
+      trackW <= EXPORT_MAX_PX
+        ? { x0: 0, x1: trackW }
+        : { x0: left, x1: Math.min(trackW, left + view) };
+    const lanesW = Math.max(1, win.x1 - win.x0);
     const height = channels.length * LANE_H;
     const width = labelW + lanesW;
     const root = svg("svg", {
@@ -1297,15 +1701,31 @@ export class ScopeView {
         ),
       );
     });
-    const lanes = svg("g", { transform: `translate(${labelW}, 0)` });
-    for (const node of this.#buildLaneNodes(channels, {
-      width: lanesW,
-      height,
-      colorOf: resolve,
-    })) {
-      lanes.append(node);
+    const lanes = svg("g", {
+      transform: `translate(${labelW - win.x0}, 0)`,
+    });
+    const shown = this.#win;
+    this.#win = win;
+    try {
+      for (const node of this.#buildLaneNodes(channels, {
+        height,
+        colorOf: resolve,
+      })) {
+        lanes.append(node);
+      }
+    } finally {
+      this.#win = shown;
     }
-    root.append(lanes);
+    // The lanes clipped to their own column, clear of the labels.
+    const clipId = "scope-export-lanes";
+    root.append(
+      svg("defs", {}, [
+        svg("clipPath", { id: clipId }, [
+          svg("rect", { x: labelW, y: 0, width: lanesW, height }),
+        ]),
+      ]),
+      svg("g", { "clip-path": `url(#${clipId})` }, [lanes]),
+    );
     return root;
   }
 

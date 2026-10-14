@@ -608,6 +608,9 @@
     "74LS90": {
       "title": "Contatore a decadi (÷10) asincrono"
     },
+    "74LS92": {
+      "title": "Contatore asincrono ÷12"
+    },
     "rom-8k": {
       "title": "ROM 8K×8"
     },
@@ -1039,7 +1042,16 @@
     "tickCount": {
       "one": "{count} colpo di clock",
       "other": "{count} colpi di clock"
-    }
+    },
+    "axisLabel": "Asse orizzontale",
+    "axisTiming": "Tempo",
+    "axisTransitions": "Transizioni",
+    "zoomIn": "Ingrandisci (meno tempo per divisione)",
+    "zoomOut": "Riduci (più tempo per divisione)",
+    "fit": "Adatta",
+    "fitTitle": "Adatta l’intera traccia al pannello",
+    "perDiv": "{time}/div",
+    "folded": "{time} senza variazioni, compresso"
   },
   "ai": {
     "title": "Costruttore di circuiti con IA",
@@ -1649,7 +1661,8 @@
       "amplitude": "Ampiezza",
       "offset": "Offset",
       "impedance": "Impedenza",
-      "volume": "Volume"
+      "volume": "Volume",
+      "customHz": "Frequenza personalizzata"
     },
     "option": {
       "manual": "Manuale",
@@ -1705,7 +1718,8 @@
         "henry": "Non è un valore di induttanza",
         "volt": "Non è un valore di tensione",
         "amp": "Non è un valore di corrente",
-        "ratio": "Non è un valore di guadagno"
+        "ratio": "Non è un valore di guadagno",
+        "hertz": "Non è un valore di frequenza"
       },
       "range": "Fuori intervallo: da {min} a {max}",
       "wrongUnit": {
@@ -1713,38 +1727,51 @@
           "farad": "Questa è una capacità, non una resistenza",
           "henry": "Questa è un'induttanza, non una resistenza",
           "volt": "Questa è una tensione, non una resistenza",
-          "amp": "Questa è una corrente, non una resistenza"
+          "amp": "Questa è una corrente, non una resistenza",
+          "hertz": "Questa è una frequenza, non una resistenza"
         },
         "farad": {
           "ohm": "Questa è una resistenza, non una capacità",
           "henry": "Questa è un'induttanza, non una capacità",
           "volt": "Questa è una tensione, non una capacità",
-          "amp": "Questa è una corrente, non una capacità"
+          "amp": "Questa è una corrente, non una capacità",
+          "hertz": "Questa è una frequenza, non una capacità"
         },
         "henry": {
           "ohm": "Questa è una resistenza, non un'induttanza",
           "farad": "Questa è una capacità, non un'induttanza",
           "volt": "Questa è una tensione, non un'induttanza",
-          "amp": "Questa è una corrente, non un'induttanza"
+          "amp": "Questa è una corrente, non un'induttanza",
+          "hertz": "Questa è una frequenza, non un'induttanza"
         },
         "volt": {
           "ohm": "Questa è una resistenza, non una tensione",
           "farad": "Questa è una capacità, non una tensione",
           "henry": "Questa è un'induttanza, non una tensione",
-          "amp": "Questa è una corrente, non una tensione"
+          "amp": "Questa è una corrente, non una tensione",
+          "hertz": "Questa è una frequenza, non una tensione"
         },
         "amp": {
           "ohm": "Questa è una resistenza, non una corrente",
           "farad": "Questa è una capacità, non una corrente",
           "henry": "Questa è un'induttanza, non una corrente",
-          "volt": "Questa è una tensione, non una corrente"
+          "volt": "Questa è una tensione, non una corrente",
+          "hertz": "Questa è una frequenza, non una corrente"
         },
         "ratio": {
           "ohm": "Questa è una resistenza, non un guadagno",
           "farad": "Questa è una capacità, non un guadagno",
           "henry": "Questa è un'induttanza, non un guadagno",
           "volt": "Questa è una tensione, non un guadagno",
-          "amp": "Questa è una corrente, non un guadagno"
+          "amp": "Questa è una corrente, non un guadagno",
+          "hertz": "Questa è una frequenza, non un guadagno"
+        },
+        "hertz": {
+          "ohm": "Questa è una resistenza, non una frequenza",
+          "farad": "Questa è una capacità, non una frequenza",
+          "henry": "Questa è un'induttanza, non una frequenza",
+          "volt": "Questa è una tensione, non una frequenza",
+          "amp": "Questa è una corrente, non una frequenza"
         }
       },
       "notPart": "Non è un codice componente: solo lettere, cifre e -, fino a 20",
@@ -1753,7 +1780,9 @@
         "pnp": "{part} è un transistor PNP",
         "nmos": "{part} è un MOSFET a canale N",
         "pmos": "{part} è un MOSFET a canale P"
-      }
+      },
+      "fastClock": "Il clock potrebbe non riuscire a funzionare a questa frequenza e verrà rallentato quando serve.",
+      "adviceLabel": "Su questo valore"
     },
     "refused": {
       "bodyHoles": "Non c'è spazio: il foro in cui andrebbe il suo terminale è occupato o oltre la fine della basetta."

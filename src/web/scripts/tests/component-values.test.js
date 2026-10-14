@@ -679,3 +679,28 @@ test("the extended lists keep every value they had", () => {
     "in order",
   );
 });
+
+test("a clock's rate: Hz, k or kilohertz, held to 1 Hz – 10 kHz", () => {
+  const read = (text) => parseComponentValue(text, "hertz", VALUE_RANGES.clock);
+  for (const [text, value, display] of [
+    ["2500", 2500, "2.5kHz"],
+    ["2.5k", 2500, "2.5kHz"],
+    ["2.5K", 2500, "2.5kHz"],
+    ["2.5kHz", 2500, "2.5kHz"],
+    ["2500 Hz", 2500, "2.5kHz"],
+    ["2k5", 2500, "2.5kHz"],
+    ["3 kilohertz", 3000, "3kHz"],
+    ["1hz", 1, "1Hz"],
+    ["10k", 10e3, "10kHz"],
+    ["437.5", 437.5, "437.5Hz"],
+  ]) {
+    assert.deepEqual(read(text), { value, display }, text);
+  }
+  assert.equal(read("10.001k").error, "range");
+  assert.equal(read("0.5").error, "range");
+  assert.equal(read("2,500").error, "notValue");
+  // `H` alone is a henry: a wrong unit, not a rate.
+  assert.deepEqual(read("10kH"), { error: "wrongUnit", unit: "hertz", got: "henry" }); // prettier-ignore
+  // And a rate typed into another field says what it is.
+  assert.deepEqual(parseComponentValue("50Hz", "ohm"), { error: "wrongUnit", unit: "ohm", got: "hertz" }); // prettier-ignore
+});

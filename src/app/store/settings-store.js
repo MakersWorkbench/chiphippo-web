@@ -177,6 +177,10 @@ const DEFAULTS = Object.freeze({
   // it to half the window); the toolbar / close button writes the open flag.
   scopeOpen: false,
   scopeHeight: 280,
+  // How the analyzer lays its trace across: "timing" (x is simulated time)
+  // or "transitions" (x advances by change). The header's picker writes it;
+  // the renderer coerces anything else to "timing" (model/scope-axis.js).
+  scopeAxis: "timing",
 
   // The bottom-docked AI builder panel — same two keys, same reasons.
   aiOpen: false,

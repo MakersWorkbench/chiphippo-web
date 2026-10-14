@@ -246,7 +246,8 @@ without any action on your part: the app window's position and size, the desk
 camera — your current pan position and zoom level — and which panels you left
 open (the parts tray, the build guide, the analyzer, the AI builder). The ones
 you can resize remember that too: the parts tray's **width**, and the analyzer
-and AI builder's **height**. Close Chip Hippo and reopen it, and you're back
+and AI builder's **height**. The analyzer also remembers whether it was on
+**Timing** or **Transitions**. Close Chip Hippo and reopen it, and you're back
 exactly where you left off.
 
 The desk padlock isn't one of these: it's saved in the project file, so it

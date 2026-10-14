@@ -233,10 +233,10 @@ Digital is a logic simulator, so some parts have to be exported as what they
 
 ### What doesn't come across
 
-- Seven 74xx parts that Digital's library doesn't include: 74LS73, 74LS75,
-  74LS169, 74LS240, 74LS259, 74LS279 and 74LS533. Each one's place in the
+- Eight 74xx parts that Digital's library doesn't include: 74LS73, 74LS75,
+  74LS92, 74LS169, 74LS240, 74LS259, 74LS279 and 74LS533. Each one's place in the
   circuit is marked with a note, and everything wired to it is still exported.
-- The other 37 CD4000 CMOS parts, which have no twin in Digital's library. The
+- The other 40 CD4000 CMOS parts, which have no twin in Digital's library. The
   same note marks each one's place.
 - The 555 timer, which Digital's library doesn't have either.
 - Capacitors. A capacitor connects nothing in Chip Hippo, so leaving it out

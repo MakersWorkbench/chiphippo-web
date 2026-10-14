@@ -608,6 +608,9 @@
     "74LS90": {
       "title": "Compteur décimal (÷10) asynchrone"
     },
+    "74LS92": {
+      "title": "Compteur asynchrone ÷12"
+    },
     "rom-8k": {
       "title": "ROM 8K×8"
     },
@@ -1039,7 +1042,16 @@
     "tickCount": {
       "one": "{count} top",
       "other": "{count} tops"
-    }
+    },
+    "axisLabel": "Axe horizontal",
+    "axisTiming": "Temps",
+    "axisTransitions": "Transitions",
+    "zoomIn": "Zoom avant (moins de temps par division)",
+    "zoomOut": "Zoom arrière (plus de temps par division)",
+    "fit": "Ajuster",
+    "fitTitle": "Ajuster toute la trace au panneau",
+    "perDiv": "{time}/div",
+    "folded": "{time} sans changement, replié"
   },
   "ai": {
     "title": "Constructeur de circuits par IA",
@@ -1649,7 +1661,8 @@
       "amplitude": "Amplitude",
       "offset": "Décalage",
       "impedance": "Impédance",
-      "volume": "Volume"
+      "volume": "Volume",
+      "customHz": "Fréquence personnalisée"
     },
     "option": {
       "manual": "Manuel",
@@ -1705,7 +1718,8 @@
         "henry": "Ce n'est pas une valeur d'inductance",
         "volt": "Ce n'est pas une valeur de tension",
         "amp": "Ce n'est pas une valeur de courant",
-        "ratio": "Ce n'est pas une valeur de gain"
+        "ratio": "Ce n'est pas une valeur de gain",
+        "hertz": "Ce n'est pas une valeur de fréquence"
       },
       "range": "Hors plage : de {min} à {max}",
       "wrongUnit": {
@@ -1713,38 +1727,51 @@
           "farad": "C'est une capacité, pas une résistance",
           "henry": "C'est une inductance, pas une résistance",
           "volt": "C'est une tension, pas une résistance",
-          "amp": "C'est un courant, pas une résistance"
+          "amp": "C'est un courant, pas une résistance",
+          "hertz": "C'est une fréquence, pas une résistance"
         },
         "farad": {
           "ohm": "C'est une résistance, pas une capacité",
           "henry": "C'est une inductance, pas une capacité",
           "volt": "C'est une tension, pas une capacité",
-          "amp": "C'est un courant, pas une capacité"
+          "amp": "C'est un courant, pas une capacité",
+          "hertz": "C'est une fréquence, pas une capacité"
         },
         "henry": {
           "ohm": "C'est une résistance, pas une inductance",
           "farad": "C'est une capacité, pas une inductance",
           "volt": "C'est une tension, pas une inductance",
-          "amp": "C'est un courant, pas une inductance"
+          "amp": "C'est un courant, pas une inductance",
+          "hertz": "C'est une fréquence, pas une inductance"
         },
         "volt": {
           "ohm": "C'est une résistance, pas une tension",
           "farad": "C'est une capacité, pas une tension",
           "henry": "C'est une inductance, pas une tension",
-          "amp": "C'est un courant, pas une tension"
+          "amp": "C'est un courant, pas une tension",
+          "hertz": "C'est une fréquence, pas une tension"
         },
         "amp": {
           "ohm": "C'est une résistance, pas un courant",
           "farad": "C'est une capacité, pas un courant",
           "henry": "C'est une inductance, pas un courant",
-          "volt": "C'est une tension, pas un courant"
+          "volt": "C'est une tension, pas un courant",
+          "hertz": "C'est une fréquence, pas un courant"
         },
         "ratio": {
           "ohm": "C'est une résistance, pas un gain",
           "farad": "C'est une capacité, pas un gain",
           "henry": "C'est une inductance, pas un gain",
           "volt": "C'est une tension, pas un gain",
-          "amp": "C'est un courant, pas un gain"
+          "amp": "C'est un courant, pas un gain",
+          "hertz": "C'est une fréquence, pas un gain"
+        },
+        "hertz": {
+          "ohm": "C'est une résistance, pas une fréquence",
+          "farad": "C'est une capacité, pas une fréquence",
+          "henry": "C'est une inductance, pas une fréquence",
+          "volt": "C'est une tension, pas une fréquence",
+          "amp": "C'est un courant, pas une fréquence"
         }
       },
       "notPart": "Pas une référence — lettres, chiffres et - uniquement, 20 au plus",
@@ -1753,7 +1780,9 @@
         "pnp": "{part} est un transistor PNP",
         "nmos": "{part} est un MOSFET canal N",
         "pmos": "{part} est un MOSFET canal P"
-      }
+      },
+      "fastClock": "L'horloge risque de ne pas pouvoir tourner à cette fréquence ; elle sera ralentie si nécessaire.",
+      "adviceLabel": "À propos de cette valeur"
     },
     "refused": {
       "bodyHoles": "Pas de place — le trou où irait sa patte est occupé, ou au-delà du bord de la plaque."

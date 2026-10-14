@@ -607,6 +607,9 @@
     "74LS90": {
       "title": "Decade (÷10) ripple counter"
     },
+    "74LS92": {
+      "title": "Divide-by-12 ripple counter"
+    },
     "rom-8k": {
       "title": "8K×8 ROM"
     },
@@ -1038,7 +1041,16 @@
     "tickCount": {
       "one": "{count} tick",
       "other": "{count} ticks"
-    }
+    },
+    "axisLabel": "Horizontal axis",
+    "axisTiming": "Timing",
+    "axisTransitions": "Transitions",
+    "zoomIn": "Zoom in (less time per division)",
+    "zoomOut": "Zoom out (more time per division)",
+    "fit": "Fit",
+    "fitTitle": "Fit the whole trace in the panel",
+    "perDiv": "{time}/div",
+    "folded": "{time} with no change, folded"
   },
   "ai": {
     "title": "AI circuit builder",
@@ -1646,7 +1658,8 @@
       "amplitude": "Amplitude",
       "offset": "Offset",
       "impedance": "Impedance",
-      "volume": "Volume"
+      "volume": "Volume",
+      "customHz": "Custom rate"
     },
     "option": {
       "manual": "Manual",
@@ -1702,7 +1715,8 @@
         "henry": "Not an inductance value",
         "volt": "Not a voltage value",
         "amp": "Not a current value",
-        "ratio": "Not a gain value"
+        "ratio": "Not a gain value",
+        "hertz": "Not a frequency value"
       },
       "range": "Out of range: {min} to {max}",
       "wrongUnit": {
@@ -1710,38 +1724,51 @@
           "farad": "That's a capacitance, not a resistance",
           "henry": "That's an inductance, not a resistance",
           "volt": "That's a voltage, not a resistance",
-          "amp": "That's a current, not a resistance"
+          "amp": "That's a current, not a resistance",
+          "hertz": "That's a frequency, not a resistance"
         },
         "farad": {
           "ohm": "That's a resistance, not a capacitance",
           "henry": "That's an inductance, not a capacitance",
           "volt": "That's a voltage, not a capacitance",
-          "amp": "That's a current, not a capacitance"
+          "amp": "That's a current, not a capacitance",
+          "hertz": "That's a frequency, not a capacitance"
         },
         "henry": {
           "ohm": "That's a resistance, not an inductance",
           "farad": "That's a capacitance, not an inductance",
           "volt": "That's a voltage, not an inductance",
-          "amp": "That's a current, not an inductance"
+          "amp": "That's a current, not an inductance",
+          "hertz": "That's a frequency, not an inductance"
         },
         "volt": {
           "ohm": "That's a resistance, not a voltage",
           "farad": "That's a capacitance, not a voltage",
           "henry": "That's an inductance, not a voltage",
-          "amp": "That's a current, not a voltage"
+          "amp": "That's a current, not a voltage",
+          "hertz": "That's a frequency, not a voltage"
         },
         "amp": {
           "ohm": "That's a resistance, not a current",
           "farad": "That's a capacitance, not a current",
           "henry": "That's an inductance, not a current",
-          "volt": "That's a voltage, not a current"
+          "volt": "That's a voltage, not a current",
+          "hertz": "That's a frequency, not a current"
         },
         "ratio": {
           "ohm": "That's a resistance, not a gain",
           "farad": "That's a capacitance, not a gain",
           "henry": "That's an inductance, not a gain",
           "volt": "That's a voltage, not a gain",
-          "amp": "That's a current, not a gain"
+          "amp": "That's a current, not a gain",
+          "hertz": "That's a frequency, not a gain"
+        },
+        "hertz": {
+          "ohm": "That's a resistance, not a frequency",
+          "farad": "That's a capacitance, not a frequency",
+          "henry": "That's an inductance, not a frequency",
+          "volt": "That's a voltage, not a frequency",
+          "amp": "That's a current, not a frequency"
         }
       },
       "notPart": "Not a part number — letters, digits and - only, up to 20",
@@ -1750,7 +1777,9 @@
         "pnp": "{part} is a PNP transistor",
         "nmos": "{part} is an N-channel MOSFET",
         "pmos": "{part} is a P-channel MOSFET"
-      }
+      },
+      "fastClock": "The clock may not be able to run at this rate, and will be slowed as necessary.",
+      "adviceLabel": "About this value"
     },
     "refused": {
       "bodyHoles": "No room — the hole its lead would move to is taken, or past the end of the board."

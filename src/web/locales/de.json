@@ -607,6 +607,9 @@
     "74LS90": {
       "title": "Dekadenzähler (÷10), asynchron"
     },
+    "74LS92": {
+      "title": "Zähler ÷12, asynchron"
+    },
     "rom-8k": {
       "title": "8K×8-ROM"
     },
@@ -1038,7 +1041,16 @@
     "tickCount": {
       "one": "{count} Takt",
       "other": "{count} Takte"
-    }
+    },
+    "axisLabel": "Horizontale Achse",
+    "axisTiming": "Zeit",
+    "axisTransitions": "Übergänge",
+    "zoomIn": "Vergrößern (weniger Zeit pro Teilung)",
+    "zoomOut": "Verkleinern (mehr Zeit pro Teilung)",
+    "fit": "Einpassen",
+    "fitTitle": "Die ganze Aufzeichnung ins Fenster einpassen",
+    "perDiv": "{time}/Div",
+    "folded": "{time} ohne Änderung, ausgeblendet"
   },
   "ai": {
     "title": "KI-Schaltungsbaumeister",
@@ -1646,7 +1658,8 @@
       "amplitude": "Amplitude",
       "offset": "Offset",
       "impedance": "Impedanz",
-      "volume": "Lautstärke"
+      "volume": "Lautstärke",
+      "customHz": "Eigene Frequenz"
     },
     "option": {
       "manual": "Manuell",
@@ -1702,7 +1715,8 @@
         "henry": "Kein Induktivitätswert",
         "volt": "Kein Spannungswert",
         "amp": "Kein Stromwert",
-        "ratio": "Kein Verstärkungswert"
+        "ratio": "Kein Verstärkungswert",
+        "hertz": "Kein Frequenzwert"
       },
       "range": "Außerhalb des Bereichs: {min} bis {max}",
       "wrongUnit": {
@@ -1710,38 +1724,51 @@
           "farad": "Das ist eine Kapazität, kein Widerstand",
           "henry": "Das ist eine Induktivität, kein Widerstand",
           "volt": "Das ist eine Spannung, kein Widerstand",
-          "amp": "Das ist ein Strom, kein Widerstand"
+          "amp": "Das ist ein Strom, kein Widerstand",
+          "hertz": "Das ist eine Frequenz, kein Widerstand"
         },
         "farad": {
           "ohm": "Das ist ein Widerstand, keine Kapazität",
           "henry": "Das ist eine Induktivität, keine Kapazität",
           "volt": "Das ist eine Spannung, keine Kapazität",
-          "amp": "Das ist ein Strom, keine Kapazität"
+          "amp": "Das ist ein Strom, keine Kapazität",
+          "hertz": "Das ist eine Frequenz, keine Kapazität"
         },
         "henry": {
           "ohm": "Das ist ein Widerstand, keine Induktivität",
           "farad": "Das ist eine Kapazität, keine Induktivität",
           "volt": "Das ist eine Spannung, keine Induktivität",
-          "amp": "Das ist ein Strom, keine Induktivität"
+          "amp": "Das ist ein Strom, keine Induktivität",
+          "hertz": "Das ist eine Frequenz, keine Induktivität"
         },
         "volt": {
           "ohm": "Das ist ein Widerstand, keine Spannung",
           "farad": "Das ist eine Kapazität, keine Spannung",
           "henry": "Das ist eine Induktivität, keine Spannung",
-          "amp": "Das ist ein Strom, keine Spannung"
+          "amp": "Das ist ein Strom, keine Spannung",
+          "hertz": "Das ist eine Frequenz, keine Spannung"
         },
         "amp": {
           "ohm": "Das ist ein Widerstand, kein Strom",
           "farad": "Das ist eine Kapazität, kein Strom",
           "henry": "Das ist eine Induktivität, kein Strom",
-          "volt": "Das ist eine Spannung, kein Strom"
+          "volt": "Das ist eine Spannung, kein Strom",
+          "hertz": "Das ist eine Frequenz, kein Strom"
         },
         "ratio": {
           "ohm": "Das ist ein Widerstand, keine Verstärkung",
           "farad": "Das ist eine Kapazität, keine Verstärkung",
           "henry": "Das ist eine Induktivität, keine Verstärkung",
           "volt": "Das ist eine Spannung, keine Verstärkung",
-          "amp": "Das ist ein Strom, keine Verstärkung"
+          "amp": "Das ist ein Strom, keine Verstärkung",
+          "hertz": "Das ist eine Frequenz, keine Verstärkung"
+        },
+        "hertz": {
+          "ohm": "Das ist ein Widerstand, keine Frequenz",
+          "farad": "Das ist eine Kapazität, keine Frequenz",
+          "henry": "Das ist eine Induktivität, keine Frequenz",
+          "volt": "Das ist eine Spannung, keine Frequenz",
+          "amp": "Das ist ein Strom, keine Frequenz"
         }
       },
       "notPart": "Keine Teilenummer – nur Buchstaben, Ziffern und -, höchstens 20",
@@ -1750,7 +1777,9 @@
         "pnp": "{part} ist ein PNP-Transistor",
         "nmos": "{part} ist ein N-Kanal-MOSFET",
         "pmos": "{part} ist ein P-Kanal-MOSFET"
-      }
+      },
+      "fastClock": "Der Takt kann diese Frequenz womöglich nicht halten und wird bei Bedarf verlangsamt.",
+      "adviceLabel": "Zu diesem Wert"
     },
     "refused": {
       "bodyHoles": "Kein Platz – das Loch, in das sein Anschluss wandern würde, ist belegt oder liegt hinter dem Ende der Platine."

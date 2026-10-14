@@ -28,6 +28,8 @@ import {
   PART_DEFS,
   PSU_VOLTS,
   CLOCK_HZ,
+  CLOCK_CUSTOM_RANGE,
+  CLOCK_FAST_HZ,
   OSCILLATOR_HZ,
   hzLabel,
 } from "../catalog/parts.js";
@@ -87,12 +89,12 @@ test("the part catalog carries the Feature 60 inventory", () => {
   assert.ok(partDef("clock"));
   assert.ok(partDef("lcd16x2"));
   assert.equal(chipDef("sw-slide"), null);
-  // 114 chips (24 + 28 LS + 46 CD4000 + 7 memory + 2 io + 2 cpu + the 555
+  // 115 chips (24 + 29 LS + 46 CD4000 + 7 memory + 2 io + 2 cpu + the 555
   // + the bench parts' LM358, ULN2003A, 4N35 and PC817) + 38 parts (the
   // discretes brought 7: two diodes, an inductor and four transistors; the
   // bench parts 7: five regulators, the relay and the electronic load; and
   // the speaker)
-  assert.equal(PALETTE_DEFS.length, 152);
+  assert.equal(PALETTE_DEFS.length, 153);
 });
 
 for (const def of PART_DEFS.filter((d) => d.kind === "discrete")) {
@@ -734,10 +736,14 @@ test("clock: hz enum (+manual), isAuto contract, Properties field", () => {
   assert.deepEqual(def.normalizeParams({}), { hz: 1 });
   assert.deepEqual(def.normalizeParams({ hz: 10 }), { hz: 10 });
   assert.deepEqual(def.normalizeParams({ hz: "manual" }), { hz: "manual" });
-  assert.deepEqual(def.normalizeParams({ hz: 3 }), { hz: 1 });
+  // Any rate in the Custom range stands; past it, held to it.
+  assert.deepEqual(CLOCK_CUSTOM_RANGE, { min: 1, max: 10e3 });
+  assert.deepEqual(def.normalizeParams({ hz: 3 }), { hz: 3 });
   assert.deepEqual(def.normalizeParams({ hz: 1000 }), { hz: 1000 });
-  // A desk saved faster than any rate offered runs as fast as one is.
-  assert.deepEqual(def.normalizeParams({ hz: 2000 }), { hz: 1000 });
+  assert.deepEqual(def.normalizeParams({ hz: 2500.5 }), { hz: 2500.5 });
+  assert.deepEqual(def.normalizeParams({ hz: 20e3 }), { hz: 10e3 });
+  assert.deepEqual(def.normalizeParams({ hz: 0.2 }), { hz: 1 });
+  assert.deepEqual(def.normalizeParams({ hz: "fast" }), { hz: 1 });
   assert.equal(def.isAuto({ hz: 5 }), true);
   assert.equal(def.isAuto({ hz: "manual" }), false);
   assert.deepEqual(
@@ -763,13 +769,39 @@ test("clock: hz enum (+manual), isAuto contract, Properties field", () => {
     assert.equal(field.disabledWhen({ hz: 10, wave: "pwm" }), true);
     assert.equal(field.disabledWhen({ hz: 10, wave: "sine" }), false);
   }
+  // The Rate: its presets, then Custom… and the box a rate is typed in.
+  const { figures, selected, figuresOf, pick, setFigure, ...rate } = hzField;
+  assert.equal(rate.type, "preset");
+  assert.equal(rate.customValue, "custom");
+  assert.equal(rate.customLabel, "Custom…");
+  const [box] = figures;
   assert.deepEqual(
-    [hzField, waveField],
+    { key: box.key, label: box.label, unit: box.unit, range: box.range },
+    { key: "customHz", label: "Custom rate", unit: "hertz", range: CLOCK_CUSTOM_RANGE }, // prettier-ignore
+  );
+  assert.equal(selected.call(hzField, { hz: 250 }), 250);
+  assert.equal(selected.call(hzField, { hz: "manual" }), "manual");
+  assert.equal(selected.call(hzField, { hz: 2500 }), "custom");
+  assert.deepEqual(figuresOf.call(hzField, { hz: 2500 }), { customHz: 2500 });
+  assert.deepEqual(figuresOf.call(hzField, { hz: "manual" }), { customHz: 1 });
+  // The list hands back strings.
+  assert.deepEqual(pick.call(hzField, { hz: 5 }, "250"), { hz: 250 });
+  assert.deepEqual(pick.call(hzField, { hz: 5 }, "manual"), { hz: "manual" });
+  assert.deepEqual(pick.call(hzField, { hz: 5 }, "custom"), { hz: 5 });
+  assert.deepEqual(setFigure.call(hzField, { hz: 5 }, "customHz", 4321), { hz: 4321 }); // prettier-ignore
+  // Past CLOCK_FAST_HZ, the (i) that it may be slowed.
+  assert.equal(CLOCK_FAST_HZ, 2000);
+  assert.equal(box.advise(2000), null);
+  assert.deepEqual(box.advise(2001), { code: "fastClock" });
+  assert.deepEqual(
+    [{ ...rate, options: [...rate.options] }, waveField],
     [
       {
         key: "hz",
         label: "Rate",
-        type: "select",
+        type: "preset",
+        customValue: "custom",
+        customLabel: "Custom…",
         options: [
           { value: 1, label: "1 Hz" },
           { value: 2, label: "2 Hz" },

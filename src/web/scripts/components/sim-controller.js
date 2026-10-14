@@ -1046,6 +1046,32 @@ export class SimController {
   }
 
   /**
+   * An edit is about to change the board under Spice Lite: tick the board AS
+   * IT STOOD at the edit's moment first. The engine catches a late tick up
+   * from the last one on the board it is HANDED (spice/engine.js — the
+   * history replayed on the prior tick's clocks and signals, but on this
+   * tick's document), so handed the edited board it replayed the whole quiet
+   * stretch since the last tick as if the edit had been made then: a switch
+   * thrown after three seconds with no tick charged its RC across all three
+   * (the cap-electrolytic Timer read 5(1 − e^−3) = 4.75 V on the spot, its
+   * Schmitt tripping at once). Run on here, the history is the old board's
+   * and the edited one starts at the edit. Owed, not shown: the edit's own
+   * tick follows at once. Nothing to do where there is no history (the logic
+   * engine has none; a tick at this very moment needs none).
+   */
+  #runOnTo() {
+    if (this.#engine !== ENGINES.spice || this.#stalled || !this.#base) return;
+    const now = this.#simNow();
+    if (!(now > this.#tickAt)) return;
+    this.#batchDepth += 1;
+    try {
+      this.#tickOnce(now);
+    } finally {
+      this.#batchDepth -= 1;
+    }
+  }
+
+  /**
    * Pause or resume ONE free-running clock while the rest of the circuit runs
    * on — its own transport, beside the header's. A paused clock HOLDS the level
    * it was at (no edge is made on the way in or out), so its lamp and every
@@ -1445,12 +1471,20 @@ export class SimController {
   // as it was before it: the document snapshot and the netlist prepared with
   // it (#tickOnce pairs them) are still the pre-edit ones until
   // #forgetDocument, so the catch-up runs first and the edit lands after it.
+  // Under Spice Lite the board as it was also runs ON to the edit's moment
+  // (#runOnTo): time passed on it since the last tick too.
 
   #onPartState = () => {
-    this.#partStateVersion += 1;
     const live = this.running && !this.#suppress;
-    if (live && this.#holdBoard()) return;
+    if (live && this.#holdBoard()) {
+      this.#partStateVersion += 1;
+      return;
+    }
     if (live) this.#catchUp();
+    if (live) this.#runOnTo();
+    // (Bumped after the board as it was has run on: the bounce reads a new
+    // version as a contact that moved.)
+    this.#partStateVersion += 1;
     this.#forgetDocument();
     if (!live) return;
     this.#tickNow();
@@ -1460,6 +1494,7 @@ export class SimController {
     const live = this.running && !this.#suppress;
     if (live && this.#holdBoard(() => this.#reconcileClocks())) return;
     if (live) this.#catchUp();
+    if (live) this.#runOnTo();
     this.#forgetDocument();
     if (!live) return;
     // A clock's rate may have changed via its menu, or a clock come or gone —
@@ -2539,6 +2574,10 @@ export class SimController {
         detail: {
           running: this.running,
           mode: this.#mode,
+          // The simulated moment this board stands at (seconds; null when
+          // stopped or replaying) — how far the run has got, for the
+          // analyzer's time axis.
+          at: tick && !tick.replay && this.#mode !== TRANSPORT.STOPPED ? this.#shownAt() : null, // prettier-ignore
           netLevels: result?.netLevels ?? new Map(),
           // Levels from supplies/chip outputs ALONE (no resistor pulls) — the
           // views use these to spot an LED wired with no series resistor.

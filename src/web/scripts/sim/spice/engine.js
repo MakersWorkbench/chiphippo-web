@@ -2226,6 +2226,10 @@ export function tick({ spice = null, ...opts }) {
   // ticks between two capped ones replayed the very chatter the back-off was
   // skipping). No island left to catch up, the tick is simply at `now`. (The
   // islands here are the last tick's: this one has built no context yet.)
+  // The history is replayed on the board this tick is HANDED: a caller that
+  // edits the board runs the old one on to the edit's moment first
+  // (SimController's #runOnTo), or the stretch since the last tick runs as if
+  // the edit had been made at its start.
   const catchesUp = () => {
     const keys = prior?.islands?.analog;
     if (!keys) return true;

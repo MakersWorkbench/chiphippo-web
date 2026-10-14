@@ -29,7 +29,10 @@
 //   · each figure is a value box (value-combobox.js, with no list): read on
 //     Enter or leaving it, through the one value parser, red and uncommitted
 //     when it does not read — the Tier 1 field's rules exactly;
-//   · going back to a preset overwrites the figures with its own.
+//   · going back to a preset overwrites the figures with its own;
+//   · a figure that carries `advise(number)` (a clock's Custom rate past what
+//     a desk can tick in real time) gets the box's amber (i) while the value
+//     it holds earns a word — a message code, worded by `message`.
 // Which entry the card OPENS on is the field's to say (`selected`): a stored
 // set that is a preset's own figures is that preset, anything else Custom…
 // with its figures open — the card never names a preset over figures that
@@ -62,8 +65,10 @@ import {
  * @param {(opt: object) => string} opts.optionText - a preset's text.
  * @param {string} opts.customText - Custom…'s text.
  * @param {(figure: object) => string} opts.figureLabel
- * @param {(message: object) => string} opts.message - a refusal, in words.
+ * @param {(message: object) => string} opts.message - a refusal, or a
+ *   figure's advice, in words.
  * @param {string} opts.toggleLabel
+ * @param {string} [opts.adviceLabel] - a figure's advice (i)'s name.
  * @returns {HTMLElement}
  */
 export function buildPresetField({
@@ -76,6 +81,7 @@ export function buildPresetField({
   figureLabel,
   message,
   toggleLabel,
+  adviceLabel = "",
 }) {
   const custom = field.customValue;
   const select = el(
@@ -96,8 +102,10 @@ export function buildPresetField({
   });
 
   /** One figure's box: its value, read as the field's own unit and range. */
-  const figureRow = (figure, number) =>
-    el("div", { class: "properties-row" }, [
+  const figureRow = (figure, number) => {
+    let held = number; // what the part holds: what the advice is about
+    const advise = figure.advise;
+    return el("div", { class: "properties-row" }, [
       el("span", { class: "properties-label", text: figureLabel(figure) }),
       buildValueCombobox({
         text: formatComponentValue(number, figure.unit),
@@ -108,11 +116,24 @@ export function buildPresetField({
             ? { ok: false, message: message(read) }
             : { ok: true, text: read.display, commit: read.value };
         },
-        onCommit: (n) => applyPatch(field.setFigure(values, figure.key, n)),
+        onCommit: (n) => {
+          held = n;
+          applyPatch(field.setFigure(values, figure.key, n));
+        },
         ariaLabel: figureLabel(figure),
         toggleLabel,
+        ...(typeof advise === "function"
+          ? {
+              advice: () => {
+                const code = advise(held);
+                return code ? message(code) : null;
+              },
+              adviceLabel,
+            }
+          : {}),
       }),
     ]);
+  };
 
   /** The figures, filled from what the card holds now, shown for Custom…
       alone. */

@@ -39,14 +39,16 @@ with its siblings [Rest Hippo](https://github.com/jfigge/resthippo) and Port Hip
   600-mil DIP seats at its true width. Every tie point, rail hole, and component
   terminal is individually addressable (`bb1.f12`, `psu1.+`), so chip pins and
   wire ends bind to real holes.
-- **110 chips in two logic families** — **52 74LS** parts (gates, open-collector
+- **115 chips in two logic families** — **53 74LS** parts (gates, open-collector
   and Schmitt parts, buffers and transceivers, flip-flops, latches, counters,
   shift registers, decoders, an encoder, multiplexers, a comparator, adders and
   the '181 ALU); **46 CD4000B** parts (gates, Schmitt triggers, level shifters,
   the bare-MOSFET CD4007UB, flip-flops, decade/ripple/up-down counters, a
   shift-and-store register, a BCD-to-7-segment driver, analog switches and
-  multiplexers, and the RC timers and one-shots); the **NE555**; seven
-  **memories** (SRAM, ROM, EPROM, EEPROM up to 128 KB); the 65xx peripherals
+  multiplexers, and the RC timers and one-shots); the **NE555**; the bench
+  parts (the **LM358** op-amp, the **ULN2003A** Darlington array and the
+  **4N35** and **PC817** optocouplers); seven **memories** (SRAM, ROM, EPROM,
+  EEPROM up to 128 KB); the 65xx peripherals
   (W65C21 PIA, W65C22 VIA); and two real **CPUs** — the **W65C02** and the
   **Z80A**, the latter running a genuine M-cycle / T-state machine so `/M1`,
   `/RFSH` and `/WAIT` mean something. The tray shows one family or both; each

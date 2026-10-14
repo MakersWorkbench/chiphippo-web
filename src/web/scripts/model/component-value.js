@@ -18,8 +18,8 @@
  */
 
 // component-value.js — the ONE way a component's value is read from what a
-// person typed and printed back: a resistance, a capacitance, an inductance or
-// a voltage, picked from a list or typed free-hand into a Properties combo box
+// person typed and printed back: a resistance, a capacitance, an inductance,
+// a voltage or a clock's rate, picked from a list or typed free-hand into a Properties combo box
 // (components/value-combobox.js). Pure and DOM-free, so the rules are tested
 // without a window and every value field — and the loader, reading an old
 // document — takes the same path.
@@ -32,7 +32,7 @@
 //     words are case-blind;
 //   · then, optionally, the unit — `Ω`/`ohm`/`ohms`/`R`, `F`/`farad(s)`,
 //     `H`/`henry`/`henries`/`henrys`, `V`/`volt(s)`, `A`/`amp(s)`/
-//     `ampere(s)` (a gain has none). A unit is never required
+//     `ampere(s)`, `Hz`/`hertz` (a gain has none). A unit is never required
 //     (the field knows its own), but a WRONG one is an error, not a guess;
 //   · the RKM form printed on the parts themselves, a prefix or unit letter
 //     standing where the decimal point would — `4k7`, `2R2`, `4n7`, `5V1`,
@@ -52,6 +52,7 @@ export const UNITS = Object.freeze({
   henry: Object.freeze({ symbol: "H" }),
   volt: Object.freeze({ symbol: "V" }),
   amp: Object.freeze({ symbol: "A" }),
+  hertz: Object.freeze({ symbol: "Hz" }),
   ratio: Object.freeze({ symbol: "" }),
 });
 
@@ -65,6 +66,8 @@ export const VALUE_RANGES = Object.freeze({
   electrolytic: Object.freeze({ min: 100e-9, max: 100e-3 }),
   inductor: Object.freeze({ min: 1e-9, max: 10 }),
   zener: Object.freeze({ min: 1.8, max: 200 }),
+  // A clock brick's Custom rate (catalog/parts.js CLOCK_CUSTOM_RANGE).
+  clock: Object.freeze({ min: 1, max: 10e3 }),
 });
 
 /** Significant digits a value keeps: enough for any value a part is sold
@@ -111,6 +114,8 @@ const UNIT_WORDS = Object.freeze([
   ["ampere", "amp"],
   ["amps", "amp"],
   ["amp", "amp"],
+  ["hertz", "hertz"],
+  ["hz", "hertz"],
   ["ohms", "ohm"],
   ["ohm", "ohm"],
   ["Ω", "ohm"], // U+03A9 GREEK CAPITAL OMEGA
@@ -180,6 +185,7 @@ const QUANTITY_OF = Object.freeze({
   henry: "inductance",
   volt: "voltage",
   amp: "current",
+  hertz: "frequency",
   ratio: "gain",
 });
 export { QUANTITY_OF };
@@ -188,7 +194,7 @@ export { QUANTITY_OF };
  * Read a typed value.
  *
  * @param {string} text - what was typed (or picked).
- * @param {"ohm"|"farad"|"henry"|"volt"|"amp"|"ratio"} unit - the field's
+ * @param {"ohm"|"farad"|"henry"|"volt"|"amp"|"hertz"|"ratio"} unit - the field's
  *   own unit.
  * @param {{min: number, max: number}} [range] - inclusive; checked after the
  *   value reads, so a well-formed value outside it says so.

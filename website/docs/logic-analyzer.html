@@ -153,11 +153,55 @@ something holds — draws that voltage instead: 0 V along the bottom of the
 lane, the highest supply on the desk along the top. A capacitor is seen to
 curve up toward its supply rather than to jump from Low to High, a 74LS
 signal swings between about 0.2 V and 4.4 V, and the value column reads in
-volts (<code>3.16 V</code>).
-The lane&#39;s horizontal axis still counts ticks, not seconds. While a voltage is
-moving, Spice Lite ticks thirty times a simulated second to draw it, so on its
-own the curve keeps its true shape; a clock&#39;s edges add ticks of their own in
-between, and a stretch where nothing changes takes no extra width.</p>
+volts (<code>3.16 V</code>). While a voltage is moving, Spice Lite samples it thirty
+times a simulated second (a wave from a clock brick, sixteen times a period),
+and the analyzer joins those samples into its curve. Once the voltage is within
+the <strong>Settle gap</strong> (Settings ▸ Spice Lite) of where it is heading, Spice Lite
+stops sampling it, and the lane holds it flat until the next thing that moves
+it — so a switch thrown after a quiet second draws as a step, not a ramp.</p>
+<h2 id="timing-and-transitions">Timing and Transitions</h2>
+<p>The <strong>Timing | Transitions</strong> picker beside the panel&#39;s title chooses how the
+trace is laid across the lanes. Both draw the same recording, so you can switch
+back and forth, running or stopped; the analyzer remembers which one you left
+it on.</p>
+<h3 id="timing">Timing</h3>
+<p>Across is <strong>simulated time</strong>. Each sample sits at the moment it was taken, so a
+clock&#39;s halves are as long as each other, a PWM&#39;s short half is short, and the
+gap between two switch presses is as wide as the time between them. Faint
+vertical lines mark the <strong>divisions</strong>, and the header shows how much time one
+division is (<code>5 ms/div</code>):</p>
+<ul>
+<li><strong>−</strong> and <strong>+</strong> step the scale coarser or finer, 1-2-5 at a time, from
+100 ns to 5000 s a division.</li>
+<li><code>Cmd/Ctrl</code>+scroll (or a trackpad pinch) over the lanes zooms the same way,
+about the point under the pointer — the way to zoom into one edge.</li>
+<li><strong>Fit</strong> (lit while it is on) picks the finest scale that shows the whole
+trace in the panel and keeps doing so as the run goes on. It is where a new
+analyzer starts; pressing − or + leaves it, and the scale then stays where
+you put it, run after run, until you press Fit again (a restart begins at
+Fit).</li>
+</ul>
+<p>A scale too fine to hold the whole trace (more than about 16 million pixels
+of it) is refused, and if a long run at a fixed scale grows past that, the
+scale steps out to keep it.</p>
+<h3 id="transitions">Transitions</h3>
+<p>Across is <strong>change</strong>. Each sample where any channel moves gets a fixed slice,
+and a stretch where nothing moves folds away, so a second of steady HIGH and a
+microsecond glitch take the same room and only the interesting moments fill
+the screen. A fold that stands for real time — more than four of the trace&#39;s
+usual steps between samples — is drawn as a narrow shaded break with a dashed
+seam; hover it to see how much simulated time was cut out there. Shorter folds
+(a slow signal under a fast clock, a voltage creeping in tiny steps) close up
+silently, or the lanes would be striped with breaks that say nothing.</p>
+<p>What counts as a change: a level, a bus value or a net that turns from a
+voltage into a level is compared exactly. A voltage counts as changed once it
+has moved more than the <strong>Settle gap</strong> (Settings ▸ Spice Lite, 1 % by default)
+of the lane&#39;s full scale from the value last shown — compared against what was
+last SHOWN, not the sample before, so a capacitor creeping up in steps each too
+small to count still adds a slice every time the creep adds up to one. Changing
+the gap redraws the trace at once.</p>
+<p>The Δ readout reads simulated time in either mode, so two cursors measure the
+same in Transitions as in Timing even though the trace between them is folded.</p>
 <h2 id="multi-bit-bus-lanes">Multi-bit (bus) lanes</h2>
 <p>A channel bound to a <strong>bus</strong> (see <a href="wiring.html">Wiring, Nets &amp; Buses</a>) doesn&#39;t
 draw a two-level waveform — decoding eight or sixteen individual traces
@@ -169,9 +213,9 @@ from a name like <code>D[7:0]</code>); if even one member is floating or unknown
 whole word is undecodable for that span and the lane hatches just like an
 unknown net.</p>
 <h2 id="cursors--">Cursors &amp; Δ</h2>
-<p>Click anywhere in the waveform area to drop <strong>cursor A</strong> at that tick;
-<code>Shift</code>-click to drop <strong>cursor B</strong>. Drag either cursor to slide it to a
-different tick — the gutter&#39;s value column updates to show each channel&#39;s
+<p>Click anywhere in the waveform area to drop <strong>cursor A</strong> at the sample under
+the pointer; <code>Shift</code>-click to drop <strong>cursor B</strong>. Drag either cursor to slide it
+to a different sample — the gutter&#39;s value column updates to show each channel&#39;s
 value at cursor A while it&#39;s placed. With only cursor A down, the header
 reads <code>t=&lt;tick&gt;</code>; with both down, it reads the delta between them —
 <strong>Δ N ticks</strong>, plus the simulated time between the two columns in
@@ -186,8 +230,10 @@ the recorded trace and both cursors without touching the channel list;
 starting a fresh <strong>Run</strong> does the same automatically.</p>
 <h2 id="export">Export</h2>
 <p>Two buttons in the header export the diagram exactly as currently rendered
-— every channel, the full retained trace, and a label column identifying
-each lane:</p>
+— every channel, the full retained trace in the mode and at the scale on
+screen, and a label column identifying each lane. (At a scale fine enough to
+make the whole trace more than 16,000 pixels wide, the export is the stretch
+on screen instead.)</p>
 <ul>
 <li><strong>SVG</strong> — downloads a self-contained <code>timing.svg</code> (colors resolved to
 concrete values, not the app&#39;s live CSS variables, so it renders

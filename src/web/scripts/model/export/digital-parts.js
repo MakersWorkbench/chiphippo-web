@@ -112,6 +112,7 @@ export const DIGITAL_UNSUPPORTED = Object.freeze({
   "74LS259": "noDigitalModel",
   "74LS279": "noDigitalModel",
   "74LS533": "noDigitalModel",
+  "74LS92": "noDigitalModel", // its library has the '90 and '93, not the '92
   // The CD4000 parts with no pin-for-pin twin in Digital's library (v0.31
   // has no 4000-series folder; the six that do are in DIGITAL_FILES, and no
   // MSI part — the 4094, 4511, 4029, 4510 — is among them). The 4000

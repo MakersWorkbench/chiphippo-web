@@ -84,13 +84,13 @@ const ampsLabel = (amps) =>
 /** Clock rates (Hz) plus click-to-toggle "manual"; the timing lives in the
     renderer's SimController — the def carries only the pure contract. A 1-2-5
     ladder up two decades, then 250 Hz, 500 Hz and 1 kHz: the slow end is for
-    watching an edge land, the fast end for letting a counter or a CPU actually
-    get somewhere. SimController runs edges in BATCHES between frames
+    watching an edge land, the fast end for letting a counter or a CPU
+    actually get somewhere — and any other rate in CLOCK_CUSTOM_RANGE typed
+    as the Rate's Custom… (2026-10-13). SimController runs edges in BATCHES between frames
     (features/done/batched-ticks.md), so no timer caps the rate — a desk too
     busy to keep up runs slower and its speed button SAYS so. 1 kHz was dropped
     once (2026-10-09, few desks kept up with it) and restored with 500 Hz
-    (2026-10-10). A desk saved at a rate not offered — faster than the top —
-    runs at the fastest that is (`offeredHz`). */
+    (2026-10-10). */
 export const CLOCK_HZ = Object.freeze([
   1,
   2,
@@ -104,6 +104,79 @@ export const CLOCK_HZ = Object.freeze([
   1000,
   "manual",
 ]);
+
+/** A clock's Custom… rate, Hz, inclusive: any figure from 1 Hz to 10 kHz
+    (component-value.js's `VALUE_RANGES.clock`, the range its box reads). */
+export const CLOCK_CUSTOM_RANGE = VALUE_RANGES.clock;
+/** Past this a clock's rate gets the (i) saying it may run slower: an edge
+    every 250 µs is more than most desks can tick in real time, and a batch
+    that cannot keep up slows the run (features/done/batched-ticks.md). */
+export const CLOCK_FAST_HZ = 2000;
+/** The Rate preset that opens the Custom rate box. */
+export const CLOCK_CUSTOM = "custom";
+
+/** A clock's stored rate: "manual", or a number in CLOCK_CUSTOM_RANGE —
+    held to it (a desk edited by hand), anything else 1 Hz. */
+function clockHz(hz) {
+  if (hz === "manual") return hz;
+  if (typeof hz !== "number" || !Number.isFinite(hz)) return 1;
+  return Math.min(CLOCK_CUSTOM_RANGE.max, Math.max(CLOCK_CUSTOM_RANGE.min, hz)); // prettier-ignore
+}
+
+/**
+ * The clock's Rate field: a PRESET list (components/preset-field.js,
+ * part-properties-dialog.js's `"preset"` type) — CLOCK_HZ, Manual, then
+ * Custom…, which opens a box the rate is typed into ("2500", "2.5k",
+ * "2.5 kHz"), read by the one value parser and held to CLOCK_CUSTOM_RANGE.
+ * `hz` stays what it always was — a number or "manual" — so nothing that
+ * reads a rate knows a custom one from a preset. A rate past CLOCK_FAST_HZ
+ * carries the (i) that says it may be slowed (`advise`).
+ */
+const CLOCK_RATE_FIELD = Object.freeze({
+  key: "hz",
+  label: "Rate",
+  type: "preset",
+  options: Object.freeze(
+    CLOCK_HZ.map((hz) =>
+      Object.freeze({
+        value: hz,
+        label: hz === "manual" ? "Manual" : formatHz(hz),
+      }),
+    ),
+  ),
+  customValue: CLOCK_CUSTOM,
+  customLabel: "Custom…",
+  figures: Object.freeze([
+    Object.freeze({
+      key: "customHz",
+      label: "Custom rate",
+      unit: "hertz",
+      range: CLOCK_CUSTOM_RANGE,
+      advise: (hz) => (hz > CLOCK_FAST_HZ ? { code: "fastClock" } : null),
+    }),
+  ]),
+  /** The preset the card shows: the rate's own, else Custom…. */
+  selected(values) {
+    const hz = clockHz(values?.hz);
+    return CLOCK_HZ.includes(hz) ? hz : CLOCK_CUSTOM;
+  },
+  /** The rate the Custom box shows: the clock's own (1 Hz for a manual
+      clock, the box's floor). */
+  figuresOf(values) {
+    const hz = clockHz(values?.hz);
+    return { customHz: hz === "manual" ? CLOCK_CUSTOM_RANGE.min : hz };
+  },
+  /** What picking an entry sets — the list hands back a string — or, for
+      Custom…, the rate the box opens on. */
+  pick(values, value) {
+    if (value === CLOCK_CUSTOM) return { hz: this.figuresOf(values).customHz };
+    return { hz: CLOCK_HZ.find((hz) => String(hz) === String(value)) ?? 1 };
+  },
+  /** A typed rate. */
+  setFigure(_values, _key, hz) {
+    return { hz };
+  },
+});
 
 /** A stored rate as one `rates` offers: itself, the fastest offered for one
     faster than all of them (a desk saved at a rate since dropped — 1 kHz —
@@ -1282,15 +1355,7 @@ export const PART_DEFS = Object.freeze(
       ],
       // The Properties dialog — a live setting, so it applies while running.
       properties: [
-        {
-          key: "hz",
-          label: "Rate",
-          type: "select",
-          options: CLOCK_HZ.map((hz) => ({
-            value: hz,
-            label: hz === "manual" ? "Manual" : hzLabel(hz),
-          })),
-        },
+        CLOCK_RATE_FIELD,
         {
           // The levels in both engines; every other wave is Spice Lite's
           // alone (an option's `spiceOnly`: the digital engine runs it square).
@@ -1345,7 +1410,7 @@ export const PART_DEFS = Object.freeze(
         },
       ],
       normalizeParams(raw) {
-        const hz = offeredHz(CLOCK_HZ, raw?.hz, 1);
+        const hz = clockHz(raw?.hz);
         const wave = CLOCK_WAVES.includes(raw?.wave) ? raw.wave : "square";
         if (wave === "square") return { hz };
         const duty = clockDuty(raw?.duty);

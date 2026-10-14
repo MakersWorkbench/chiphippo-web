@@ -88,7 +88,8 @@ multiplexers that build address/data logic around them.
 | `74LS259` | 8-bit addressable latch |
 | `74LS533` / `74LS573` | Octal transparent latch, tri-state (inverting / non-inverting) |
 
-The `74LS73`, `74LS75`, and `74LS76` reproduce their datasheet's
+The `74LS73`, `74LS75`, `74LS76`, `74LS83`, `74LS90` and `74LS92` reproduce
+their datasheet's
 **non-standard power-pin placement** — real parts don't always put VCC and
 GND on the package corners, and neither do these.
 
@@ -97,6 +98,7 @@ GND on the package corners, and neither do these.
 | Part | Description |
 | --- | --- |
 | `74LS90` | Decade (÷10) ripple counter |
+| `74LS92` | Divide-by-12 ripple counter |
 | `74LS161` | Synchronous 4-bit binary counter |
 | `74LS169` | Synchronous 4-bit up/down counter |
 | `74LS193` | Synchronous up/down 4-bit counter |

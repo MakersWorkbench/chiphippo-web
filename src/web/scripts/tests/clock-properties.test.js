@@ -125,3 +125,72 @@ test("the Pulse width is live for a PWM alone, and reads out its own percent", (
   pick("Rate", "manual");
   assert.equal(slider().disabled, true);
 });
+
+test("Rate ▸ Custom… opens a box any rate from 1 Hz to 10 kHz is typed in; past 2 kHz, an (i)", () => {
+  const { doc, surface, controller } = desk();
+  const clk = controller.addBrickAt("clock", 20, 4, { hz: 5 });
+  const params = () => doc.getComponent(clk.id).params;
+  openProperties(surface, clk.id);
+  const custom = () => row("Custom rate");
+  assert.equal(custom(), undefined, "a preset: no box");
+  assert.equal(row("Rate").querySelector("select").options[11].textContent, "Custom…"); // prettier-ignore
+  pick("Rate", "custom");
+  // It opens on the rate the clock had.
+  const input = () => custom().querySelector("input");
+  assert.equal(input().value, "5Hz");
+  assert.deepEqual(params(), { hz: 5 });
+  const advice = () => custom().querySelector(".properties-hint-btn");
+  const note = () => custom().querySelector(".properties-field-error");
+  const type = (text) => {
+    input().value = text;
+    input().dispatchEvent(new window.Event("change", { bubbles: true }));
+  };
+  assert.equal(advice().hidden, true);
+  // Hz, a k, or kilohertz — read, shown tidy, and set.
+  for (const [text, hz, shown] of [
+    ["1500", 1500, "1.5kHz"],
+    ["2.5k", 2500, "2.5kHz"],
+    ["750 Hz", 750, "750Hz"],
+    ["3 kHz", 3000, "3kHz"],
+    ["10K", 10e3, "10kHz"],
+  ]) {
+    type(text);
+    assert.equal(params().hz, hz, text);
+    assert.equal(input().value, shown, text);
+    assert.equal(note().hidden, true, text);
+    assert.equal(advice().hidden, hz <= 2000, `${text}: the (i)`);
+  }
+  // Out of range, or not a rate: red, and the clock keeps its rate.
+  for (const text of ["20k", "0.5", "fast", "5V"]) {
+    type(text);
+    assert.equal(params().hz, 10e3, text);
+    assert.equal(note().hidden, false, text);
+    assert.equal(input().getAttribute("aria-invalid"), "true", text);
+  }
+  for (const [text, says] of [
+    ["20k", "Out of range: 1Hz to 10kHz"],
+    ["fast", "Not a frequency value"],
+    ["5V", "That's a voltage, not a frequency"],
+  ]) {
+    type(text);
+    assert.equal(note().textContent, says, text);
+  }
+  type("4k");
+  advice().click();
+  const card = custom().querySelector(".properties-advice");
+  assert.equal(card.hidden, false);
+  assert.equal(card.textContent, "The clock may not be able to run at this rate, and will be slowed as necessary."); // prettier-ignore
+  advice().click();
+  // Reopened, a custom rate is Custom… with its box; a preset is the preset.
+  openProperties(surface, clk.id);
+  assert.equal(row("Rate").querySelector("select").value, "custom");
+  assert.equal(input().value, "4kHz");
+  assert.equal(advice().hidden, false, "the (i) from the start");
+  pick("Rate", "250");
+  assert.deepEqual(params(), { hz: 250 });
+  assert.equal(custom(), undefined);
+  // And the clock runs at it: its badge says so.
+  pick("Rate", "custom");
+  type("1234");
+  assert.equal(surface.querySelector(`[data-component-id="${clk.id}"]`).textContent.includes("1.23 kHz"), true); // prettier-ignore
+});

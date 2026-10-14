@@ -728,3 +728,34 @@ test("74LS90: ÷2 section on QA; gated reset-to-0 and set-to-9", () => {
     [H, L, L, H], // QA QB QC QD = 1001 = 9
   );
 });
+
+test("74LS92: ÷2 on QA; ÷6 on QB–QD counts 0,1,2,4,5,6 (not binary); gated reset-to-0", () => {
+  const def = chipDef("74LS92");
+  // CKA=14→QA(12) ; CKB=1→QB(11),QC(9),QD(8) ; R0=6,7. Falling edge.
+  const run = { 6: L }; // R0(1) low → no reset
+  let r = pulse(def, def.logic.state0(), run, 14, false); // CKA falling
+  assert.equal(r.out.get(12), H); // QA 0→1
+  r = pulse(def, r.state, run, 14, false);
+  assert.equal(r.out.get(12), L); // QA 1→0
+  // A rising CKB does nothing.
+  assert.equal(pulse(def, def.logic.state0(), run, 1, true).out.get(11), L);
+  // ÷6, read QD QC QB (TI SDLS940A count sequence): 000 001 010 100 101 110.
+  const seq = [];
+  let s = def.logic.state0();
+  for (let i = 0; i < 7; i++) {
+    const o = outs(def, s, run);
+    seq.push(`${+(o.get(8) === H)}${+(o.get(9) === H)}${+(o.get(11) === H)}`);
+    s = pulse(def, s, run, 1, false).state;
+  }
+  assert.deepEqual(seq, ["000", "001", "010", "100", "101", "110", "000"]);
+  // Reset: both R0 HIGH clears both sections; one alone does not.
+  let t = pulse(def, def.logic.state0(), run, 14, false).state;
+  t = pulse(def, t, run, 1, false).state;
+  assert.deepEqual(step(def, t, { 6: H, 7: L }), t);
+  const r0 = step(def, t, { 6: H, 7: H });
+  const o0 = outs(def, r0, { 6: H, 7: H });
+  assert.deepEqual(
+    [o0.get(12), o0.get(11), o0.get(9), o0.get(8)],
+    [L, L, L, L],
+  );
+});

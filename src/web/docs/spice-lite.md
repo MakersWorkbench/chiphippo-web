@@ -158,7 +158,8 @@ first charges in a **straight line** and then curves the rest of the way.
   [logic analyzer](logic-analyzer.md) is drawn as its wire's voltage, so a
   charging capacitor curves up toward its supply instead of stepping from LOW
   to HIGH, and a 74LS signal swings between about 0.2 V and 4.4 V. The
-  channel's value reads in volts.
+  channel's value reads in volts. The **Settle gap** also sets what the
+  analyzer's Transitions view counts as a change in a voltage.
 
 Slow curves cost nothing to run: Spice Lite calculates _when_ a node will
 cross a threshold rather than stepping toward it, so a 10-second RC delay
@@ -716,7 +717,9 @@ bounce. With it off, or on the standard engine, every switch closes cleanly.
 - **Settle gap**: how close a capacitor's voltage has to get to its final
   value before the probe and the analyzer stop redrawing it (an input watching
   it is told the moment it crosses, whatever this says). 1 % is about five time
-  constants. It never holds the circuit up.
+  constants. It never holds the circuit up. The analyzer's Transitions view
+  uses the same percentage, of a lane's full scale, as the smallest change in a
+  voltage worth a slice of its own.
 - **Switch bounce**: On or Off (Off by default) — see
   [Switch bounce](#switch-bounce).
 - A **TTL | CMOS** strip showing the families your tray shows (and any family

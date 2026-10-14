@@ -68,6 +68,9 @@ trapezoid, a sawtooth either way or a sine (`sim/spice/waves.js`; see
 that plays the tone across it through Web Audio, with a 555 example of four desktops; parts
 flagged `spiceOnly` (it and the electronic load) leave the tray while Spice Lite is off (see
 `.claude/rules/spice-lite.md` → "The speaker").
+**Analyzer x axis** (2026-10-13, no feature number): the logic analyzer draws its trace in
+Timing (simulated time, per-division zoom) or Transitions (a slice a change, steady runs
+folded), `model/scope-axis.js` (see `.claude/rules/spice-lite.md` → "Analyzer x axis").
 **CPU monitor** (2026-10-10, no feature number, `features/done/cpu-monitor.md`): a live
 window on a W65C02/Z80A, opened from the CPU's context menu. It shows memory around PC
 read through the circuit's own decode (bytes editable while running, a ROM's kept at Stop

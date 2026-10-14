@@ -1108,6 +1108,38 @@ export function decadeCounter7490(m) {
   };
 }
 
+/**
+ * Divide-by-twelve ripple counter (7492-style): a ÷2 stage (`qa`, clocked on
+ * the falling edge of `cka`) and a ÷6 stage (`qb`/`qc`/`qd`, on the falling
+ * edge of `ckb`) — not binary: a ÷3 on QB/QC whose carry clocks a ÷2 on QD,
+ * so it counts (QD QC QB) 000 001 010 100 101 110 (TI SDLS940A, "'92A, 'LS92
+ * count sequence") and QD is a square wave at a sixth of CKB. Async gated
+ * reset: both R0 inputs HIGH → 0. No set-to-nine. Wire QA→CKB externally for
+ * the ÷12 count.
+ * @param {{cka,ckb,r0:number[],qa,qb,qc,qd}} m
+ */
+export function divideBy12Counter7492(m) {
+  const reset0 = (ins) => m.r0.every((p) => ins.get(p) === H);
+  return {
+    state0: () => ({ a: L, v: 0 }), // a = QA; v = the ÷6 stage's 0…5 count
+    step(s, ins, prev) {
+      if (reset0(ins)) return { a: L, v: 0 };
+      let a = s.a;
+      let v = s.v;
+      if (prev && edgeFell(prev.get(m.cka), ins.get(m.cka))) a = inv(a);
+      if (prev && edgeFell(prev.get(m.ckb), ins.get(m.ckb))) v = (v + 1) % 6;
+      return { a, v };
+    },
+    outputs: (s) =>
+      new Map([
+        [m.qa, s.a],
+        [m.qb, s.v % 3 === 1 ? H : L],
+        [m.qc, s.v % 3 === 2 ? H : L],
+        [m.qd, s.v >= 3 ? H : L],
+      ]),
+  };
+}
+
 // ── CMOS counters (Feature 400) — unknown-aware, see the header ─────────────
 
 /**

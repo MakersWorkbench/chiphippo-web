@@ -355,6 +355,15 @@ paths:
     sim-state, which the speed button shows in amber (`app.js` `showSpeed`). So there is
     no timer floor and no rate ceiling: a rate on offer runs true until the desk is too
     busy, and then SAYS so (the old floor was derived from `CLOCK_HZ` for that reason).
+    **A clock's Rate is a `"preset"` field** (2026-10-13, `CLOCK_RATE_FIELD` in
+    catalog/parts.js): `CLOCK_HZ`, Manual, then **Custom…**, whose box (`customHz`,
+    unit `hertz` in model/component-value.js — `Hz`/`hertz`, a `k`) takes ANY rate in
+    `CLOCK_CUSTOM_RANGE` (1 Hz – 10 kHz, `VALUE_RANGES.clock`). `params.hz` stays a
+    number or "manual" — no reader knows a custom rate from a preset; `normalizeParams`
+    holds a stored number to the range (a desk at 2 kHz used to be cut to 1 kHz).
+    Past `CLOCK_FAST_HZ` (2000) the box shows an amber (i), "may be slowed as
+    necessary" — a preset figure's `advise(n)` → message code (`fastClock`), the
+    combobox's `advice` (value-combobox.js), worded by `comboMessage`.
   - **The simulation Worker** (2026-10-09, `features/03-sim-worker.md`). The app holds a
     `SimHost` (`components/sim-host.js`), SimController's public surface method for
     method, which runs the run on a module Worker (`components/sim-worker.js` →
@@ -379,6 +388,10 @@ paths:
     pause, doc change, part-state or `wake()` runs whatever is due, THEN ticks and
     publishes synchronously — so the board answers on the same event and synchronous
     readers (the Properties dialog) keep working. `#tickAt` keeps time monotonic.
+    **An EDIT (doc change, part-state) under Spice Lite also runs the old board on to
+    its moment** (`#runOnTo`, 2026-10-13): the engine replays a late tick's history on
+    the board it is handed, so without it a switch thrown after a quiet stretch charged
+    its RC from the last tick (see spice-lite.md → "Analyzer x axis").
     **Pause catches up too**, then freezes AT THE PRESS (or where an out-of-budget
     batch re-anchored): frozen with a frame of edges unrun, the first Step only
     caught up to the press — no edge, or several — instead of moving one

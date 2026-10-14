@@ -51,6 +51,7 @@ import {
   srLatchUnit,
   shiftRegister595,
   decadeCounter7490,
+  divideBy12Counter7492,
 } from "../sim/sequential.js";
 import { input, output, io, nc, gnd, vcc, unit, buf3 } from "./pin-builders.js";
 
@@ -1262,6 +1263,42 @@ export const CHIPS_74LS = Object.freeze([
       qb: 9,
       qc: 8,
       qd: 11,
+    }),
+  },
+  {
+    id: "74LS92",
+    title: "Divide-by-12 ripple counter",
+    blurb:
+      "Divide-by-twelve counter built from a ÷2 section (CKA→QA) and a ÷6 " +
+      "section (CKB→QB,QC,QD — a ÷3 then a ÷2, so not a binary count), both " +
+      "falling-edge; gated reset-to-zero (R0). Wire QA→CKB for a ÷12 count. " +
+      "Non-standard power pins.",
+    group: "Counter",
+    package: "DIP-14",
+    pins: [
+      input(1, "CKB"),
+      nc(2),
+      nc(3),
+      nc(4),
+      vcc(5),
+      input(6, "R0(1)"),
+      input(7, "R0(2)"),
+      output(8, "QD"),
+      output(9, "QC"),
+      gnd(10),
+      output(11, "QB"),
+      output(12, "QA"),
+      nc(13),
+      input(14, "CKA"),
+    ],
+    logic: divideBy12Counter7492({
+      cka: 14,
+      ckb: 1,
+      r0: [6, 7],
+      qa: 12,
+      qb: 11,
+      qc: 9,
+      qd: 8,
     }),
   },
 ]);

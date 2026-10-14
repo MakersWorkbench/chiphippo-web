@@ -6007,6 +6007,49 @@ textarea.annotation-editor {
   background: var(--color-surface-1);
 }
 
+.scope-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Fit while the scale is fitting the trace (no scale of the user's chosen). */
+.scope-btn--active,
+.scope-btn--active:hover {
+  background: var(--color-surface-1);
+  border-color: var(--color-subtext);
+}
+
+/* The Timing | Transitions picker: the app's shared segmented track, packed
+   beside the title as the AI panel's Build/Review is. */
+.scope-axis {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+/* Timing mode's scale: − / "1 ms/div" / + / Fit. */
+.scope-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.scope-zoom[hidden] {
+  display: none;
+}
+
+.scope-zoom-btn {
+  min-width: calc(var(--font-size) + 9px);
+  padding: 2px 0;
+}
+
+.scope-per-div {
+  min-width: 9ch;
+  font: var(--font-size-xs) / 1 var(--font-mono);
+  color: var(--color-subtext);
+  text-align: center;
+  white-space: nowrap;
+}
+
 .scope-close {
   flex: 0 0 auto;
   width: var(--segment-height);
@@ -6136,8 +6179,16 @@ textarea.annotation-editor {
   cursor: crosshair;
 }
 
+/* The lanes' whole width and height — what the panel scrolls. Only the
+   stretch on screen is drawn: the svg is that window, placed at its x. */
+.scope-track {
+  position: relative;
+}
+
 .scope-svg {
   display: block;
+  position: absolute;
+  top: 0;
 }
 
 .scope-empty {

@@ -213,7 +213,7 @@ Every part has Name and Description fields. Discretes also take an optional part
 - **Oscillator cans.** Full and half size, 1 Hz–1 kHz, chip-powered.
 - **Power bricks** (desk-level, not seated)
   - **PSU:** 3, 5, 9, 12 or 15 V. Above 5 V damages 74LS chips. The current limit (100 mA–5 A) matters under Spice Lite.
-  - **Clock:** 1, 2, 5, 10, 20, 50, 100, 250 Hz, 1 kHz, or Manual (click to toggle). It must itself be powered.
+  - **Clock:** 1, 2, 5, 10, 20, 50, 100, 250, 500 Hz, 1 kHz, a Custom rate typed in (anything from 1 Hz to 10 kHz), or Manual (click to toggle). It must itself be powered.
 - **Annotations:** Label (one line) and Note (multi-line). They can anchor to a part and ride with it, and they are invisible to the electrical model.
 - **Signals** (§10) and **Arduino Output/Input tags** (§11).
 
@@ -590,7 +590,7 @@ Up to **10 stimulus buttons per desktop** sit on a rail at the desk's right edge
   - TX, RX and LG lamps sit on the desk.
 
 ### Example circuits
-- **94 per-chip benches**, opened from a chip's pin-assignments window: 52 74LS, 41 CD4000, and the NE555 as three hand-built desktops. Each bench is a powered breadboard with switches, pull-downs and LED read-outs.
+- **101 per-chip benches**, opened from a chip's pin-assignments window: 53 74LS, 41 CD4000, the NE555 as three hand-built desktops, the LM358, ULN2003A, 4N35 and PC817, and a Hello World computer for each of the W65C02 and Z80A. Each bench is a powered breadboard with switches, pull-downs and LED read-outs.
 - **Group projects** in the repo's `demos/`: one per function (gates, counters, decoders…) for each family.
 - **Whole computers:** 65xx blink, 65xx with LCD, and a Ben Eater 6502 core plus I/O, each with a `.hex` ROM.
 - **Pipeline.** `make demos` regenerates every bench from specs and validates it through the real engine.

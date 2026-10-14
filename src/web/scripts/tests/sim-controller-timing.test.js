@@ -219,3 +219,47 @@ test("a Spice Lite wave is where its clock is between edges: Step, own pause", a
   sim.stop();
   cap.stop();
 });
+
+test("Spice Lite: a switch thrown after a quiet stretch charges from the throw, not from the last tick", async () => {
+  // The cap-electrolytic Timer: a slide switch takes 10 kΩ into 1000 µF to
+  // +5 V (τ = 1 s), and a CD40106B reads the capacitor. Nothing ticks after
+  // Run — no clock, the capacitor flat at 0 V — so when the switch is
+  // thrown 3 s in, the last tick is Run's. The engine catches a late tick up
+  // from the last on the board it is HANDED; given the thrown board, it
+  // charged the capacitor across those 3 s (5(1 − e^−3) = 4.75 V at once,
+  // the Schmitt tripped on the spot). The board as it stood must run on to
+  // the throw first.
+  resetDom();
+  const { readFileSync } = await import("node:fs");
+  const { exampleDesktops } = await import("../model/example-desktops.js");
+  const ref = "cap-electrolytic";
+  const payload = JSON.parse(readFileSync(new URL(`../../demos/${ref}.json`, import.meta.url), "utf8")); // prettier-ignore
+  const { doc } = exampleDesktops(ref, payload).find((d) => d.name === `${ref} Timer example`); // prettier-ignore
+  const sw = doc.components.find((c) => c.ref === "sw-slide");
+  const capC = doc.components.find((c) => c.ref === "cap-electrolytic");
+  const r = doc.components.find((c) => c.ref === "resistor" && c.params.ohms === 10e3); // prettier-ignore
+  const tau = r.params.ohms * capC.params.farads;
+  let now = 0;
+  const clock = { now: () => now, setTimeout: () => 0, clearTimeout() {} };
+  const desk = fakeDoc(doc);
+  const sim = new SimController({ deskDoc: desk, notifications: fakeNotifications(), clock }); // prettier-ignore
+  sim.setSpiceLite({ enabled: true });
+  const cap = capture();
+  sim.start();
+  const volts = () => {
+    const e = cap.events.at(-1);
+    return e.nodeVolts.get(e.netlist.netOfPoint.get(`${capC.board}.${capC.anchor}`)); // prettier-ignore
+  };
+  assert.ok(volts() < 0.01, `discharged at Run: ${volts()}`);
+  now += 3000; // a quiet three seconds
+  desk.setComponentParams(sw.id, { pos: sw.params.pos === "2" ? "1" : "2" });
+  window.dispatchEvent(new window.CustomEvent("chiphippo:doc-changed"));
+  assert.ok(volts() < 0.01, `still discharged at the throw: ${volts()}`);
+  // …and one τ after it, 1 − 1/e of the supply.
+  now += tau * 1000;
+  sim.wake();
+  const want = 5 * (1 - Math.exp(-1));
+  assert.ok(Math.abs(volts() - want) < 0.02, `one τ on: ${volts()}, want ${want}`); // prettier-ignore
+  sim.stop();
+  cap.stop();
+});

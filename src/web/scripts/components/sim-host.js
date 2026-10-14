@@ -61,6 +61,7 @@ function stoppedDetail() {
   return {
     running: false,
     mode: TRANSPORT.STOPPED,
+    at: null,
     netLevels: new Map(),
     strongLevels: new Map(),
     chipStatus: new Map(),

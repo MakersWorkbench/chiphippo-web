@@ -626,13 +626,51 @@ tiedLow)`: `supplyMaOf` hands a silicon block a `tiedLow(pin)` read off the wiri
   (`fullScaleOf` over the broadcast's `supplies`, raised only, reset on Run; never
   auto-ranged, which would turn a creeping node back into a step). Columns without
   volts still step; a flat stretch adds only its ends. The gutter reads `scope.volts`
-  to two places. The axis is still TICKS: the display frames (`ANALOG_FRAME_S`, sampled
-  sim-ticks since 2026-10-09) are what space a moving curve evenly, and clock edges
-  interleave their own columns —
-  stated in the guide, not corrected. The Δ-ms readout is each column's own
-  simulated moment (`ScopeRecorder` keeps the sim-tick's `at`; `atOf`), so frames
-  and wakes cost it nothing (2026-10-10 — it was ticks × the fastest clock's
-  half-period).
+  to two places. The Δ-ms readout is each column's own simulated moment
+  (`ScopeRecorder` keeps the sim-tick's `at`; `atOf`), so frames and wakes cost it
+  nothing (2026-10-10 — it was ticks × the fastest clock's half-period).
+- **Analyzer x axis — Timing | Transitions** (2026-10-13, no feature number; the
+  shelved oscilloscope stash was dropped and NOT reused). The tick-index axis
+  (`PX_PER_TICK`) is gone; `model/scope-axis.js` (pure) places the same recorder
+  columns two ways, chosen by the header's `buildSegmented` picker and kept in
+  `settings.scopeAxis` (default `"timing"`, `normalizeAxisMode`). The analyzer samples
+  on the ENGINE's events only (sim-ticks: edges, inputs, wakes, and the display frames
+  `#emitFrames` sends while the analyzer records) — it has no clock of its own and
+  cannot have one (the curves live in the Worker). So:
+  - **Timing**: x = `at` (`columnTimes`, monotonic), `PX_PER_DIV` 100 at a 1-2-5
+    `SEC_PER_DIV` ladder (100 ns – 5000 s); `#secPerDiv` null = Fit (`fitSecPerDiv`,
+    the default, session-only once zoomed), floored by `minSecPerDiv` so the track
+    stays under `MAX_TRACK_PX` (16 M px). −/+/Fit and ⌘/Ctrl+wheel (anchored at the
+    pointer, `#anchor`). The right edge is `#now`: SimController's sim-state now
+    carries `at` (`#shownAt()`, null when stopped/replaying). A voltage is joined
+    straight to the next sample only when it is ≤ `JOIN_S` (1.5 frames) away
+    (`joined`); otherwise held and STEPPED there — frames stop once every node is
+    within the gap, so a longer silence means it had arrived (a switch thrown after a
+    quiet second was a 1 s ramp under a plain straight join).
+  - **Transitions**: a column where any DRAWN channel moved gets `SLICE_PX`; a
+    volts change is judged against the value last SHOWN (not the previous sample) by
+    `gapPercent` of the full scale (`setSpiceLite`, live from Settings), so a creep
+    under the threshold adds up and still shows; levels/bus words by identity. Runs of
+    unchanged columns fold to 0 px; only a fold longer than `MARK_STEPS` (4) × the
+    median sample step keeps a `BREAK_PX` titled break (`.scope-break`, `scope.folded`)
+    — marking every fold combed the lanes on a creeping RC.
+  - **Drawing is windowed**: `.scope-track` carries the full width; the svg is the
+    visible stretch ± one viewport (`#win`, its viewBox at the window's x), redrawn on
+    a scroll past it; off-window x is clamped (`#xOf`) so each lane stays one path.
+    Export is the whole track up to `EXPORT_MAX_PX` (16 000), else the stretch on
+    screen.
+  - Found while verifying, FIXED 2026-10-13 (SimController, not the engine): a switch
+    thrown after a quiet stretch (no ticks since Run) jumped an RC node as if it had
+    charged since the previous tick — cap-electrolytic's Timer: flip at 2.98 s read
+    4.75 V at once (= 5(1−e^−2.98)), the Schmitt tripped immediately. The engine
+    catches a late tick up on the board it is HANDED, and an edit handed it the
+    edited one. `#onDocChanged`/`#onPartState` now call `#runOnTo()` after
+    `#catchUp()`: under Spice Lite the OLD board (still `#base`) ticks at the edit's
+    moment, owed not published (its sim-tick still goes out), before
+    `#forgetDocument`; `#partStateVersion` is bumped after it so the bounce does not
+    read the old board as a contact move. Held by `sim-controller-timing.test.js`
+    ("a switch thrown after a quiet stretch"); `lamp-average-bounce.test.js`'s
+    `afterEdit` skips that run-on tick.
 - **A gate biased into its linear region** (`spice/linear-bias.js`, 2026-10-08, plan
   Phase 5): an inverting, non-Schmitt gate unit (INV/NAND/NOR) whose output a RESISTOR
   ties straight to one of its own inputs (`selfBiasedGates`, per netlist) is an amplifier

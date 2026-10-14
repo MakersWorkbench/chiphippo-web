@@ -514,11 +514,17 @@ function captureTicks() {
 
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`); // prettier-ignore
 
-test("every rate the picker offers runs at its TRUE rate — no timer floor", () => {
+test("every rate the picker offers (and a custom one) runs at its TRUE rate — no timer floor", () => {
   // Edges come in batches between frames (features/done/batched-ticks.md), so
   // nothing caps the rate but what a batch can do: 1 kHz is 2000 edges a
   // second, each at its own exact moment.
-  for (const hz of CLOCK_HZ.filter((v) => typeof v === "number")) {
+  // …and a Custom… rate (catalog/parts.js CLOCK_CUSTOM_RANGE), to its top.
+  for (const hz of [
+    ...CLOCK_HZ.filter((v) => typeof v === "number"),
+    1234,
+    10e3,
+  ]) {
+    // prettier-ignore
     resetDom();
     const clock = fakeClock();
     const sim = new SimController({
