@@ -34,6 +34,7 @@ import {
   testSuiteFaults,
 } from "../ai/generate.js";
 import {
+  BUILDABLE_DEFS,
   buildCatalogCard,
   buildRepairMessage,
   buildReviewSystemPrompt,
@@ -259,6 +260,16 @@ test("the BUILDER is offered only what the compiler can seat; the review sees al
   }
 });
 
+test("the clock brick is on the builder's card — its PWM duty is a wave, not a knob", () => {
+  // The prompt's own rules send an `edges` test to a `clock` part, so a card
+  // without one (the duty range once read as a pot's wiper) left every
+  // sequential design guessing at an id.
+  assert.ok(BUILDABLE_DEFS.some((d) => d.id === "clock"));
+  assert.match(buildSystemPrompt(), /^clock — .*out vcc gnd$/m);
+  // …while a real knob stays off it.
+  assert.ok(!BUILDABLE_DEFS.some((d) => d.id === "pot"));
+});
+
 test("a part's buses and a memory's enables are on its card line", () => {
   // `A[3]` is a member form the resolver accepts — so the model is shown the
   // bus names it may use — and a memory's CE/OE gate its outputs exactly as a
@@ -310,6 +321,7 @@ test("the system prompt states the rules the compiler actually enforces", () => 
   // mention one would spend a repair round teaching it every time.
   assert.match(prompt, /NEVER list a power pin/);
   assert.match(prompt, /at least two members/);
+  assert.match(prompt, /its own name/);
   assert.match(prompt, /at most one net/);
   assert.match(prompt, /Two outputs must not share a net/);
   assert.match(prompt, /series resistor/);
@@ -511,4 +523,21 @@ test("the design's own explanation reaches the caller as well as the desk", () =
     "",
     "a spec without one reports no note rather than undefined",
   );
+});
+
+test("a reply with no parts and a reason is a refusal, not a broken spec", () => {
+  const r = buildFromReply(
+    JSON.stringify({ title: "Cannot build: needs a 555", notes: "No timer.", parts: [], nets: [], tests: [] }), // prettier-ignore
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.declined, true);
+  assert.deepEqual(r.faults, [], "nothing to repair");
+  assert.equal(r.title, "Cannot build: needs a 555");
+  assert.equal(r.notes, "No timer.");
+  // …while an empty spec with nothing to say is still the spec's mistake.
+  const bare = buildFromReply(
+    JSON.stringify({ parts: [], nets: [], tests: [] }),
+  );
+  assert.ok(!bare.declined);
+  assert.ok(bare.faults.some((f) => f.code === "NO_PARTS"));
 });

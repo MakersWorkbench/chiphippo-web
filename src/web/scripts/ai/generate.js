@@ -317,8 +317,35 @@ export function buildFromReply(text) {
 export function* buildStepsFromReply(text) {
   const parsed = parseNetlist(text);
   if (!parsed.ok) return { ok: false, faults: parsed.errors };
+  // The prompt's own way to say "this cannot be built": no parts, and the
+  // reason in the title. Built, it is a spec with nothing in it — NO_PARTS,
+  // TOO_FEW_TESTS — and two repair rounds paid to push the model into the
+  // substitution it was told not to make. So it is an ANSWER, handed back as
+  // one, with nothing to repair.
+  const declined = declinedReply(parsed.spec);
+  if (declined) return declined;
   const built = yield* buildStepsFromSpec(parsed.spec);
   return built.ok ? { ...built, spec: parsed.spec } : built;
+}
+
+/**
+ * A reply that declines the request (`parts: []` with a title saying why), as
+ * a result: not ok, `declined`, no faults — or null for a reply that is a
+ * design.
+ */
+export function declinedReply(spec) {
+  const title = typeof spec?.title === "string" ? spec.title.trim() : "";
+  if (!title || !Array.isArray(spec.parts) || spec.parts.length > 0) {
+    return null;
+  }
+  return {
+    ok: false,
+    declined: true,
+    faults: [],
+    title,
+    notes: typeof spec.notes === "string" ? spec.notes : "",
+    spec,
+  };
 }
 
 /** Split faults into the two kinds the panel treats differently. */

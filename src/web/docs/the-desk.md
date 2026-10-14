@@ -14,8 +14,10 @@ The desk has no edges — pan and zoom to work at whatever scale suits the
 circuit in front of you.
 
 - **Pan**: hold `Space` and drag (from anywhere — over a board or a part
-  too), drag with the **middle mouse button**, or two-finger scroll on a
-  trackpad. A plain drag on empty desk doesn't pan: it draws a selection box
+  too), hold `Option` (`Alt`) and drag anywhere that isn't a wire end or a
+  movable leg, drag with the **middle mouse button**, or two-finger scroll on
+  a trackpad. Both modifier pans work while the circuit runs too. A plain drag
+  on empty desk doesn't pan: it draws a selection box
   (see [Selecting things](#selecting-things)). A quick *tap* of `Space` still
   runs and stops the circuit — it's only a pan while you hold it and drag.
 - **Zoom**: scroll/pinch to zoom, centered on the pointer, or use the

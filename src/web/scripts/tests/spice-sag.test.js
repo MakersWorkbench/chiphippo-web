@@ -119,6 +119,21 @@ test("routing: a draw follows the wires to it, and no path means no drop", () =>
   assert.equal(drops.get("y"), 0, "an unwired node: nothing to drop across");
 });
 
+test("a chip with several draws down the same wires drops by their total, once", () => {
+  // Its ICC, and a CMOS input's band current beside it: two draws, one path.
+  // Summed per draw, each wire's whole current counted for every one of them.
+  const b = bench();
+  const u = b.seat("u1", "CD4001B", "e10");
+  b.vcc(u.get(14));
+  b.gnd(u.get(7));
+  const nl = buildNetlist(b.doc);
+  const draw = (amps) => ({ chip: "u1", psu: "psu1", plusAt: b.at(u.get(14)), minusAt: b.at(u.get(7)), amps }); // prettier-ignore
+  const one = supplySag(b.doc, nl, [draw(0.01)]).drops.get("u1");
+  const two = supplySag(b.doc, nl, [draw(0.005), draw(0.005)]).drops.get("u1");
+  assert.ok(one > 0);
+  close(two, one, 1e-12, "two 5 mA draws as one 10 mA");
+});
+
 test("a chip sagging in its wires is still on its supply: no mixed-supply warning", () => {
   const { doc } = chain({ signal: true });
   const r = runner(doc, { engine: "spice" }).run(0).result;

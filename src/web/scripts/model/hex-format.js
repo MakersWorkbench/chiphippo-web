@@ -21,7 +21,8 @@
 // inspector's Import / Export (Feature 190). Intel HEX is the format assembler
 // toolchains emit, so supporting it makes loading a ROM program trivial. Raw
 // `.bin` needs no module — the bytes ARE the image — so this file is only the
-// HEX side; the inspector decides bin-vs-hex by file extension.
+// HEX side; the programmer decides bin-vs-hex by the file's extension or, for
+// any other name, by whether it READS as HEX (`looksLikeIntelHex`).
 //
 // A record is `:LL AAAA TT <data…> CC` in ASCII hex: byte count, 16-bit
 // address, record type, data, and a two's-complement checksum over every byte.
@@ -113,8 +114,12 @@ export function placeHexWrites(parsed, byteLength, current = []) {
  * @returns {{writes: Array<[number, number]>, minAddr: number, maxAddr: number}}
  */
 export function parseIntelHexWrites(text) {
-  const lines = String(text ?? "").split(/\r?\n/);
+  // CR, LF or CRLF: a classic-Mac or old-toolchain file ends its lines in CR.
+  const lines = String(text ?? "").split(/\r\n|\r|\n/);
   let base = 0; // running base from an extended-address record
+  // A SEGMENT base (type 02) adds to an offset that wraps at 64 KiB — the
+  // 8086's own segment arithmetic; a LINEAR one (type 04) does not.
+  let segmented = false;
   let minAddr = Infinity;
   let maxAddr = -1;
   const writes = [];
@@ -140,7 +145,7 @@ export function parseIntelHexWrites(text) {
     const data = bytes.slice(4, 4 + len);
     if (type === 0x00) {
       for (let k = 0; k < len; k++) {
-        const a = base + addr + k;
+        const a = base + (segmented ? (addr + k) & 0xffff : addr + k);
         writes.push([a, data[k]]);
         if (a < minAddr) minAddr = a;
         if (a > maxAddr) maxAddr = a;
@@ -151,10 +156,12 @@ export function parseIntelHexWrites(text) {
       if (len !== 2)
         throw hexError(`line ${lineNo}: extended-segment record needs 2 bytes`);
       base = ((data[0] << 8) | data[1]) << 4; // segment × 16
+      segmented = true;
     } else if (type === 0x04) {
       if (len !== 2)
         throw hexError(`line ${lineNo}: extended-linear record needs 2 bytes`);
       base = ((data[0] << 8) | data[1]) * 0x10000; // upper 16 bits
+      segmented = false;
     } else if (type === 0x03 || type === 0x05) {
       /* start-address records carry no image data — ignore */
     } else {
@@ -164,6 +171,50 @@ export function parseIntelHexWrites(text) {
     }
   }
   return { writes, minAddr, maxAddr };
+}
+
+/**
+ * The parsed writes, or a `HEX_PARSE` error when there are none: a file of
+ * nothing but an EOF record (or start addresses) holds no image, and
+ * programming a ROM from it would flag the chip programmed with nothing in it.
+ * @param {{writes: Array<[number, number]>, minAddr: number, maxAddr: number}} parsed
+ */
+export function requireHexData(parsed) {
+  if (parsed.maxAddr < 0) {
+    throw hexError("no data records — the file holds no image");
+  }
+  return parsed;
+}
+
+/**
+ * Does a file READ as Intel HEX, whatever it is called? Its first non-blank
+ * line a whole valid record — start code, hex pairs, byte count and checksum
+ * all agreeing — which a raw binary image all but never is. So SDCC's `.ihx`,
+ * an `.ihex` or a HEX file picked under any name is decoded, never loaded as
+ * its own ASCII.
+ * @param {Uint8Array|number[]} bytes
+ * @returns {boolean}
+ */
+export function looksLikeIntelHex(bytes) {
+  // The longest record is 1 + 2 × (5 + 255) characters.
+  const head = Array.from((bytes ?? []).slice(0, 1024), (b) =>
+    String.fromCharCode(b),
+  ).join("");
+  const line = head
+    .trimStart()
+    .split(/\r\n|\r|\n/)[0]
+    .trim();
+  if (line[0] !== ":") return false;
+  try {
+    const rec = hexPairs(line.slice(1), 1);
+    return (
+      rec.length >= 5 &&
+      rec.length === 5 + rec[0] &&
+      (rec.reduce((a, b) => a + b, 0) & 0xff) === 0
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Assemble one Intel HEX record line (with its checksum). */

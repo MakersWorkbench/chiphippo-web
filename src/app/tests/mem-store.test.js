@@ -165,3 +165,29 @@ test("a blank path is rejected with INVALID_ARG", () => {
     (e) => e.code === "INVALID_ARG",
   );
 });
+
+test("readImage() reads a regular file, and only one — never a device or a pipe", () => {
+  const dir = tempDir();
+  const file = path.join(dir, "rom.bin");
+  fs.writeFileSync(file, Buffer.from([1, 2, 3]));
+  assert.deepEqual([...mem.readImage(file)], [1, 2, 3]);
+  // A directory, a character device (stat says size 0) and a FIFO are refused
+  // before anything is read — /dev/zero read whole never returned.
+  const refused = [dir];
+  if (process.platform !== "win32") {
+    refused.push("/dev/zero");
+    const fifo = path.join(dir, "pipe");
+    require("child_process").execFileSync("mkfifo", [fifo]);
+    refused.push(fifo);
+  }
+  for (const p of refused) {
+    assert.throws(() => mem.readImage(p), { code: "INVALID_ARG" }, p);
+  }
+});
+
+test("readImage() refuses a file past the cap", () => {
+  const file = path.join(tempDir(), "big.bin");
+  fs.writeFileSync(file, "");
+  fs.truncateSync(file, mem.MAX_BYTES + 1);
+  assert.throws(() => mem.readImage(file), { code: "INVALID_ARG" });
+});

@@ -74,6 +74,8 @@ import { planRailReseats, withReseats } from "./rail-reseat.js";
 import { ROUTE_CONFIG } from "./route-config.js";
 import { OUTSIDE, ON_BOARD, ON_BRIDGE, bridgeMaskFor, buildRouteSpace, exemptObstacles } from "./route-space.js"; // prettier-ignore
 import { findRoute, pathCorners } from "./route-search.js";
+import { drawnWire } from "./wire-crossing.js";
+import { centroid } from "../desk/ribbon-path.js";
 
 /** Why a wire was left alone. Stable, English, never translated — these are
     codes a report quotes, in the shape `desk-review.js` uses for the same job. */
@@ -180,7 +182,7 @@ function seedStatic(space, occ, shapes) {
   const cfg = space.config;
   const reach = cfg.minSeparation;
   for (const { id, points } of shapes) {
-    const near = new Set();
+    const near = [new Set(), new Set()]; // per axis the run takes there
     for (let k = 1; k < points.length; k += 1) {
       const a = points[k - 1];
       const b = points[k];
@@ -195,7 +197,7 @@ function seedStatic(space, occ, shapes) {
           if (space.ys[j] < y0 || space.ys[j] > y1) continue;
           if (pointToSegment(space.xs[i], space.ys[j], a, b) > reach) continue;
           const n = j * space.nx + i;
-          near.add(n);
+          near[axis].add(n);
           let pair = occ.pass.get(n);
           if (!pair) occ.pass.set(n, (pair = [new Set(), new Set()]));
           pair[axis].add(id);
@@ -203,12 +205,18 @@ function seedStatic(space, occ, shapes) {
       }
     }
     // An edge whose two ends are both alongside the static wire is a stretch of
-    // run this wire has already taken.
-    for (const n of near) {
+    // run this wire has already taken — along the way it RUNS there. A drawn
+    // curve passes between tracks, so two nodes one above the other can both
+    // be beside a level stretch of it, and that pair is a crossing, not a run.
+    for (const n of near[0]) {
       const i = n % space.nx;
       const j = Math.floor(n / space.nx);
-      if (i + 1 < space.nx && near.has(n + 1)) addTo(occ.h, space.hEdge(j, i), id); // prettier-ignore
-      if (j + 1 < space.ny && near.has(n + space.nx)) addTo(occ.v, space.vEdge(i, j), id); // prettier-ignore
+      if (i + 1 < space.nx && near[0].has(n + 1)) addTo(occ.h, space.hEdge(j, i), id); // prettier-ignore
+    }
+    for (const n of near[1]) {
+      const i = n % space.nx;
+      const j = Math.floor(n / space.nx);
+      if (j + 1 < space.ny && near[1].has(n + space.nx)) addTo(occ.v, space.vEdge(i, j), id); // prettier-ignore
     }
   }
 }
@@ -920,6 +928,9 @@ function separateLanes(routes, config) {
   }
 }
 
+/** The congestion history a round is SCORED under — none (see the rounds). */
+const NO_HISTORY = new Map();
+
 /** Waypoints are stored to two decimals, so a nudged one is quantized here
     rather than by the document — the route a test reads and the route the desk
     draws must be the same numbers. */
@@ -950,13 +961,18 @@ export function* routeDeskSteps(doc, opts = {}) {
   // the free holes, the endpoints themselves — is read off the document these
   // moves produce. Routing first and moving afterwards would route to the old
   // holes and then quietly invalidate every path that touched one.
-  const reseats =
+  //
+  // `opts.keepEnds` names wires whose reseat a previous pass had to give up
+  // (see the retry below the routing).
+  const keepEnds = opts.keepEnds ?? null;
+  const reseats = (
     config.reseatRailEnds === false
       ? []
       : planRailReseats(doc, {
           only: opts.only ?? null,
           minGain: config.reseatMinGain,
-        });
+        })
+  ).filter((m) => !keepEnds?.has(m.wireId));
   const source = withReseats(doc, reseats);
 
   const wires = source.wires ?? [];
@@ -967,6 +983,7 @@ export function* routeDeskSteps(doc, opts = {}) {
   // ── Which wires, and where do they start and end ────────────────────────
   const candidates = [];
   const statics = [];
+  const busEnds = new Map(); // wire id → {a, b}, for the ribbons below
   for (const wire of wires) {
     const a = addressWorld(source.boards ?? [], source.components ?? [], wire.from); // prettier-ignore
     const b = addressWorld(source.boards ?? [], source.components ?? [], wire.to); // prettier-ignore
@@ -981,13 +998,37 @@ export function* routeDeskSteps(doc, opts = {}) {
     }
     // Everything else is TERRAIN — a bus member, a wire outside the selection,
     // a wire whose ends no longer resolve. It keeps its shape, so the router
-    // has to route around it rather than pretend it is not there.
+    // has to route around it rather than pretend it is not there — the shape
+    // it is DRAWN in: a direct wire sags up to a couple of pitches below its
+    // chord (`drawnWire`, the curve wire-path.js draws), and a bus member is
+    // drawn as its ribbon, not along its own chord.
     if (!a || !b) continue;
+    if (busMembers.has(wire.id)) {
+      busEnds.set(wire.id, { a, b });
+      continue;
+    }
     statics.push({
       id: wire.id,
       points:
-        wire.layout === "routed" ? [a, ...(wire.points ?? []), b] : [a, b],
+        wire.layout === "routed"
+          ? [a, ...(wire.points ?? []), b]
+          : drawnWire(a, b),
     });
+  }
+  // A ribbon is one sagging trunk between the centroids of its members' two
+  // ends (wire-layer.js), each member a short lead from its hole into it.
+  for (const bus of source.buses ?? []) {
+    const ends = (bus.members ?? [])
+      .filter((id) => busEnds.has(id))
+      .map((id) => ({ id, ...busEnds.get(id) }));
+    if (ends.length === 0) continue;
+    const A = centroid(ends.map((e) => e.a));
+    const B = centroid(ends.map((e) => e.b));
+    statics.push({ id: bus.id, points: drawnWire(A, B) });
+    for (const e of ends) {
+      statics.push({ id: e.id, points: [e.a, A] });
+      statics.push({ id: e.id, points: [B, e.b] });
+    }
   }
 
   const space = buildRouteSpace(source, {
@@ -1121,10 +1162,17 @@ export function* routeDeskSteps(doc, opts = {}) {
     // could point at. The score is the same cost every route was chosen by, so
     // "best" here means best by the model's own reckoning rather than by a
     // second opinion invented for the purpose.
+    //
+    // …but read under ONE model for every round: no history, no pressure. Both
+    // only ever grow, so a round scored by its own was dearer by construction,
+    // and round 1 won almost every time. (Ranking contention FIRST was tried
+    // and rejected: over the 115 example desktops it cut pre-hardening
+    // contention 69 → 5, which the hardening pass clears anyway, for 10% more
+    // crossings.)
     let score = 0;
     for (const [id, route] of found) {
       const job = jobs.find((j) => j.id === id);
-      const model = costModelFor(space, occ, history, id, job.exempt, false, pressure, null, job.bridgeMask, job.ownNodes); // prettier-ignore
+      const model = costModelFor(space, occ, NO_HISTORY, id, job.exempt, false, 1, null, job.bridgeMask, job.ownNodes); // prettier-ignore
       score += costOfPath(space, model, route.nodes);
     }
     if (best === null || score < bestScore) {
@@ -1237,6 +1285,20 @@ export function* routeDeskSteps(doc, opts = {}) {
       const changed = yield* swapEnds(space, occ, history, byId, found, pressure, swaps, vacated, label); // prettier-ignore
       if (changed === 0) break;
     }
+  }
+
+  // A reseat travels only with a route (below), so a reseated wire that could
+  // not be placed stays in the hole it HAD — a hole this whole pass treated as
+  // free, and may have laid other routes straight through, while the hole it
+  // was to move into stood blocked for nothing. Route again with that wire
+  // left where it is. Each retry keeps at least one more wire's ends, so it
+  // ends.
+  const lost = reseats.filter((m) => !found.has(m.wireId));
+  if (lost.length > 0) {
+    return yield* routeDeskSteps(doc, {
+      ...opts,
+      keepEnds: new Set([...(keepEnds ?? []), ...lost.map((m) => m.wireId)]),
+    });
   }
 
   // ── Report ──────────────────────────────────────────────────────────────

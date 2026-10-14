@@ -36,6 +36,7 @@ import {
 } from "../sim/spice/dynamics.js";
 import {
   ARRIVED_STEP_A,
+  crossingTime,
   valueAt,
   hasArrived,
   heading,
@@ -191,6 +192,40 @@ test("a ringing system (an inductor's current against a capacitor's voltage) in 
   }
   close(coupledFinal(curves[0]), 5, 1e-9, "it settles at 5 V");
   close(coupledSlope(curves[1], 0), 5 / L, 1e-6, "di/dt = V/L at the step");
+});
+
+test("a ring's crossing is found even where it clears the level only near its crest", () => {
+  // Series RLC about 2.5 V, Q = 50, swinging a volt: the search once stepped
+  // a radian or two at a time and missed a level a crest barely cleared — a
+  // Schmitt input on an LC ring missed its toggles.
+  const L = 10e-3;
+  const C = 1e-6;
+  const R = 2;
+  const w = 1 / Math.sqrt(L * C);
+  const T = (2 * Math.PI) / w;
+  let checked = 0;
+  for (let k = 0; k < 24; k++) {
+    const phi = (k / 24) * 2 * Math.PI;
+    const v0 = 2.5 + Math.cos(phi);
+    const iL = -C * w * Math.sin(phi);
+    const sys = rcSystem({ c: rows([[C, 0], [0, L]]), y: rows([[1e-9, -1], [1, R]]), i0: vec([0, 2.5]), v0: vec([v0, iL]), t0: 0, nc: 1 }); // prettier-ignore
+    const curve = { ...sys.curves[0], scale: sys.scale };
+    for (const level of [3.3, 3.45]) {
+      if (valueAt(curve, 0) >= level) continue;
+      let brute = Number.POSITIVE_INFINITY;
+      for (let u = T / 4000; u < 3 * T; u += T / 4000) {
+        if (valueAt(curve, u) >= level) {
+          brute = u;
+          break;
+        }
+      }
+      if (!Number.isFinite(brute)) continue;
+      checked++;
+      const found = crossingTime(curve, 0, level);
+      assert.ok(Math.abs(found - brute) <= T / 1000, `phase ${phi.toFixed(2)}, ${level} V: ${found} vs ${brute}`); // prettier-ignore
+    }
+  }
+  assert.ok(checked > 30, `${checked} crossings`);
 });
 
 test("a mode with no eigenvector of its own falls back to e^A, exactly all the same", () => {

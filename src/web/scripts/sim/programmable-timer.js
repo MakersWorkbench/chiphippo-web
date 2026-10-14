@@ -24,11 +24,14 @@
 // The oscillator (Fig. 2) is RS (3) inverted and gated by the reset: that is
 // the counter's clock, which "increments on positive-edge clock transitions"
 // — so an external clock on RS counts on its FALLING edges, as a 4060's φI
-// does. CTC (2) drives the clock out and RTC (1) its complement, which is
-// what the RC network hangs off: Ctc from CTC to a junction, Rtc from RTC to
-// it, Rs (≈ 2·Rtc, ≥ 10 kΩ) from RS to it; f = 1/(2.3·Rtc·Ctc). In that mode
-// the part keeps the time itself and ignores the level its RS net settles at.
-// With nothing on CTC or RTC, RS is an ordinary clock input.
+// does. CTC (2) and RTC (1) are the two inverters' outputs the RC network
+// hangs off: Ctc from CTC to a junction, Rtc from RTC to it, Rs (≈ 2·Rtc,
+// ≥ 10 kΩ) from RS to it; f = 1/(2.3·Rtc·Ctc). Running, CTC is IN PHASE with
+// RS and RTC its complement — the only way round that network oscillates
+// (see "The silicon" below), and so what both engines show: an external
+// clock on RS puts CTC = RS, RTC = NOT RS. In oscillator mode the part keeps
+// the time itself and ignores the level its RS net settles at. With nothing
+// on CTC or RTC, RS is an ordinary clock input.
 //
 // The output is the counter's stage N, picked by A and B (the Frequency
 // Selection Table: 13, 10, 8 or 16 stages), through Fig. 1's output stage:
@@ -397,9 +400,10 @@ export function cd4541Logic() {
     step,
     outputs(state, ins) {
       // Fig. 1: the latch, forced LOW by a reset, then Q/Q̄ SELECT's XOR —
-      // so a part not counting shows the level a reset leaves. Fig. 2: CTC is
-      // the clock and RTC its complement; a part not running holds its clock
-      // LOW.
+      // so a part not counting shows the level a reset leaves. Fig. 2: CTC in
+      // phase with RS (an external clock's own level; the oscillator's
+      // schedule) and RTC its complement, as the silicon has them; a part not
+      // running holds CTC LOW.
       const phase = state?.phase;
       const running = phase === "run";
       const latch = running ? state.latch : phase === "unknown" ? X : L;
@@ -407,7 +411,7 @@ export function cd4541Logic() {
         ? phase === "unknown"
           ? X
           : L
-        : (state.clock ?? inv(ins.get(PIN.RS) ?? X));
+        : (state.clock ?? ins.get(PIN.RS) ?? X);
       return new Map([
         [PIN.OUT, xor(latch, ins.get(PIN.QSEL) ?? X)],
         [PIN.CTC, clock],

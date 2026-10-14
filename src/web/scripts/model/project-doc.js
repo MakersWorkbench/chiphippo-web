@@ -49,7 +49,10 @@ import {
   normalizeCustomChips,
 } from "./custom-chip.js";
 
-const MAX_NAME = 64;
+/** How long a project's or a desktop's name may be — main's own limit too
+    (store/project-store.js), and the Name box's `maxLength`, so what is typed
+    is what is kept. */
+export const MAX_NAME = 64;
 
 /** Trim a user-supplied string field, or "" for anything that isn't one. */
 const text = (value) =>

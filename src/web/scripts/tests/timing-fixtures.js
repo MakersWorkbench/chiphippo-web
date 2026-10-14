@@ -64,16 +64,19 @@ export function bench({ volts = 5 } = {}) {
   /** Seat a part; returns pin → hole. */
   const seat = (id, ref, anchor, params = {}) => {
     const def = partDef(ref);
+    // The holes its pins take are the SEATED part's: a 7-segment display
+    // anchored in row e normalizes to its wide e/i seat.
+    const seated = def.normalizeParams(params);
     doc.components.push({
       id,
       kind: def.kind,
       ref,
       board: BOARD,
       anchor,
-      params: def.normalizeParams(params),
+      params: seated,
     });
     const holes = new Map(
-      partPinHoles(ref, anchor, params).map(({ pin, hole }) => [pin, hole]),
+      partPinHoles(ref, anchor, seated).map(({ pin, hole }) => [pin, hole]),
     );
     for (const h of holes.values()) used.add(h);
     return holes;
@@ -196,4 +199,86 @@ export function astable555({
     b.gnd(bypass.get(2));
   }
   return { doc: b.doc, b, u };
+}
+
+/**
+ * Two NPNs cross-coupled into a flip-flop: 1 kΩ from each collector to +5 V,
+ * 10 kΩ from each collector to the other's base, both emitters to GND.
+ * @returns {{doc: object, b: ReturnType<typeof bench>, q1: Map, q2: Map}}
+ */
+export function transistorLatch() {
+  const b = bench();
+  const q1 = b.seat("q1", "npn", "a5");
+  const q2 = b.seat("q2", "npn", "a40");
+  const r1 = b.seat("r1", "resistor", "f5", { ohms: 1e3 });
+  const r2 = b.seat("r2", "resistor", "f40", { ohms: 1e3 });
+  const x1 = b.seat("x1", "resistor", "f15", { ohms: 10e3 });
+  const x2 = b.seat("x2", "resistor", "f25", { ohms: 10e3 });
+  b.vcc(r1.get(1));
+  b.link(r1.get(2), q1.get(3));
+  b.vcc(r2.get(1));
+  b.link(r2.get(2), q2.get(3));
+  b.link(x1.get(1), q1.get(3));
+  b.link(x1.get(2), q2.get(2));
+  b.link(x2.get(1), q2.get(3));
+  b.link(x2.get(2), q1.get(2));
+  b.gnd(q1.get(1));
+  b.gnd(q2.get(1));
+  return { doc: b.doc, b, q1, q2 };
+}
+
+/**
+ * A Darlington of two discrete NPNs: signal `sig1` into the first's base
+ * through 10 kΩ, its emitter on the second's base, the collectors tied and
+ * 100 Ω up to +5 V, the second's emitter to GND.
+ * @returns {{doc: object, b: ReturnType<typeof bench>, q1: Map, q2: Map}}
+ */
+export function darlingtonPair() {
+  const b = bench();
+  const q1 = b.seat("q1", "npn", "a5");
+  const q2 = b.seat("q2", "npn", "a20");
+  const rb = b.seat("rb", "resistor", "a30", { ohms: 10e3 });
+  const rc = b.seat("rc", "resistor", "a40", { ohms: 100 });
+  b.signal("sig1", rb.get(1), "high");
+  b.link(rb.get(2), q1.get(2));
+  b.link(q1.get(1), q2.get(2));
+  b.link(q1.get(3), q2.get(3));
+  b.vcc(rc.get(1));
+  b.link(rc.get(2), q2.get(3));
+  b.gnd(q2.get(1));
+  return { doc: b.doc, b, q1, q2 };
+}
+
+/**
+ * The two-transistor flasher (astable): two NPNs, 1 kΩ from each collector to
+ * +5 V, 47 kΩ from +5 V to each base, and 10 µF from each collector to the
+ * other's base (+ plate on the collector), both emitters to GND. Each half
+ * period is about ln 2 · 47 kΩ · 10 µF = 0.33 s.
+ * @returns {{doc: object, b: ReturnType<typeof bench>, q1: Map, q2: Map}}
+ */
+export function transistorFlasher() {
+  const b = bench();
+  const q1 = b.seat("q1", "npn", "a5");
+  const q2 = b.seat("q2", "npn", "a40");
+  const r1 = b.seat("r1", "resistor", "f5", { ohms: 1e3 });
+  const r2 = b.seat("r2", "resistor", "f40", { ohms: 1e3 });
+  const rb1 = b.seat("rb1", "resistor", "f15", { ohms: 47e3 });
+  const rb2 = b.seat("rb2", "resistor", "f25", { ohms: 47e3 });
+  const c1 = b.seat("c1", "cap-electrolytic", "a15", { farads: 10e-6 });
+  const c2 = b.seat("c2", "cap-electrolytic", "a25", { farads: 10e-6 });
+  b.vcc(r1.get(1));
+  b.link(r1.get(2), q1.get(3));
+  b.vcc(r2.get(1));
+  b.link(r2.get(2), q2.get(3));
+  b.vcc(rb1.get(1));
+  b.link(rb1.get(2), q1.get(2));
+  b.vcc(rb2.get(1));
+  b.link(rb2.get(2), q2.get(2));
+  b.link(c1.get(1), q1.get(3));
+  b.link(c1.get(2), q2.get(2));
+  b.link(c2.get(1), q2.get(3));
+  b.link(c2.get(2), q1.get(2));
+  b.gnd(q1.get(1));
+  b.gnd(q2.get(1));
+  return { doc: b.doc, b, q1, q2 };
 }

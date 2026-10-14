@@ -153,4 +153,21 @@ test("the 3D view stands it on end too", () => {
   );
   assert.deepEqual(scene.errors, []);
   assert.ok(scene.modelled.has("c1"));
+  assert.ok(
+    scene.labels.some((l) => l.text === "+"),
+    "its + leg marked, as on the desk",
+  );
+});
+
+test("R skips a quarter whose far leg would only come NEAR a hole", () => {
+  // From row a, three pitches down is 0.24 off the dovetailed rail's row —
+  // within a hole's reach, but not in it, so the leg would be drawn beside
+  // the hole it was wired into. That quarter is stepped past.
+  resetDom();
+  const doc = new DeskDoc(null);
+  doc.addKit("full", 0, 0); // bb1 rail · bb2 pins · bb3 rail
+  const s = doc.addComponent({ kind: "discrete", ref: "speaker", board: "bb2", anchor: "a10" }); // prettier-ignore
+  doc.rotateComponent(s.id);
+  assert.equal(doc.getComponent(s.id).params.rot, 180);
+  assert.deepEqual(pins(doc, s.id), ["bb2.a10", "bb2.a7"]);
 });

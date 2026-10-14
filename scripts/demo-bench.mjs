@@ -53,6 +53,7 @@ import {
   spec,
 } from "../src/web/scripts/model/breadboard.js";
 import {
+  partCoverHoles,
   partPinHoles,
   worldOfAddress,
 } from "../src/web/scripts/model/occupancy.js";
@@ -122,6 +123,9 @@ export const LAYOUT = Object.freeze({
 /** The demo caption above the bench: line pitch, where the last line sits
     (just clear of the power bricks at y −23), and the muted colour its body
     lines take so the block reads as a caption rather than shouting. */
+/** A digit's segments in the order a demo spec lists them: a…g, then dp. */
+const SEGMENT_IDS = Object.freeze(["a", "b", "c", "d", "e", "f", "g", "dp"]);
+
 const CAPTION_LINE = 1.8;
 const CAPTION_BOTTOM = -24;
 const CAPTION_MUTED = "#808080";
@@ -214,6 +218,11 @@ export class Bench {
       if (hole != null) {
         this.#claim(`${PINS}.${hole}`, `${ref} ${id} pin ${pin}`);
       }
+    }
+    // A wide part's body stands over the rows between its legs, and those
+    // holes take no lead (occupancy.js), so no wire may be handed one.
+    for (const hole of partCoverHoles(ref, anchor, params)) {
+      this.#claim(`${PINS}.${hole}`, `${ref} ${id} body`);
     }
     this.#components.push(comp);
     return comp;
@@ -521,19 +530,33 @@ export class Bench {
 
   /**
    * A 7-segment digit with its common leg on a rail through a resistor, so a
-   * driver lights a segment rather than burning it. Common ANODE (`seg8ca`,
+   * driver lights a segment rather than burning it. Common ANODE (`seg7ca`,
    * the default) holds the leg up at the supply for an active-low driver that
-   * sinks segments; common CATHODE (`seg8cc`) holds it at ground for an
+   * sinks segments; common CATHODE (`seg7cc`) holds it at ground for an
    * active-high driver that sources them (the CD4511B).
+   *
+   * The digit stands across the channel at its true 0.6 in — legs in rows d
+   * and h, its body over e–g — with the common twice, pins 3 and 8, joined
+   * inside it; the resistor goes in under pin 3, to the rail below.
    */
-  segmentDisplay({ col = LAYOUT.displayCol, ref = "seg8ca", color = "red" }) {
-    const disp = this.#part("discrete", ref, `b${col}`, { color });
-    const rail = ref === "seg8cc" ? "-" : "+";
-    this.#toRail("resistor", `c${col + 8}`, rail, { ohms: 330 });
+  segmentDisplay({ col = LAYOUT.displayCol, ref = "seg7ca", color = "red" }) {
+    const def = partDef(ref);
+    const anchor = `d${col}`;
+    const disp = this.#part("discrete", ref, anchor, { color });
+    const holes = new Map(
+      partPinHoles(ref, anchor, disp.params).map((p) => [p.pin, p.hole]),
+    );
+    const common = def.pins.find((p) => p.name === "COM");
+    const rail = common.role === "cathode" ? "-" : "+";
+    const comCol = Number(holes.get(common.n).slice(1));
+    this.#toRail("resistor", `c${comCol}`, rail, { ohms: 330 });
+    // Segment k (1 a … 7 g, 8 dp) → the hole of the pin that is not the common.
+    const segPin = (seg) =>
+      seg.anodePin === common.n ? seg.cathodePin : seg.anodePin;
     return {
       id: disp.id,
-      // Segment k (a…g, dp) seats in column col+k−1; pin 9 is the common leg.
-      holeOf: (pin) => `b${col + pin - 1}`,
+      holeOf: (k) =>
+        holes.get(segPin(def.segments.find((s) => s.id === SEGMENT_IDS[k - 1]))), // prettier-ignore
     };
   }
 

@@ -34,6 +34,7 @@ import {
 } from "../model/design-clip.js";
 import { boardRect, matingEdge } from "../model/mating.js";
 import { MAX_SIGNALS, nextSignalColor } from "../model/signals.js";
+import { partPinAddresses } from "../model/occupancy.js";
 
 /** The plain `{boards, components, wires, …}` view captureDesign reads. */
 const view = (doc) => ({
@@ -102,6 +103,41 @@ test("captureDesign: a wire with one end outside the set is left behind", () => 
   const clip = captureDesign(view(doc), { boardIds: ["bb1"] });
   assert.equal(clip.wires.length, 1, "only the wire wholly inside the set");
   assert.equal(clip.wires[0].color, "red");
+});
+
+test("captureDesign: a part whose lead reaches off the set is left behind, as a wire would be", () => {
+  const doc = new DeskDoc(null);
+  doc.addKit("full", 0, 0); // bb1 rail · bb2 pins · bb3 rail
+  const inside = doc.addComponent({ kind: "discrete", ref: "resistor", board: "bb2", anchor: "a20" }); // prettier-ignore
+  const bent = doc.addComponent({ kind: "discrete", ref: "resistor", board: "bb2", anchor: "a10" }); // prettier-ignore
+  // Its far lead down into the bottom rail, which is not being copied.
+  doc.movePartEnds(bent.id, "bb2", "a10", { dx: 1, dy: 3.76 });
+  assert.equal(partPinAddresses(doc, doc.getComponent(bent.id))[1].address, "bb3.-8"); // prettier-ignore
+  const clip = captureDesign(view(doc), { boardIds: ["bb2"] });
+  assert.deepEqual(
+    clip.parts.map((p) => p.key),
+    [inside.id],
+  );
+  // …and the paste of what came lands, wherever there is room for the board
+  // — the bent lead no longer refusing it over bare desk.
+  const pasted = doc.pasteDesign(clip, { dx: 100, dy: 0 });
+  assert.equal(pasted.components.length, 1);
+  // With its rail copied too, it travels, bend and all.
+  const whole = captureDesign(view(doc), { boardIds: ["bb1", "bb2", "bb3"] });
+  assert.equal(whole.parts.length, 2);
+});
+
+test("a design's pull never asks for a fractional x the paste cannot keep", () => {
+  const src = new DeskDoc(null);
+  src.addBoard("rail-full", 0, 0, 90);
+  const clip = captureDesign(view(src), { boardIds: ["bb1"] });
+  const dest = new DeskDoc(null);
+  dest.addBoard("rail-full", 0, 0, 90); // 3.50 wide on end
+  // Flush would be x 3.5; a board is placed on whole columns.
+  const pull = snapDesign(clip, { dx: 4, dy: 0 }, dest.boards.map(boardRect));
+  assert.equal(Math.abs(pull.dx), 0);
+  const board = dest.pasteDesign(clip, { dx: 4 + pull.dx, dy: pull.dy }).boards[0]; // prettier-ignore
+  assert.equal(board.x, 4, "where the ghost showed it");
 });
 
 test("captureDesign: a selected brick travels, and its wires with it", () => {

@@ -177,11 +177,20 @@ export function supplySag(doc, netlist, draws) {
     if (d.chip) routed.push({ chip: d.chip, wires });
   }
 
-  const drops = new Map();
+  // A chip's drop is the sum over the wires its supply comes through, each
+  // ONCE: a chip with several draws (its ICC, and a CMOS input's band
+  // current beside it) reaches its supply down the same wires, and summed
+  // per draw each wire's whole current counted once for every one of them.
+  const through = new Map(); // chip → its draws' wires
   for (const { chip, wires } of routed) {
+    if (!through.has(chip)) through.set(chip, new Set());
+    for (const wire of wires) through.get(chip).add(wire);
+  }
+  const drops = new Map();
+  for (const [chip, wires] of through) {
     let drop = 0;
     for (const wire of wires) drop += wireAmps.get(wire) * ohmsOf.get(wire);
-    drops.set(chip, (drops.get(chip) ?? 0) + drop);
+    drops.set(chip, drop);
   }
   return { drops, wireAmps };
 }

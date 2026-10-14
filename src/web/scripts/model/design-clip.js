@@ -34,7 +34,12 @@
 // The capture is BOARDS-FIRST and total. Given a set of board ids it takes:
 //   · those boards (type, rotation, position, group, name/description),
 //   · EVERY component seated on them — the whole board comes, not just what a
-//     marquee happened to touch,
+//     marquee happened to touch — save one whose lead reaches OFF them (a
+//     resistor bent to a rail left behind, a lead floating over bare desk):
+//     that one touches the outside, so it stays, by the wire rule below. Taken,
+//     its lead would land wherever the paste put it — in mid-air, which no
+//     placement allows (a paste refused after a green ghost), or in a hole of
+//     whatever board lay there, a connection the design never had,
 //   · the desk bricks (PSU / clock) explicitly named in the selection,
 //   · every wire whose BOTH endpoints land on a captured owner (a wire with one
 //     end outside would have to be cut, so it is simply not part of the design),
@@ -62,6 +67,7 @@ import { partDef } from "../catalog/index.js";
 import { dropRunLatches } from "../catalog/run-latches.js";
 import { formatAddress, parseAddress } from "./breadboard.js";
 import { boardRect, snapCorrection } from "./mating.js";
+import { partPinAddresses } from "./occupancy.js";
 
 /**
  * A copied part's params: a deep copy with everything RUN-VOLATILE or
@@ -112,8 +118,13 @@ export function captureDesign(doc, { boardIds = [], componentIds = [] } = {}) {
   const named = new Set(componentIds);
   const components = doc.components ?? [];
   const bricks = components.filter((c) => c.board == null && named.has(c.id));
+  // Seated on a captured board, with every lead in one of its holes.
+  const onCaptured = (c) =>
+    (partPinAddresses(doc, c) ?? []).every((p) =>
+      wanted.has(parseAddress(p.address ?? "")?.boardId),
+    );
   const parts = components.filter(
-    (c) => c.board != null && wanted.has(c.board),
+    (c) => c.board != null && wanted.has(c.board) && onCaptured(c),
   );
 
   // A wire, a name, or a bus only travels when EVERYTHING it touches does.
@@ -283,9 +294,11 @@ export function resolveDesign(clip, shift, { canPlaceBoard, canPlaceBrick }) {
     const y = b.y + shift.dy;
     return { ...b, x, y, legal: canPlaceBoard(b.type, x, y, b.rot) };
   });
+  // A brick lives in whole units (DeskDoc.addBrick rounds it there), so it is
+  // judged — and drawn — where the paste will put it, not a fraction beside.
   const bricks = clip.bricks.map((b) => {
-    const x = b.x + shift.dx;
-    const y = b.y + shift.dy;
+    const x = Math.round(b.x + shift.dx);
+    const y = Math.round(b.y + shift.dy);
     return { ...b, x, y, legal: canPlaceBrick(b.ref, x, y) };
   });
   return {
@@ -310,12 +323,17 @@ export function resolveDesign(clip, shift, { canPlaceBoard, canPlaceBrick }) {
  */
 export function snapDesign(clip, shift, stationary) {
   if (clip.boards.length === 0) return { dx: 0, dy: 0 };
-  return snapCorrection(
+  const pull = snapCorrection(
     clip.boards.map((b) =>
       boardRect({ ...b, x: b.x + shift.dx, y: b.y + shift.dy }),
     ),
     stationary,
   );
+  // A board is PLACED on the column lattice (DeskDoc.addBoard), so a pull
+  // to a fractional x — flush beside a turned rail, 3.50 wide — is one the
+  // paste cannot keep: the ghost would show it flush and the board land half
+  // a pitch away. Only a whole-pitch pull across; y keeps its fraction.
+  return { dx: Math.round(pull.dx), dy: pull.dy };
 }
 
 /**

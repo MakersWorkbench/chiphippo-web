@@ -21,9 +21,10 @@
 // icon or the application menu (menu:show-about → chiphippo:show-about). A
 // renderer PopupManager modal styled like the Rest Hippo About card: a large
 // rounded logo, the name with an (i) toggle revealing a floating version/build
-// popover, subtitle, description, support address, credit, and a prominent
-// Close button. Build metadata loads asynchronously from the main process
-// (getAppInfo).
+// popover, subtitle, description, then a two-line footer — the credit with the
+// copyright, and the support address with the voluntary sponsor link — and a
+// prominent Close button. Build metadata (and whether this build may offer the
+// sponsor link) loads asynchronously from the main process (getAppInfo).
 
 import { t } from "../i18n.js";
 import { el } from "../dom.js";
@@ -43,7 +44,10 @@ const NAME = "Chip Hippo";
 // client configured must still be able to read the address off the card.
 const SUPPORT_EMAIL = "hippoherd@gmail.com";
 
-/** A small "i" glyph for the info toggle (the button supplies the circle). */
+/** The dot between two items of a footer line — decoration, not text. */
+const dot = () =>
+  el("span", { class: "about-dot", text: "·", "aria-hidden": "true" });
+
 export class AboutDialog {
   static #open = false;
 
@@ -62,6 +66,27 @@ export class AboutDialog {
       target: build,
       label: t("about.versionInfo"),
     });
+
+    // The voluntary sponsor link — hidden until main says this build may
+    // offer it (not a Mac App Store one: store-build.js `allowsDonations`).
+    // Main owns the page it opens; the card only asks for it.
+    const donateDot = dot();
+    donateDot.hidden = true;
+    const donate = el(
+      "button",
+      {
+        class: "about-donate",
+        type: "button",
+        hidden: true,
+        onClick: () => {
+          Promise.resolve(window.chiphippo?.openDonatePage?.()).catch(() => {});
+        },
+      },
+      [
+        el("span", { class: "about-donate-heart", text: "♥", "aria-hidden": "true" }), // prettier-ignore
+        el("span", { text: t("about.donate") }),
+      ],
+    );
 
     const element = el(
       "div",
@@ -86,30 +111,37 @@ export class AboutDialog {
         ]),
         el("p", { class: "about-subtitle", text: t("about.subtitle") }),
         el("p", { class: "about-desc", text: t("about.description") }),
-        el("p", { class: "about-byline", text: t("about.byline") }),
-        // `target="_blank"` is what routes the click to the OS mail client:
+        // The footer is TWO lines, each two items with a dot between them
+        // (each item kept whole when the line wraps): the credit with the
+        // copyright, then the support address with the sponsor link. The
+        // copyright is a legal notice, not prose — the same words in every
+        // language, like the product name above it.
+        el("p", { class: "about-credit" }, [
+          el("span", { text: t("about.byline") }),
+          dot(),
+          el("span", { text: "Copyright © 2026 Jason Figge" }),
+        ]),
+        // `target="_blank"` is what routes the address to the OS mail client:
         // main's setWindowOpenHandler passes a mailto: window-open to
         // shell.openExternal, where a bare in-frame navigation would try to
         // move the desk's own document.
         el("p", { class: "about-support" }, [
-          el("span", {
-            class: "about-support-label",
-            text: t("about.support"),
-          }),
-          el("a", {
-            class: "about-support-link",
-            href: `mailto:${SUPPORT_EMAIL}`,
-            target: "_blank",
-            rel: "noopener noreferrer",
-            text: SUPPORT_EMAIL,
-          }),
+          el("span", { class: "about-support-item" }, [
+            el("span", {
+              class: "about-support-label",
+              text: t("about.support"),
+            }),
+            el("a", {
+              class: "about-support-link",
+              href: `mailto:${SUPPORT_EMAIL}`,
+              target: "_blank",
+              rel: "noopener noreferrer",
+              text: SUPPORT_EMAIL,
+            }),
+          ]),
+          donateDot,
+          donate,
         ]),
-        // The copyright line is a legal notice, not prose — the same words in
-        // every language, like the product name above it.
-        el("p", {
-          class: "about-credit",
-          text: "Copyright © 2026 Jason Figge",
-        }),
         el("button", {
           class: "about-close",
           type: "button",
@@ -130,16 +162,17 @@ export class AboutDialog {
       },
     });
 
-    AboutDialog.#fillDetails(build);
+    AboutDialog.#fillDetails(build, [donateDot, donate]);
   }
 
-  static async #fillDetails(build) {
+  static async #fillDetails(build, sponsor) {
     let info = null;
     try {
       info = await window.chiphippo?.getAppInfo?.();
     } catch {
       /* dev build without the bridge — show version-less */
     }
+    if (info?.donate === true) for (const node of sponsor) node.hidden = false;
     // Electron / Chromium / Node / Platform are product names, so only the row
     // LABEL "Version" is catalog text.
     const rows = info

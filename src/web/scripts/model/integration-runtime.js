@@ -63,6 +63,13 @@ import {
   unpackLevels,
 } from "./integration.js";
 
+/** Has any of an element's PIN tags a hole? (A trigger tag is no pin, and on
+    Auto it means nothing at all.) */
+const pinPlanted = (element) =>
+  Object.entries(element?.tags ?? {}).some(
+    ([key, tag]) => key !== TRIGGER_KEY && typeof tag?.anchor === "string",
+  );
+
 /** The trigger tag's anchor, or null when it is not on the board. */
 function triggerAnchor(element) {
   const anchor = element?.tags?.[TRIGGER_KEY]?.anchor;
@@ -181,8 +188,11 @@ export class IntegrationRuntime {
     for (const e of elements ?? []) {
       if (isAutoTrigger(e)) {
         // An Input on Auto is live (handled in apply); an Output sends when
-        // its value is not the one it last sent.
-        if (e.kind !== "output" || !e.connection) continue;
+        // its value is not the one it last sent. One with nothing planted
+        // reaches no net (integration.js `runElements`) — it rides a run only
+        // because its connection's layout counts it — so it has nothing to
+        // say, not even the zeros its first boundary would have sent.
+        if (e.kind !== "output" || !e.connection || !pinPlanted(e)) continue;
         const now = sample(e);
         const last = this.#lastSent.get(e.id);
         if (last?.width === now.width && last.value === now.value) continue;

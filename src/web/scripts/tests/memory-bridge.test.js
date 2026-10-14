@@ -622,3 +622,32 @@ test("keepRunEdits refuses while running, and an SRAM has nothing to keep", asyn
   ({ bridge } = makeBridge({ comp: sram() }));
   assert.equal(await bridge.keepRunEdits("c1", new Uint8Array(1)), false);
 });
+
+test("a HEX image under another name (SDCC's .ihx, or none) is decoded, never programmed as its ASCII", async () => {
+  for (const path of ["/roms/prog.ihx", "/roms/prog.rom", "/roms/prog"]) {
+    resetDom();
+    const text = [hexRecord(0x0100, [0xa9, 0x42]), ":00000001FF"].join("\n");
+    const { calls } = install({
+      files: new Map([[GUID, new Uint8Array(8192)]]),
+      picked: { ok: true, path, bytes: new TextEncoder().encode(text) },
+    });
+    const { bridge } = makeBridge({ comp: rom({ storage: { guid: GUID } }) });
+    await bridge.program("c1");
+    const image = calls.programBytes[0];
+    assert.equal(image.length, 8192, path);
+    assert.deepEqual([image[0x100], image[0x101]], [0xa9, 0x42], path);
+  }
+});
+
+test("a HEX file with no data records programs nothing, and says why", async () => {
+  resetDom();
+  const { calls } = install({
+    files: new Map([[GUID, new Uint8Array(8192)]]),
+    picked: { ok: true, path: "/roms/empty.hex", bytes: new TextEncoder().encode(":00000001FF\n") }, // prettier-ignore
+  });
+  const { bridge, controller, notifications } = makeBridge({ comp: rom({ storage: { guid: GUID } }) }); // prettier-ignore
+  await bridge.program("c1");
+  assert.deepEqual(calls.program, [], "nothing written");
+  assert.deepEqual(controller.calls, [], "and the chip not flagged programmed");
+  assert.ok(notifications.calls.some((c) => /no data records/.test(c.message ?? "")), JSON.stringify(notifications.calls)); // prettier-ignore
+});

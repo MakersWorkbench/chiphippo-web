@@ -56,7 +56,10 @@ engine beyond the regulator supply rule.
   (carried in `analog.relays`), flips it with hysteresis at each settle (`syncRelays`),
   times the crossing as a `relay:` entry in `nextCrossing`, and answers the channel's
   control pins through the `input` hook (leg `a` H while pulled in, leg `b` L) — so the
-  relay registers no READER and never colours a net's shown level. Contacts are
+  relay registers no READER and never colours a net's shown level. A pulled-in relay whose
+  coil a switch shorted out of the network (`coilsAway`: no curve left to cross) asks for
+  a wake at its drop-out in closed form, `at + τ·ln(I₀ / (dropOut·rated))` (2026-10-14 —
+  it held its contacts until something else ticked the desk). Contacts are
   `def.contacts.ohms`, booked against `contacts.limits` (warn only: smoke Infinity).
 - **Readings and warnings** (`spice/bench-warnings.js`): `report().analog` → `result.bench`
   (→ sim-state `bench` → the load's readout, the regulator's hover) and the
@@ -76,8 +79,13 @@ engine beyond the regulator supply rule.
     pieces (not only the same piece twice), carries its run across them, is capped at the
     SLOWEST time constant (capped at the fastest — a stuck coil's is the transistor's
     leakage — a relay's kick took 19 000 corners), and never carries a coil's current
-    through ZERO (`firstRoot` on the coil's curve): past it, the piece pulled the current
-    backwards through the clamp that had stopped conducting and the solve ran away.
+    through ZERO (`firstRoot` on the coil's curve — the coils sit at `nc + nw + j`, after
+    the waves; reading `nc + j` read a wave's volts and a ramp drove a coil to −39 mA,
+    fixed 2026-10-14): past it, the piece pulled the current backwards through the clamp
+    that had stopped conducting and the solve ran away. Nor past one e-fold of a GROWING
+    mode (`scale.grow`, dynamics.js — a device linearized to a negative slope; with
+    `slow` Infinity nothing capped it, and a triangle-driven coil ran to e^4600 → NaN for
+    the rest of the run, 2026-10-14).
   - A coil heading the other way than it was read is re-linearized the way it goes, a
     coil's cluster balances to 1e-14 A (`COIL_TOLERANCE_A`; at 1 pA a relay's collector
     rested at 4 V with 5 pA in its coil), and the tick's last solve uses the coils' current

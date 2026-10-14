@@ -2421,6 +2421,13 @@ export class DiscreteView {
     this.#segs = null;
     this.#status = undefined;
     this.#statusVolts = undefined;
+    // A drawing with its own hit shape takes the pointer only there, so the
+    // holes under the rest of its box stay clickable (app.css) — said by the
+    // drawing itself, so no part can be left off a hand-kept list.
+    this.#el.classList.toggle(
+      "part-discrete--body-hit",
+      Boolean(this.#el.querySelector(".part-display-hit")),
+    );
   }
 
   /**
@@ -2457,6 +2464,10 @@ export class DiscreteView {
    * draws the same mid-drag, with a leg over bare desk, or anywhere else.
    */
   updateLegsWorld(points) {
+    // What is DRAWN is bent now, whatever the params say: a straight part
+    // previewing a bent leg mid-drag must be rebuilt by showStraight when the
+    // leg comes back into the row, not left on its bent drawing.
+    this.#bent = true;
     const rel = points.map((p) => ({
       x: p.x - points[0].x,
       y: p.y - points[0].y,

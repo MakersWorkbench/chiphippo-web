@@ -33,6 +33,7 @@
 
 import { clear, el } from "../dom.js";
 import { PX_PER_UNIT } from "../desk/desk-geometry.js";
+import { t } from "../i18n.js";
 
 export class AnnotationLayer {
   #layer;
@@ -43,6 +44,7 @@ export class AnnotationLayer {
   #els = new Map(); // annotationId → element
   #selectedId = null;
   #editing = null; // annotationId while an inline editor is open
+  #cancelEdit = null; // closes the open editor without committing
 
   /**
    * @param {HTMLElement} layer - the `.layer-annotations` element.
@@ -64,6 +66,15 @@ export class AnnotationLayer {
     this.#onEditCommit = onEditCommit;
 
     window.addEventListener("chiphippo:doc-changed", () => this.render());
+    // Another document on the desk (a desktop switch, a project opened from
+    // the menu, with the editor still focused): the text in hand belongs to
+    // the LAST one, and committing it on the blur that follows would write
+    // it into whichever annotation of this one has the same id.
+    window.addEventListener("chiphippo:desk-loaded", () =>
+      this.#cancelEdit?.(),
+    );
+    // An empty annotation's placeholder is in the language in force.
+    window.addEventListener("chiphippo:locale-changed", () => this.render());
     this.render();
   }
 
@@ -111,7 +122,11 @@ export class AnnotationLayer {
       text.textContent = ann.text;
     } else {
       text.classList.add("annotation-text--empty");
-      text.textContent = ann.kind === "note" ? "Note" : "Label";
+      text.textContent = t(
+        ann.kind === "note"
+          ? "palette.annotation.note"
+          : "palette.annotation.label",
+      );
     }
     box.append(text);
 
@@ -180,6 +195,7 @@ export class AnnotationLayer {
       done = true;
       const text = editor.value;
       this.#editing = null;
+      this.#cancelEdit = null;
       box.classList.remove("annotation--editing");
       if (commit) {
         this.#onEditCommit?.(id, text); // emits doc-changed → full re-render
@@ -187,6 +203,7 @@ export class AnnotationLayer {
         this.render(); // cancel: redraw from the document as it stood
       }
     };
+    this.#cancelEdit = () => finish(false);
     editor.addEventListener("blur", () => finish(true));
     editor.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {

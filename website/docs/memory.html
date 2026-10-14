@@ -134,7 +134,9 @@ dropped if the chip is non-volatile.</p>
 <ol>
 <li>Right-click the chip on the desk and choose <strong>Properties…</strong>.</li>
 <li>Click <strong>Load image… (program)</strong>.</li>
-<li>Pick a <code>.bin</code> (raw bytes) or <code>.hex</code> (Intel HEX) file.</li>
+<li>Pick a <code>.bin</code> (raw bytes) or an Intel HEX file — <code>.hex</code>, SDCC&#39;s <code>.ihx</code>,
+<code>.ihex</code>, or a HEX file under any other name (Chip Hippo recognises it by
+what it holds).</li>
 </ol>
 <p>A <code>.bin</code> image is copied to the start of the chip&#39;s memory. If the file is
 smaller than the chip, only the start is overwritten and the rest is left
@@ -196,8 +198,9 @@ desk document does.</p>
 current contents as either a raw <code>.bin</code> or an <strong>Intel HEX</strong> <code>.hex</code> file —
 useful for round-tripping through an assembler toolchain or another tool
 that expects the hex format. The external programmer (above) accepts either
-extension coming in: a <code>.hex</code> file is decoded before it&#39;s written to the
-chip.</p>
+coming in: a HEX file is decoded before it&#39;s written to the chip, and one
+with no data records in it at all is refused rather than flagging the chip
+programmed.</p>
 <h2 id="a-missing-backing-file">A missing backing file</h2>
 <p>Because a ROM&#39;s contents live in a file separate from the desk document,
 it&#39;s possible for that file to go missing without the document changing —

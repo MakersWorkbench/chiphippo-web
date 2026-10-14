@@ -38,6 +38,7 @@ import {
   zoomAboutPoint,
   ZOOM_MIN,
 } from "../desk/desk-geometry.js";
+import { beginPointerGesture } from "./pointer-gesture.js";
 
 /** Pointer travel (px) below which a press stays a click, not a pan. */
 const DRAG_THRESHOLD = 4;
@@ -52,7 +53,7 @@ export class DeskView {
   // The desk padlock (components/desk-lock.js) shut: the wheel stops moving the
   // camera. Every other route still works — see setWheelLocked.
   #wheelLocked = false;
-  // Active pan: { pointerId, lastX, lastY, startX, startY, active }.
+  // Active pan: { pointerId, lastX, lastY, startX, startY, active, teardown }.
   #drag = null;
   // Whether a plain left-drag on EMPTY desk pans. The schematic keeps that;
   // the breadboard does not — there a drag on the background is the
@@ -224,6 +225,18 @@ export class DeskView {
     this.#beginPan(e, e.button === 1);
   };
 
+  /**
+   * Pan from a press someone else claimed — an Option/Alt press that found no
+   * lead to pick (DeskController's pin-targeting mode): a drag past the
+   * click threshold pans, a click does nothing. Whether it began one.
+   * @param {PointerEvent} e
+   */
+  beginPan(e) {
+    if (this.#drag || e.button !== 0) return false;
+    this.#beginPan(e, false);
+    return true;
+  }
+
   /** Start a pan gesture; `immediate` skips the click-vs-drag threshold. */
   #beginPan(e, immediate) {
     this.#drag = {
@@ -236,14 +249,15 @@ export class DeskView {
     };
     if (this.#spaceHeld) this.#spacePanned = true;
     if (this.#drag.active) this.#markPanning(true);
-    try {
-      this.#viewport.setPointerCapture(e.pointerId);
-    } catch {
-      /* capture is best-effort (e.g. synthetic events) */
-    }
-    this.#viewport.addEventListener("pointermove", this.#onPointerMove);
-    this.#viewport.addEventListener("pointerup", this.#onPointerUp);
-    this.#viewport.addEventListener("pointercancel", this.#onPointerUp);
+    // The one plumbing every desk drag uses (pointer-gesture.js): the release
+    // is heard on the window whether or not the capture held, and a capture
+    // yanked away (the window losing focus mid-drag) ends it — listening on
+    // the viewport alone left a pan that missed its pointerup panning on
+    // under a bare hover.
+    this.#drag.teardown = beginPointerGesture(this.#viewport, e.pointerId, {
+      onMove: this.#onPointerMove,
+      onEnd: this.#onPointerUp,
+    });
   }
 
   #onPointerMove = (e) => {
@@ -279,14 +293,7 @@ export class DeskView {
     if (!d) return;
     this.#drag = null;
     this.#markPanning(false);
-    try {
-      this.#viewport.releasePointerCapture(d.pointerId);
-    } catch {
-      /* already released */
-    }
-    this.#viewport.removeEventListener("pointermove", this.#onPointerMove);
-    this.#viewport.removeEventListener("pointerup", this.#onPointerUp);
-    this.#viewport.removeEventListener("pointercancel", this.#onPointerUp);
+    d.teardown?.();
   }
 
   #markPanning(on) {

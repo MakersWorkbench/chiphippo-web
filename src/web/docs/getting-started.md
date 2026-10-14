@@ -11,8 +11,8 @@ circuit afterward.
 
 Open the installed app like any other desktop program (or, if you're running
 from source, `make debug`). Chip Hippo opens on an **infinitely pannable,
-zoomable desk** — hold `Space` and drag (or drag with the middle mouse
-button) to pan, scroll or pinch to zoom, and the header's
+zoomable desk** — hold `Space` or `Option` and drag (or drag with the middle
+mouse button) to pan, scroll or pinch to zoom, and the header's
 zoom controls (bottom-right of the desk) reset or step the view. The first
 time you launch, the desk is empty and shows a hint: *"Open the parts tray and
 add a breadboard to get started."*

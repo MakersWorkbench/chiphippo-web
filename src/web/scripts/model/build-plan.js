@@ -51,8 +51,13 @@ import { WIRE_COLORS, parseBusName } from "./desk-doc.js";
 import { wireCutMm, wireLengthLabel } from "./wire-length.js";
 import { formatComponentValue } from "./component-value.js";
 import { partNumberOf, transistorCase } from "../catalog/discretes.js";
-import { hzLabel } from "../catalog/parts.js";
-import { loadBadge } from "../catalog/bench-parts.js";
+import {
+  CLOCK_WAVE_LABELS,
+  DEFAULT_CURRENT_LIMIT,
+  ampsLabel,
+  hzLabel,
+} from "../catalog/parts.js";
+import { loadBadge, relayCoilVolts } from "../catalog/bench-parts.js";
 
 /**
  * @typedef {object} BuildPlan
@@ -87,6 +92,10 @@ export function buildPlan(document, netlist) {
     components: document?.components ?? [],
     wires: document?.wires ?? [],
     buses: document?.buses ?? [],
+    // Read for the one-member-net warning only: a wire to a planted flag or
+    // tag reaches something, though no pin.
+    signals: document?.signals ?? [],
+    integrations: document?.integrations ?? [],
   };
   const ctx = makeContext(doc, netlist);
   return {
@@ -290,6 +299,15 @@ function bomVariant(def, comp) {
   // it is what tallies two identical parts into one line, so a language change
   // must never split or merge a BOM row. Only the TITLE is translated.
   if (def.kind === "psu") {
+    // A current limit is set only off the default (catalog normalizeParams),
+    // so a supply that never had one keys and reads as it always has.
+    const limit = p.currentLimit ?? DEFAULT_CURRENT_LIMIT;
+    if (limit !== DEFAULT_CURRENT_LIMIT) {
+      return {
+        key: `${comp.ref}:${p.volts}:${limit}`,
+        title: `${partTitle(def)} (${p.volts} V, ${ampsLabel(limit)})`,
+      };
+    }
     return {
       key: `${comp.ref}:${p.volts}`,
       title: `${partTitle(def)} (${p.volts} V)`,
@@ -298,6 +316,17 @@ function bomVariant(def, comp) {
   if (def.kind === "clock") {
     const rate =
       p.hz === "manual" ? tf("plan.manualClock", "manual") : hzLabel(p.hz);
+    // Its wave, off the square (stored only then): a 10 Hz sine and a 10 Hz
+    // square are two set-ups, and a PWM says its pulse width.
+    const wave = p.hz !== "manual" && p.wave && p.wave !== "square" ? p.wave : null; // prettier-ignore
+    if (wave) {
+      const duty = wave === "pwm" ? (p.duty ?? 50) : null;
+      const waveText = tf(`properties.option.${wave}`, CLOCK_WAVE_LABELS[wave] ?? wave); // prettier-ignore
+      return {
+        key: [comp.ref, p.hz, wave, duty].filter((v) => v != null).join(":"),
+        title: `${partTitle(def)} (${rate}, ${waveText}${duty != null ? ` ${duty}%` : ""})`, // prettier-ignore
+      };
+    }
     return { key: `${comp.ref}:${p.hz}`, title: `${partTitle(def)} (${rate})` };
   }
   if (def.kind === "load") {
@@ -309,6 +338,20 @@ function bomVariant(def, comp) {
     return {
       key: `${comp.ref}:${p.color}`,
       title: `${partTitle(def)} (${wireColorName(p.color)})`,
+    };
+  }
+  // A relay is bought by its coil, an oscillator can by its rate.
+  if (def.coil) {
+    const volts = relayCoilVolts(p);
+    return {
+      key: `${comp.ref}:${volts}`,
+      title: `${partTitle(def)} — ${drawerDetail(def, p)}`,
+    };
+  }
+  if (def.logic?.oscillator) {
+    return {
+      key: `${comp.ref}:${p.hz}`,
+      title: `${partTitle(def)} — ${drawerDetail(def, p)}`,
     };
   }
   // A typed value is what you take out of the drawer: two 10k resistors are
@@ -323,20 +366,10 @@ function bomVariant(def, comp) {
   // A part with a choice of package (a MOSFET) says which: a TO-220 and a
   // TO-92 are different things to buy.
   if (def.countsAsConnection) {
-    // A value is a NUMBER or nothing here: an older document's capacitance
-    // that would not read is kept as its text (catalog/value-fields.js), and
-    // a line for it says no value rather than a bare "F".
-    const [number, text] =
-      def.capacitor && Number.isFinite(p.farads)
-        ? [p.farads, formatComponentValue(p.farads, "farad")]
-        : def.inductor && Number.isFinite(p.henries)
-          ? [p.henries, formatComponentValue(p.henries, "henry")]
-          : def.diode?.zener && Number.isFinite(p.zenerVolts)
-            ? [p.zenerVolts, formatComponentValue(p.zenerVolts, "volt")]
-            : [null, ""];
+    const number = connectionValue(def, p)?.number ?? null;
     const partNumber = partNumberOf(p);
     const pkg = packageChoice(def, p);
-    const detail = [text, pkg, partNumber].filter(Boolean).join(", ");
+    const detail = drawerDetail(def, p);
     return {
       key: [comp.ref, number, pkg, partNumber]
         .filter((v) => v != null)
@@ -344,10 +377,11 @@ function bomVariant(def, comp) {
       title: detail ? `${partTitle(def)} — ${detail}` : partTitle(def),
     };
   }
-  if (typeof def.weakBridges === "function" && Number.isFinite(p.ohms)) {
+  const ohms = weakOhms(def, p);
+  if (ohms != null) {
     return {
-      key: `${comp.ref}:${p.ohms}`,
-      title: `${partTitle(def)} — ${formatComponentValue(p.ohms, "ohm")}`,
+      key: `${comp.ref}:${ohms}`,
+      title: `${partTitle(def)} — ${drawerDetail(def, p)}`,
     };
   }
   // A designed chip is bought (or programmed) as the part number on it.
@@ -359,7 +393,60 @@ function bomVariant(def, comp) {
         : chipMarking(def),
     };
   }
+  // …and so is every other chip: a 74LS00 and a CD4011B are both a "Quad
+  // 2-input NAND", and only the part number tells the drawer which.
+  if (def.kind === "chip") {
+    return {
+      key: comp.ref,
+      title: `${chipMarking(def, comp.ref)} — ${partTitle(def)}`,
+    };
+  }
   return { key: comp.ref, title: partTitle(def) };
+}
+
+/** A connection part's typed value: `{number, text}`, or null. A value is a
+    NUMBER or nothing here: an older document's capacitance that would not
+    read is kept as its text (catalog/value-fields.js), and a line for it says
+    no value rather than a bare "F". */
+function connectionValue(def, p) {
+  if (def.capacitor && Number.isFinite(p.farads)) {
+    return { number: p.farads, text: formatComponentValue(p.farads, "farad") };
+  }
+  if (def.inductor && Number.isFinite(p.henries)) {
+    return { number: p.henries, text: formatComponentValue(p.henries, "henry") }; // prettier-ignore
+  }
+  if (def.diode?.zener && Number.isFinite(p.zenerVolts)) {
+    return { number: p.zenerVolts, text: formatComponentValue(p.zenerVolts, "volt") }; // prettier-ignore
+  }
+  return null;
+}
+
+/** The ohms a weakly-bridged part is bought by — a resistor's (or a pot's)
+    `ohms`, a speaker's `impedance` — or null. */
+function weakOhms(def, p) {
+  if (typeof def.weakBridges !== "function") return null;
+  if (Number.isFinite(p.ohms)) return p.ohms;
+  if (Number.isFinite(p.impedance)) return p.impedance;
+  return null;
+}
+
+/**
+ * What tells one of a discrete apart from another of its kind in the drawer,
+ * as words ("" when nothing does): a typed value with the package (where it
+ * had a choice) and part number, a resistor's or speaker's ohms, a relay's
+ * coil, an oscillator can's rate. The BOM line's title and the placement
+ * step both say it, so a 330 Ω and a 10 kΩ are told apart in both places.
+ */
+function drawerDetail(def, p) {
+  if (def.countsAsConnection) {
+    return [connectionValue(def, p)?.text, packageChoice(def, p), partNumberOf(p)] // prettier-ignore
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (def.coil) return formatComponentValue(relayCoilVolts(p), "volt");
+  if (def.logic?.oscillator && p.hz != null) return hzLabel(p.hz);
+  const ohms = weakOhms(def, p);
+  return ohms != null ? formatComponentValue(ohms, "ohm") : "";
 }
 
 /** The package a part was given where it had a choice (a MOSFET's TO-220 or
@@ -476,11 +563,8 @@ function pinMember({ componentId, ref, pin, name, hole }) {
 /** "74LS00 pin 3 (1Y)" — the type identity + pin number + its datasheet name. */
 function pinLabel(ref, pin, name) {
   const def = partDef(ref);
-  const base = def?.package
-    ? chipMarking(def, ref)
-    : def
-      ? partTitle(def)
-      : ref;
+  const base =
+    def?.kind === "chip" ? chipMarking(def, ref) : def ? partTitle(def) : ref;
   const suffix = name && name !== String(pin) ? ` (${name})` : "";
   return tf("plan.pinLabel", "{base} pin {pin}{suffix}", { base, pin, suffix });
 }
@@ -697,14 +781,10 @@ function discreteSteps(doc, steps) {
   for (const comp of doc.components) {
     const def = partDef(comp.ref);
     if (def?.kind !== "discrete") continue;
-    // A coloured part says its colour; one of the discretes its package
-    // (where it had a choice) and part number, which is how it is told apart
-    // in the drawer.
-    const marking = def.countsAsConnection
-      ? [packageChoice(def, comp.params), partNumberOf(comp.params)]
-          .filter(Boolean)
-          .join(", ")
-      : null;
+    // A coloured part says its colour; any other what tells it apart in the
+    // drawer — its value, package and part number, its ohms, its coil or its
+    // rate (`drawerDetail`, the BOM line's own words).
+    const marking = drawerDetail(def, comp.params ?? {});
     const color =
       def.colors && comp.params?.color
         ? ` (${wireColorName(comp.params.color)})`
@@ -734,7 +814,12 @@ function seatingPhrase(doc, comp) {
   const flip =
     comp.params?.rot === 180 ? ` (${tf("plan.flipped", "flipped 180°")})` : "";
   if (def?.package && board) {
-    const holeList = (partPinHoles(comp.ref, comp.anchor, comp.params) ?? [])
+    const pinHoles = partPinHoles(comp.ref, comp.anchor, comp.params) ?? [];
+    // Pin 1's OWN hole: a part turned end for end has it in the opposite
+    // corner from its anchor, and the step that named the anchor put the
+    // chip in backwards — supply reversed.
+    const pin1 = pinHoles.find((h) => h.pin === 1)?.hole ?? comp.anchor;
+    const holeList = pinHoles
       .map((h) => h.hole)
       .filter(Boolean)
       .map((h) => parseHole(board.type, h))
@@ -752,29 +837,37 @@ function seatingPhrase(doc, comp) {
         {
           from: `${a}${lo}`,
           to: `${b}${hi}`,
-          anchor: `${comp.board}.${comp.anchor}`,
+          anchor: `${comp.board}.${pin1}`,
           flip,
         },
       );
     }
   }
   // A linear (or rotated) part: list its resolved lead addresses — each
-  // NAMED, for one of the discretes whose pins have names, since
-  // which way round a diode, a transistor or an electrolytic goes is the
-  // whole question ("A bb1.a10, K bb1.a13").
+  // NAMED, for any part whose pins have names, since which way round a
+  // diode, an LED, a transistor, an electrolytic, a regulator or a speaker
+  // goes is the whole question ("A bb1.a10, K bb1.a13").
   const pins = partPinAddresses(doc, comp) ?? [];
-  const named =
-    def?.countsAsConnection === true &&
-    def.pins.some((p) => !/^\d+$/.test(p.name));
+  const named = def?.pins?.some((p) => !/^\d+$/.test(p.name)) === true;
   const leads = pins.map((p) => {
     const at = p.address ?? tf("plan.floatingLead", "floating");
-    const name = named ? def.pins.find((q) => q.n === p.pin)?.name : null;
+    const name = named ? leadName(def, comp.params, p.pin) : null;
     return name ? `${name} ${at}` : at;
   });
   return tf("plan.withLeads", "with leads at {leads}{flip}", {
     leads: leads.join(", "),
     flip,
   });
+}
+
+/** A lead's datasheet name — read through the part's polarity where it has
+    one, since a FLIPPED LED's pin 1 is its cathode. */
+function leadName(def, params, pin) {
+  const pol = typeof def.polarity === "function" ? def.polarity(params ?? {}) : null; // prettier-ignore
+  const role =
+    pol?.anodePin === pin ? "anode" : pol?.cathodePin === pin ? "cathode" : null; // prettier-ignore
+  const byRole = role ? def.pins.find((q) => q.role === role)?.name : null;
+  return byRole ?? def.pins.find((q) => q.n === pin)?.name ?? null;
 }
 
 /**
@@ -952,7 +1045,8 @@ function floatingLeadWarnings(doc, warnings) {
     if (!def || (comp.kind !== "chip" && comp.kind !== "discrete")) continue;
     const pins = partPinAddresses(doc, comp);
     if (!pins) continue;
-    const base = def.package ? chipMarking(def, comp.ref) : partTitle(def);
+    const base =
+      def.kind === "chip" ? chipMarking(def, comp.ref) : partTitle(def);
     for (const { pin, address } of pins) {
       if (address != null) continue;
       const name = def.pins.find((p) => p.n === pin)?.name;
@@ -1017,10 +1111,22 @@ function isConnected(netlist, address) {
   );
 }
 
-/** A wired net that reaches only one thing is a likely-forgotten connection. */
+/** A wired net that reaches only one thing is a likely-forgotten connection —
+    unless a planted signal flag or an Output/Input tag is what it reaches:
+    the wire takes a pin to the bench's stimulus (or an Arduino's), and that
+    IS the connection. */
 function singleMemberNetWarnings(doc, netlist, ctx, warnings) {
+  const tapped = new Set();
+  const tap = (anchor) => {
+    const netId = typeof anchor === "string" ? netlist?.netOfPoint?.get(anchor) : null; // prettier-ignore
+    if (netId != null) tapped.add(netId);
+  };
+  for (const sig of doc.signals ?? []) tap(sig?.flag?.anchor);
+  for (const element of doc.integrations ?? []) {
+    for (const tag of Object.values(element?.tags ?? {})) tap(tag?.anchor);
+  }
   for (const line of buildWiringList(doc, netlist, ctx)) {
-    if (!line.isSingleton) continue;
+    if (!line.isSingleton || tapped.has(line.netId)) continue;
     const who = line.name ?? line.members[0]?.label ?? line.netId;
     warnings.push({
       kind: "single-member-net",

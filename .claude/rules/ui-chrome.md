@@ -9,6 +9,9 @@ paths:
   - "src/web/scripts/components/keyboard-shortcuts.js"
   - "src/web/scripts/components/about-dialog.js"
   - "src/web/scripts/components/notification-stack.js"
+  - "src/web/scripts/components/notice-banner.js"
+  - "src/web/scripts/model/notices.js"
+  - "src/web/scripts/tests/notice*.test.js"
   - "src/web/pinout.html"
   - "src/web/scripts/pinout.js"
   - "src/web/index.html"
@@ -135,6 +138,33 @@ the list's scrollbar), clamped to `[180, half the window]` and persisted as
 `settings.paletteWidth` — reported by the panel, written by app.js. It survives a
 close/reopen for free, since shutting the tray HIDES the panel rather than rebuilding it.
 The drag runs on `pointer-gesture.js`.
+
+## What's-new banner
+
+A bar IN FLOW between the toolbar and `.app-main` (`components/notice-banner.js`), so
+it covers nothing and gives the room back when closed: a title, a few lines, an ✕. It
+stays until the ✕, and a closed notice is closed for good (2026-10-14; first notice:
+the selection & drag model).
+
+- **Who sees it is an upgrade test, decided in MAIN.** At the very top of
+  `whenReady`, before anything writes either, `stampFirstRun` (main.js) treats
+  `settings.json` or the saves folder already being on disk as evidence of an earlier
+  install and stamps `firstRunVersion` ONCE (`firstRunPatch`, settings-store.js):
+  `"legacy"` for an earlier install (≤ 1.4.2, before the stamp existed), else this
+  build's version. Main-owned, so the renderer can't fake an upgrade.
+- **Which notices are owed is pure** (`model/notices.js`): `NOTICES` is
+  `{id, key, since}`; `pendingNotices` returns those whose `since` is newer than the
+  first run (`"legacy"` is older than everything) and whose id is not in
+  `dismissedNotices`. No stamp → nothing shown. app.js builds the bar only when
+  something is owed, shows them one at a time, and writes each ✕ into
+  `dismissedNotices` (as the capacitor note's "Don't show again" is written).
+- **To say something again later, add a notice with a NEW id** and a `since` of the
+  version that brings the change; a closed id is never shown again. Its lines are
+  `notice.<key>.<line>` in every catalog, listed in `LINES` in notice-banner.js;
+  `{mod}`/`{alt}`/`{shift}` are filled with the platform's glyphs.
+- Under `make debug` the package version is the LAST release, so a fresh data dir
+  stamps it and is shown the notice too — a dev-only quirk that ends at the bump.
+- Persistent chrome: `relocalize()` is in app.js's relabeller.
 
 ## Popups & menus
 
@@ -279,7 +309,13 @@ re-dispatches as `chiphippo:*`; `app.js` hands the project/desktop ones straight
 - **About** / **Settings…** push `menu:show-about` / `menu:open-settings`, re-dispatched as
   `chiphippo:show-about` / `chiphippo:open-settings`; `app.js` opens
   `components/about-dialog.js` (name/subtitle/desc + version info from `app:info:get`) and
-  `components/settings-dialog.js`.
+  `components/settings-dialog.js`. The About card's footer is TWO lines, each two items with a
+  dot between (wrapping between items): the credit with the copyright, then the support
+  address with **♥ Sponsor Chip Hippo…** — a button, not a link: `app:donate` takes no URL
+  and main opens its own `DONATE_URL` (Jason's GitHub Sponsors, Rest Hippo's tip-jar
+  destination). Shown only where `app:info:get`'s `donate` says so — not in a Mac App Store
+  build (`store-build.js` `allowsDonations`, Guideline 3.1.1). A new footer item joins a line
+  rather than adding one (Jason, 2026-10-14: "avoid adding more one-off lines").
 
 ## Auxiliary windows
 

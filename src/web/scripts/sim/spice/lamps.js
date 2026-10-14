@@ -46,6 +46,7 @@
 
 import { partDef } from "../../catalog/index.js";
 import { partPinAddresses } from "../../model/occupancy.js";
+import { nodeOf, parseAddress } from "../../model/breadboard.js";
 import { backlightSpec, ledSpec } from "./leds.js";
 import { diodeSpec } from "./diodes.js";
 import { resistorKey } from "./supply.js";
@@ -113,6 +114,7 @@ export function lampTopology(doc, netlist) {
   if (cached) return cached;
   const netOf = (address) =>
     address ? (netlist.netOfPoint.get(address) ?? null) : null;
+  const wiredBy = nodeUsers(doc);
   const junctions = []; // {key, comp, seg, spec, anode, cathode, anodeAt, cathodeAt}
   const resistors = []; // {key, a, b, aAt, bAt, ohms}
   const outputsAt = new Map(); // chip id → pin → the hole its lead is in
@@ -163,8 +165,9 @@ export function lampTopology(doc, netlist) {
       const { anodePin, cathodePin } = def.polarity(comp.params);
       junction(junctionKey(comp.id), null, anodePin, cathodePin);
     } else if (segments) {
+      const lead = commonLeads(def, comp, at, wiredBy);
       for (const seg of segments) {
-        junction(junctionKey(comp.id, seg.id), seg.id, seg.anodePin, seg.cathodePin); // prettier-ignore
+        junction(junctionKey(comp.id, seg.id), seg.id, lead(seg.anodePin), lead(seg.cathodePin)); // prettier-ignore
       }
     }
     if (backlight) {
@@ -188,4 +191,68 @@ export function lampTopology(doc, netlist) {
   const topo = { junctions, resistors, outputsAt };
   TOPOLOGY.set(netlist, topo);
   return topo;
+}
+
+/**
+ * Who has a lead in each board node — every wire end and every seated part's
+ * pin, by `board.node` — read once, when a display first asks (`commonLeads`).
+ * @returns {(address: string, self: string) => boolean} whether anything but
+ *   part `self` is in `address`'s node
+ */
+function nodeUsers(doc) {
+  let users = null;
+  const types = new Map((doc.boards ?? []).map((b) => [b.id, b.type]));
+  const nodeKey = (address) => {
+    const { boardId, hole } = parseAddress(address) ?? {};
+    const type = types.get(boardId);
+    if (!type) return address; // a brick's terminal is a node of its own
+    return `${boardId}.${nodeOf(type, hole)}`;
+  };
+  const add = (address, owner) => {
+    if (!address) return;
+    const key = nodeKey(address);
+    if (!users.has(key)) users.set(key, new Set());
+    users.get(key).add(owner);
+  };
+  return (address, self) => {
+    if (!users) {
+      users = new Map();
+      for (const w of doc.wires ?? []) {
+        add(w.from, w.id);
+        add(w.to, w.id);
+      }
+      for (const c of doc.components ?? []) {
+        if (c.board == null) continue;
+        for (const p of partPinAddresses(doc, c) ?? []) add(p.address, c.id);
+      }
+    }
+    const here = users.get(nodeKey(address));
+    return Boolean(here && [...here].some((owner) => owner !== self));
+  };
+}
+
+/**
+ * A display's bridged commons (`internalBridges`, the 7-segment's pins 3
+ * and 8) are one strip inside it, and its segments name the first. The
+ * current they carry leaves by whichever the BUILD wired: a display grounded
+ * through pin 8 alone booked every segment's milliamps on pin 3's hole, with
+ * nothing plugged into it. Each common answers for its group when its own
+ * node holds nothing else and another's does; wired both ways (or neither),
+ * it keeps its own pin.
+ * @returns {(pin: number) => number}
+ */
+function commonLeads(def, comp, at, wiredBy) {
+  if (typeof def.internalBridges !== "function") return (pin) => pin;
+  const swap = new Map();
+  for (const group of def.internalBridges(comp.params) ?? []) {
+    const wired = group.filter((pin) => {
+      const address = at.get(pin);
+      return address != null && wiredBy(address, comp.id);
+    });
+    if (!wired.length) continue;
+    for (const pin of group) {
+      if (!wired.includes(pin)) swap.set(pin, wired[0]);
+    }
+  }
+  return (pin) => swap.get(pin) ?? pin;
 }

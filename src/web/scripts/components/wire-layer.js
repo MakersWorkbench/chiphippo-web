@@ -289,6 +289,33 @@ export class WireLayer {
   }
 
   /**
+   * The path a wire is drawn along at rest, unfaded (world px) — what the
+   * probe's net highlight traces, so its glow lies on the wire the user sees:
+   * a routed wire through its bends, a bus member as its two leads off the
+   * ribbon. Null when the wire does not resolve.
+   */
+  restingPath(wireId) {
+    const wire = this.#doc.getWire(wireId);
+    if (!wire) return null;
+    const { a, b } = this.#wireEnds(wire, null);
+    if (!a || !b) return null;
+    const bus = this.#doc.buses.find((x) => x.members.includes(wireId));
+    if (bus) {
+      const wiresById = new Map(this.#doc.wires.map((w) => [w.id, w]));
+      const geo = this.#busGeometry(bus, null, null, wiresById);
+      const i = bus.members.indexOf(wireId);
+      if (geo) {
+        return `${wirePath(geo.spreadA[i] ?? geo.collarA, a)} ${wirePath(geo.spreadB[i] ?? geo.collarB, b)}`; // prettier-ignore
+      }
+    }
+    if (wire.layout === "routed") {
+      const route = this.#routeGeometry(wire, a, b, null);
+      return filletedPolylinePath(route.points, BEND_RADIUS_PX);
+    }
+    return wirePath(a, b);
+  }
+
+  /**
    * Rebuild every wire from the document (documents are small; a full
    * rebuild is simple and correct). `overrides` supplies in-flight board
    * positions during a drag so wires stay glued to their holes live, and

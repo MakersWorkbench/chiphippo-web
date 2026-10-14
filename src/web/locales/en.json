@@ -105,6 +105,11 @@
       "message": "Confirm access to this project",
       "button": "Grant Access"
     },
+    "reserved": {
+      "message": "Choose another name",
+      "slot": "“{file}” is where Chip Hippo keeps work that has not been saved yet, so nothing else can be saved under that name.",
+      "open": "“{file}” is the project you have open. A desktop exported over it would replace the whole project."
+    },
     "exportKicad": {
       "title": "Export to KiCad",
       "message": "Choose the folder for the KiCad project — a new one, or the one it was exported to before.",
@@ -1082,6 +1087,7 @@
     "buildCrashed": "The build failed unexpectedly: {message}",
     "compilerFault": "The circuit was described correctly but could not be built. This is a fault in Chip Hippo's compiler, not in the design.",
     "gaveUp": "Gave up after {total} repair attempts. What is still wrong:",
+    "declined": "The model says this can't be built from the parts in the catalog:",
     "retrying": "That design did not pass — asking for a fix (attempt {n} of {total}):",
     "untitledCircuit": "Circuit",
     "summary": "{title} — {parts} parts, {wires} wires, {strips} board strips.",
@@ -1495,6 +1501,7 @@
     "description": "Design and simulate logic circuits on virtual solderless breadboards — place chips, wires, switches, LEDs and power, then watch electricity settle through every net.",
     "byline": "Created by Jason, coded by Claude",
     "support": "Support:",
+    "donate": "Sponsor Chip Hippo…",
     "versionInfo": "Version information",
     "version": "Version",
     "platform": "Platform",
@@ -1603,7 +1610,7 @@
       "analyzer": "Toggle the logic analyzer",
       "fit": "Fit to screen",
       "pan": "Pan the desk",
-      "panKeys": "Space+drag or middle-drag",
+      "panKeys": "Space+drag, {alt}+drag or middle-drag",
       "zoomOut": "Zoom all the way out (find a lost part)",
       "zoom": "Zoom in / out / reset",
       "fontSize": "Editor font size in / out / reset",
@@ -2531,6 +2538,17 @@
     "more": {
       "one": "+{count} more",
       "other": "+{count} more"
+    }
+  },
+  "notice": {
+    "dragModel": {
+      "title": "Dragging has changed",
+      "band": "Drag across the desk to select everything inside the box.",
+      "pickLead": "{alt}+drag to move one wire end or lead on its own.",
+      "toggle": "{mod}+click to add an item to the selection, or take it out.",
+      "carry": "Drag a part and its wiring comes with it.",
+      "bare": "{shift}+drag to move parts and leave their wires where they are.",
+      "pan": "Pan the desk with Space+drag, {alt}+drag off a lead, or the middle mouse button."
     }
   }
 }

@@ -38,6 +38,8 @@
  *                                  are truncated.
  * - writeAll(path, bytes)        → overwrite the whole file (inspector Save).
  * - remove(path)                 → delete the file (chip removed).
+ * - readImage(path)              → a picked image's bytes: a regular file,
+ *                                  capped at MAX_BYTES.
  *
  * The document stores only the GUID; the bytes are this sidecar, so a
  * `.chiphippo` stays small and text.
@@ -196,4 +198,53 @@ function remove(filePath) {
   }
 }
 
-module.exports = { create, load, program, writeAll, remove, MAX_BYTES };
+/**
+ * Read a memory IMAGE the user picked for the external programmer — a file of
+ * their own, anywhere. Only a regular file, and at most `MAX_BYTES` of it: the
+ * picker offers "All files", and a size from `stat` is no cap at all for a
+ * character device or a pipe (it says 0), so `/dev/zero` or a FIFO read whole
+ * never returned and grew main without bound. Opened non-blocking, so a path
+ * swapped for a pipe after the check cannot hang the open either.
+ *
+ * @param {string} filePath
+ * @returns {Buffer}
+ */
+function readImage(filePath) {
+  const resolved = resolvePath(filePath);
+  const refuse = (message) =>
+    Object.assign(new Error(message), { code: "INVALID_ARG" });
+  if (!fs.statSync(resolved).isFile()) throw refuse("not a regular file");
+  const fd = fs.openSync(
+    resolved,
+    fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0),
+  );
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) throw refuse("not a regular file");
+    if (stat.size > MAX_BYTES) {
+      throw refuse(`file is too large (${stat.size} bytes, max ${MAX_BYTES})`);
+    }
+    // One byte past the cap tells a file that grew since the stat.
+    const buf = Buffer.alloc(MAX_BYTES + 1);
+    let got = 0;
+    for (;;) {
+      const n = fs.readSync(fd, buf, got, buf.length - got, got);
+      if (n === 0) break;
+      got += n;
+      if (got > MAX_BYTES) throw refuse(`file is too large (max ${MAX_BYTES} bytes)`); // prettier-ignore
+    }
+    return Buffer.from(buf.subarray(0, got));
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+module.exports = {
+  create,
+  load,
+  program,
+  writeAll,
+  remove,
+  readImage,
+  MAX_BYTES,
+};

@@ -30,14 +30,20 @@
 // the only thing telling a fetch from a read, /RFSH and the R register become
 // decoration, and /WAIT cannot be implemented in its actual form.
 //
-// And the fidelity is nearly free, because two facts line up. The transport
-// ticks the engine once per clock EDGE (sim-controller.js: `1000 / (2 * hz *
-// speed)`), which is HALF-T resolution — exactly the resolution the Z80's own
-// timing diagrams are drawn at, since every control line transitions on a clock
-// edge. And `outputs` may read the LIVE clock level off its input pins, so the
-// state only has to carry WHICH T-state we are in; `outputs` derives the half.
-// That removes half the state machine: `step` advances one T per RISING edge,
-// and SIGNALS is the datasheet's timing diagram transcribed as data.
+// And the fidelity is nearly free, because the transport ticks the engine once
+// per clock EDGE (sim-controller.js: `1000 / (2 * hz * speed)`), which is
+// HALF-T resolution — exactly the resolution the Z80's own timing diagrams are
+// drawn at, since every control line transitions on a clock edge. `step`
+// advances one T per RISING edge and records the clock HALF on both edges
+// (`high`), and SIGNALS is the datasheet's timing diagram transcribed as data.
+//
+// The half is the STATE's, never read off the live clock pin. The engine's
+// pre-settle draws the new clock level with the OLD state before `step` runs,
+// so a half read off the pin put T(n)'s FIRST half up for a moment at the edge
+// that begins T(n+1): every rising edge pulsed the strobes back a half-cycle —
+// /RD twice per fetch, /MREQ five times, and a /WR that dropped again after
+// T3 and rose once the data bus had floated, so a latch clocked by it caught
+// $FF. Carried in the state, the picture changes only when the T-state does.
 //
 // ── How it stays plain data (no generators) ──────────────────────────────────
 // The engine threads sequential state as an opaque value, compares it
@@ -156,19 +162,22 @@ function signalsAt(mk, t, high) {
       };
 
     case "IN":
-      // The I/O difference: /IORQ + /RD assert a full cycle later, at T2↓, and
-      // the automatic wait state sits between T2 and the final T.
+      // The I/O difference: /IORQ + /RD assert at T2↑, and the automatic wait
+      // state sits between T2 and the final T; both release at T3↓, half a
+      // T-state before the address and data change (UM0080 Figure 7).
       return {
         ...off,
-        iorq: t >= 3 || (t === 2 && !high),
-        rd: t >= 3 || (t === 2 && !high),
+        iorq: t === 2 || t === 3 || (t === 4 && high),
+        rd: t === 2 || t === 3 || (t === 4 && high),
       };
 
     case "OUT":
+      // /WR "is used as a clock to the I/O port" (UM0080): it rises at T3↓,
+      // while the byte is still on the bus, which floats at the next T1↑.
       return {
         ...off,
-        iorq: t >= 3 || (t === 2 && !high),
-        wr: t >= 3 || (t === 2 && !high),
+        iorq: t === 2 || t === 3 || (t === 4 && high),
+        wr: t === 2 || t === 3 || (t === 4 && high),
       };
 
     case "INTACK":
@@ -193,14 +202,23 @@ function signalsAt(mk, t, high) {
       return { ...off };
 
     case "BUSACK":
-      // The buses belong to somebody else — everything floats, including the
-      // control lines. This is why a CPU cannot declare an `outputEnable`.
+      // The buses belong to somebody else — the address bus floats, and so do
+      // the TRISTATE controls (/MREQ /IORQ /RD /WR — `outputs` floats those);
+      // /M1 and /RFSH are plain outputs and sit inactive. This is why a CPU
+      // cannot declare an `outputEnable`.
       return { ...off, addr: null };
 
     default: // RESET
+      // "The address and data bus enter a high-impedance state, and all
+      // control output signals enter an inactive state" (UM0080) — driven
+      // HIGH, not floating, so glue logic reads a clean level at power-up.
       return { ...off, addr: null };
   }
 }
+
+/** The control lines that float with the buses under /BUSACK (UM0080's
+    "tristate" outputs); /M1 and /RFSH never float. */
+const TRISTATE_CONTROLS = ["mreq", "iorq", "rd", "wr"];
 
 // ── The replay bus ───────────────────────────────────────────────────────────
 
@@ -438,21 +456,10 @@ export function z80Tick(state, ctl) {
   }
 
   // The bus belongs to somebody else until /BUSRQ is released; then the
-  // interrupted M-cycle picks up exactly where it left off.
+  // M-cycle it was granted in front of begins, from its T1.
   if (state.mk === "BUSACK") {
     if (ctl.busrq) return state;
     return { ...state, ...state.held, held: null };
-  }
-  if (ctl.busrq && state.t === 1) {
-    // A bus request is honoured at an M-cycle boundary, never mid-cycle.
-    const { mk, t, itc, addr, dout, din, wait } = state;
-    return {
-      ...state,
-      mk: "BUSACK",
-      t: 1,
-      wait: false,
-      held: { mk, t, itc, addr, dout, din, wait },
-    };
   }
 
   // A wait state: /WAIT was low at the sampling edge, so this T repeats.
@@ -472,7 +479,23 @@ export function z80Tick(state, ctl) {
   const sample = state.mk === "INTERNAL" ? null : MCYCLES[state.mk].sample;
   const din = state.t + 1 === sample ? ctl.data : state.din;
   if (state.t < len) return { ...state, t: state.t + 1, din, nmiPending };
-  return completeMCycle({ ...state, din, nmiPending }, ctl);
+  const next = completeMCycle({ ...state, din, nmiPending }, ctl);
+  // A bus request is honoured at the END of a machine cycle (UM0080: "always
+  // recognized at the end of the current machine cycle"), on the edge that
+  // would begin the next one's T1 — so the next cycle is held, not started:
+  // granting it a T1 later put a half-clock of /M1, /MREQ and /RD (a stray
+  // read) on the bus before it floated, and ran that T1 again on release.
+  if (ctl.busrq) {
+    const { mk, t, itc, addr, dout, din: held, wait } = next;
+    return {
+      ...next,
+      mk: "BUSACK",
+      t: 1,
+      wait: false,
+      held: { mk, t, itc, addr, dout, din: held, wait },
+    };
+  }
+  return next;
 }
 
 /**
@@ -576,17 +599,24 @@ export function z80Unit(pins) {
       const was = prev.get(clk);
       // The whole state machine is edge-gated: an unchanged clock must return
       // the state VERBATIM, or the engine's step fixpoint never settles and the
-      // tick is reported as an oscillation.
+      // tick is reported as an oscillation. Each edge records the half it
+      // begins, which is what `outputs` draws (see the header).
       if (was === L && now === H) {
-        return z80Tick(state, control(ins, { data: readData(ins) }));
+        const next = z80Tick(state, control(ins, { data: readData(ins) }));
+        return next.high === true ? next : { ...next, high: true };
       }
-      if (was === H && now === L) return z80Fall(state, control(ins));
+      if (was === H && now === L) {
+        const next = z80Fall(state, control(ins));
+        return next.high === false ? next : { ...next, high: false };
+      }
       return state;
     },
 
     outputs(state, ins) {
       const out = new Map();
-      const high = ins.get(clk) !== L;
+      // The half the last edge began; a state no edge has stepped yet (the
+      // power-on one, a monitor's peek) has only the pin to go by.
+      const high = state.high ?? ins.get(clk) !== L;
       const sig = signalsAt(state.mk, state.t, high);
       const bus =
         sig.addr === "rfsh"
@@ -607,15 +637,17 @@ export function z80Unit(pins) {
         out.set(pin, drives ? ((state.dout >> i) & 1 ? H : L) : Z),
       );
 
-      // Every control output is active LOW; in RESET and BUSACK they float.
-      const floating = state.mk === "BUSACK" || state.mk === "RESET";
-      const line = (asserted) => (floating ? Z : asserted ? L : H);
-      out.set(m1, line(sig.m1));
-      out.set(mreq, line(sig.mreq));
-      out.set(iorq, line(sig.iorq));
-      out.set(rd, line(sig.rd));
-      out.set(wr, line(sig.wr));
-      out.set(rfsh, line(sig.rfsh));
+      // Every control output is active LOW. In RESET they all sit inactive
+      // (HIGH); under BUSACK the tristate four float and /M1, /RFSH sit HIGH.
+      const busack = state.mk === "BUSACK";
+      const line = (name, asserted) =>
+        busack && TRISTATE_CONTROLS.includes(name) ? Z : asserted ? L : H;
+      out.set(m1, line("m1", sig.m1));
+      out.set(mreq, line("mreq", sig.mreq));
+      out.set(iorq, line("iorq", sig.iorq));
+      out.set(rd, line("rd", sig.rd));
+      out.set(wr, line("wr", sig.wr));
+      out.set(rfsh, line("rfsh", sig.rfsh));
 
       // /HALT and /BUSACK are not part of a bus cycle and never float.
       out.set(halt, state.halted ? L : H);

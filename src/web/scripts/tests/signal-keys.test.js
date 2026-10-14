@@ -102,6 +102,20 @@ test("keyup is gated on NOTHING — a stuck signal is the worst outcome", () => 
   assert.deepEqual(keys.heldKeys, []);
 });
 
+test("Shift pressed mid-hold still lets the digit go — matched by the physical key", () => {
+  // `e.key` is read with the modifiers held at RELEASE, so a "1" that went
+  // down comes up as "!" — and the signal stayed asserted until a Stop.
+  const { keys, log } = harness();
+  keys.handleKeyDown(down("1", { code: "Digit1" }));
+  assert.equal(keys.handleKeyUp({ key: "!", code: "Digit1", shiftKey: true }), true); // prettier-ignore
+  assert.deepEqual(log, ["sig1:down", "sig1:up"]);
+  assert.deepEqual(keys.heldKeys, []);
+  // A keyup with no code (an older or synthetic event) still releases by key.
+  keys.handleKeyDown(down("2"));
+  assert.equal(keys.handleKeyUp({ key: "2" }), true);
+  assert.deepEqual(keys.heldKeys, []);
+});
+
 test("a release reaches the signal that was PRESSED, not the digit's current one", () => {
   const { keys, log, state } = harness();
   keys.handleKeyDown(down("2")); // sig2

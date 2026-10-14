@@ -73,9 +73,13 @@ paths:
     — the only way `/M1`, `/RFSH` and `/WAIT` mean anything. It is affordable because the
     transport ticks the engine once per clock EDGE (`sim-controller.js`'s
     `1000 / (2 * hz * speed)`), i.e. HALF-T resolution — what the Z80's timing diagrams
-    are drawn at — and because `outputs` may read the LIVE clock off its own input pins,
-    so the state carries only WHICH T-state it is in. `SIGNALS` is the datasheet's timing
-    diagram transcribed as DATA, not code.
+    are drawn at. Each edge records the half it begins in the state (`high`), and
+    `outputs` draws THAT, never the live clock pin: the engine's pre-settle shows the new
+    clock with the OLD state, so a half read off the pin pulsed every strobe back a
+    half-cycle at each rising edge (2026-10-14). `SIGNALS` is the datasheet's timing
+    diagram transcribed as DATA, not code: an I/O cycle's /IORQ + /RD|/WR run T2↑ to
+    T3↓; /BUSRQ is granted at the END of an M-cycle, the next one held from its T1; in
+    RESET every control line sits HIGH, under BUSACK only /MREQ /IORQ /RD /WR float.
   - **The W65C02 is CYCLE-exact** (Jason, 2026-10-10): every dummy cycle of the
     W65C02S datasheet is a real bus READ — implied/accumulator ops read the next byte;
     zp,X/(zp,X) and an index carried into the high byte (always, for a store, and for
@@ -84,7 +88,8 @@ paths:
     RTI/JSR spend a cycle on the stack at S, RTS another on the return address; JMP
     (a)/(a,X) are 6; taken branches (and BBR/BBS, 5 + the same) read the next
     instruction's address, +1 across a page; decimal ADC/SBC +1; WAI/STP 3; `$5C` 8;
-    undefined one-byte opcodes 1. Reset and IRQ/NMI are 7 (two reads of PC first;
+    undefined one-byte opcodes 1. Reset and IRQ/NMI are 7 (two reads of PC first —
+    an interrupt's first, the fetch it abandons, with SYNC high;
     reset then three stack reads stepping S from 0 to $FD — `resetHold` starts S at 0
     and drives PC, not $FFFC, while held). Where WDC gives only a COUNT, the address is
     the next instruction's (no stray I/O read). `tests/w65c02.test.js` holds the count
@@ -282,7 +287,25 @@ paths:
   `evaluate` → re-drive to a
   fixpoint or the 200-iteration cap (→ still-changing nets marked `X` + oscillation).
   **Warm-starting net levels by stable netId is exactly why cross-coupled NAND latches
-  HOLD.** The engine is a pure function: it REPORTS `chipStatus` and returns
+  HOLD.** A latch with BOTH inputs idle at once (settled from all-floating at Run, or
+  both released in one tick) has two steady states and flips L/L, H/H to the cap in a
+  simultaneous update, so a capped logic-engine settle (no hooks — not Spice Lite)
+  breaks the tie ONCE (`solve`, 2026-10-14): it settles again from where it ended, the
+  first racing net in netId order LOW and the rest HIGH; a settle that comes of it is a
+  real steady state and replaces the report, a true ring oscillator keeps it.
+  **A transistor its own channel feeds** (settle-pass.js `selfFedControls`, logic
+  engine only, 2026-10-14): as a plain switch a diode-connected transistor, or the second
+  of a Darlington of two discretes (its base on the first's emitter, the collectors
+  tied), has no fixed point — on, its channel joins its base to its emitter's LOW; off,
+  the base is pulled up again — so it oscillated to the cap. Where its own channel WOULD
+  join its control to itself (`selfFedCandidates`: the control reaches an end through
+  the other channels, any state; a rail joins nothing), the control reads its net as it
+  resolves WITHOUT that channel (this pass's drivers, the other channels' joins, the
+  resistors' pulls off the last levels) — what pulls the base up with the transistor out
+  of the way turns it on, as on the bench. Those controls ride the channels as `forced`
+  (published by `channelsOf`, so its lamp shows it on); the incremental settle reads the
+  channels again whenever a net they hear moves, level or drivers (`selfFedNets`).
+  Under Spice Lite (`read` set) the solve answers instead. The engine is a pure function: it REPORTS `chipStatus` and returns
   run-volatile `state`/`pinLevels`, never mutating `params` and never touching a timer.
 - **Analog switches JOIN nets; they drive none** (CD4066B, CD4051B/52B/53B — Phase 2b
   of Feature 410 — and the CD4007UB, whose six MOSFETs are six channels built by
@@ -456,7 +479,11 @@ its floating bus reading `$FF`).
   power-up stays deterministic. Every rule is idempotent, so a stuck X still reaches the
   tick fixpoint. `overUnknowns(levels, fn)` tries each X both ways and keeps what every
   reading agrees on, so an unknown that cannot change an output does not spoil it (a 4028
-  with D floating still holds outputs 2–7 LOW).
+  with D floating still holds outputs 2–7 LOW). The timed parts keep the same doubt
+  (2026-10-14): a 4060 whose RESET floated stays unknown until a clean RESET HIGH, in
+  either mode, and an X on φI is a maybe-edge, as the 4040's clock; a 4047 whose RESET
+  floats runs on as though it were not and shows X wherever that and a reset disagree,
+  until a clean RESET or the pulse's own end.
 - **The batch-2 MSI parts' facts that are not obvious from a pinout**: a 4027 with SET
   and RESET both HIGH drives Q and Q̄ HIGH (as the 4013); the 4094's storage latches are
   TRANSPARENT while STROBE is HIGH and its OUTPUT ENABLE is active HIGH, QS/Q'S never

@@ -129,11 +129,13 @@ hole. Pressing the button injects a level there. `model/signals.js` (pure) +
   tool is armed, Run disarms both, and bare `0` has no other claim. The signal block sits
   AFTER `controller.handleKeyDown` in app.js, which makes that precedence a fact of the
   code rather than a claim about tool state. The held set is a **Map, key → the signal id
-  it PRESSED**, so a release always reaches the
+  it PRESSED** (and the physical `e.code` it went down on), so a release always reaches the
   signal that was pressed even if the rail changed underneath. **Release is gated on
   nothing** — not the run state, not the popup guard, not the typing guard — and has three
   legs (keyup, window blur, the transport stopping), because a stuck signal is far worse
-  than a missed press.
+  than a missed press. A keyup is matched by **`e.code` first**, then `e.key`: `e.key` is
+  read with the modifiers held at RELEASE, so hold `1`, press Shift, let go, and the keyup
+  says `!` (2026-10-14).
 - **Design clips are the one place all-or-nothing bends.** A signal travels only when its
   flag is planted on a captured board (the wire rule); an unplaced one stays behind.
   `color` is deliberately NOT captured — colours are handed out per desk, so the next in

@@ -194,12 +194,12 @@ test("a Spice Lite wave is where its clock is between edges: Step, own pause", a
   const cap = capture();
   sim.start();
   sim.pause();
-  const out = () => {
-    const e = cap.events.at(-1);
-    return e.nodeVolts.get(e.netlist.netOfPoint.get("clk1.out"));
-  };
+  const out = (e = cap.events.at(-1)) =>
+    e.nodeVolts.get(e.netlist.netOfPoint.get("clk1.out"));
   const lamp = () => cap.events.at(-1).clockLevels.get("clk1");
-  assert.ok(out() < 0.5, `near 0 V at Run: ${out()}`);
+  // Read off the state Run published: a loaded machine can let a batch run
+  // a frame or more of wall time before the pause lands.
+  assert.ok(out(cap.events[0]) < 0.5, `near 0 V at Run: ${out(cap.events[0])}`);
   // (Read a few gate delays on: the tick's settle runs on past its moment.)
   sim.step(); // one half: the triangle's peak
   assert.ok(Math.abs(out() - 5) < 1e-5, `at its peak: ${out()}`);
@@ -211,9 +211,13 @@ test("a Spice Lite wave is where its clock is between edges: Step, own pause", a
   sim.resume();
   await sleep(120);
   sim.toggleClockPause("clk1");
+  // Read once the pause has published: under load the last state out can
+  // still be a batch from a few milliseconds before it.
+  await sleep(30);
   const held = out();
   assert.ok(held > 0 && held < 5, `part-way: ${held}`);
   await sleep(60);
+  assert.ok(Math.abs(out() - held) < 1e-6, `held at ${out()} from ${held}`);
   sim.toggleClockPause("clk1"); // …and picks up where it was
   assert.ok(Math.abs(out() - held) < 0.05, `resumed at ${out()} from ${held}`);
   sim.stop();

@@ -224,14 +224,24 @@ export class Program {
     return this.#outputSlots.map((s) => vals[s]);
   }
 
-  /** The edge blocks the step from `prev` to `ins` fires (none on the first
-      sample, `prev` null). */
+  /** The edge blocks the step from `prev` to `ins` fires. The first sample
+      (`prev` null) is IEEE 1364's time zero, every input x a moment before:
+      an asynchronous control already at its active level fires its block
+      there (x→0 is a negedge, x→1 a posedge), so a reset held low from Run
+      applies at once — as a built-in part's CLR does. The CLOCK does not:
+      no part latches on its first sample. */
   firedBlocks(ins, prev) {
-    if (!prev || !this.#m.edge.length) return [];
+    if (!this.#m.edge.length) return [];
     return this.#m.edge.filter((block) =>
       block.events.some((e) => {
         const i = this.#inputIndexOf.get(e.slot);
-        return fires(e.edge, bitState(prev[i], e.pos), bitState(ins[i], e.pos));
+        const now = bitState(ins[i], e.pos);
+        if (!prev) {
+          const clock = block.clock;
+          const isClock = clock && clock.slot === e.slot && clock.pos === e.pos;
+          return !isClock && fires(e.edge, "x", now);
+        }
+        return fires(e.edge, bitState(prev[i], e.pos), now);
       }),
     );
   }
@@ -453,10 +463,25 @@ function pendingOf(vals, nba, count) {
  */
 function runComb(block, vals, record) {
   const before = block.writes.map((w) => vals[w.slot]);
-  const ctx = { vals, nba: [], trace: null, tx: null };
-  if (record) ctx.trace = (stmt) => record(stmt, ctx);
+  const ctx = { vals, nba: [], trace: null, tx: null, written: null };
+  if (record) {
+    ctx.trace = (stmt) => record(stmt, ctx);
+    ctx.written = new Map();
+  }
   exec(block.body, ctx);
   applyNba(ctx);
+  // A traced run starts from the values the chip was last seen at, where the
+  // engine's evaluation starts every comb reg at x (`#fresh`): a bit the run
+  // did not write — a full case meeting an x subject matches nothing, and has
+  // no default — is x on the pins, so it is x here too. Otherwise the watch
+  // shows the old value while the chip drives x.
+  if (ctx.written) {
+    for (const w of block.writes) {
+      if (w.counter) continue;
+      const unset = (w.mask & ~(ctx.written.get(w.slot) ?? 0)) >>> 0;
+      if (unset) vals[w.slot] = withX(vals[w.slot], unset);
+    }
+  }
   let changed = null;
   block.writes.forEach((w, k) => {
     if (!sameValue(before[k], vals[w.slot])) (changed ??= new Set()).add(w.slot); // prettier-ignore
@@ -476,8 +501,11 @@ export function exec(stmt, ctx) {
       ctx.trace?.(stmt);
       const value = V.resize(stmt.value(ctx.vals), stmt.w);
       const segments = stmt.target.resolve(ctx.vals);
-      if (stmt.blocking) writeSegments(ctx.vals, segments, value, ctx.tx);
-      else ctx.nba.push([segments, value]);
+      if (stmt.blocking) {
+        writeSegments(ctx.vals, segments, value, ctx.tx, ctx.written);
+      } else {
+        ctx.nba.push([segments, value]);
+      }
       return;
     }
     case "for": {
@@ -551,7 +579,7 @@ function matches(mode, a, b) {
 /** Write a value across segments (most significant first); a `slot: -1`
     segment (an unknown index) consumes its bits and writes nothing, and an
     array word's segment (`mem`) writes that word. */
-function writeSegments(vals, segments, value, tx = null) {
+function writeSegments(vals, segments, value, tx = null, written = null) {
   let offset = value.w;
   for (const seg of segments) {
     offset -= seg.w;
@@ -559,13 +587,21 @@ function writeSegments(vals, segments, value, tx = null) {
     const bits = V.slice(value, offset, seg.w);
     if (seg.mem) vals[seg.slot] = writeWord(vals[seg.slot], seg.addr, bits, tx);
     else vals[seg.slot] = V.withBits(vals[seg.slot], seg.lo, bits);
+    if (written && !seg.mem) {
+      const bitsMask = (V.mask(seg.w) * 2 ** seg.lo) % 2 ** 32;
+      written.set(seg.slot, ((written.get(seg.slot) ?? 0) | bitsMask) >>> 0);
+    }
   }
 }
+
+/** `value` with the bits under `mask` made x. */
+const withX = (value, mask) =>
+  V.make(value.w, value.v & ~mask, value.x | mask, value.z & ~mask);
 
 function applyNba(ctx) {
   if (!ctx.nba.length) return;
   const tx = ctx.tx ?? newTx();
-  for (const [segments, value] of ctx.nba) writeSegments(ctx.vals, segments, value, tx); // prettier-ignore
+  for (const [segments, value] of ctx.nba) writeSegments(ctx.vals, segments, value, tx, ctx.written); // prettier-ignore
   ctx.nba = [];
 }
 

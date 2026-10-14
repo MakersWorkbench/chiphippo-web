@@ -229,7 +229,11 @@ export function netPolarity(net) {
     if (t.endsWith("+")) plus = true;
     else if (t.endsWith("-")) minus = true;
   }
-  for (const r of net.rails) {
+  // A rail's line is a supply only while nothing DRIVES it: a chip output on
+  // it makes it a signal bus — a turned rail beside a board is one (CLAUDE.md
+  // → "Rotation") — and drawing it as VCC would tie that output to a supply.
+  const driven = net.pins.some((p) => p.role === "output");
+  for (const r of driven ? [] : net.rails) {
     if (r.endsWith("+")) plus = true;
     else if (r.endsWith("-")) minus = true;
   }

@@ -46,6 +46,9 @@ export class NetHighlight {
    * (all in world px):
    *   positionOf(address)  → {x,y} | null   (hole or PSU terminal)
    *   wireEndpointsOf(id)  → {a,b} | null   (both endpoints, world px)
+   *   wirePathOf(id)       → string | null  (optional: the path the wire is
+   *                          DRAWN along — a routed wire's bends, a bus
+   *                          member's leads; the sag between its ends without)
    * `pinned` styles the highlight as locked (brighter).
    *
    * @param {import('../sim/netlist.js').NetInfo} net
@@ -61,16 +64,15 @@ export class NetHighlight {
     else delete this.#svg.dataset.level;
     if (!net) return;
 
-    // Member wires: a glow stroke tracing each wire's sagging path.
+    // Member wires: a glow stroke tracing each wire where it is drawn.
     for (const wireId of net.wires) {
-      const ends = geometry.wireEndpointsOf(wireId);
-      if (!ends) continue;
-      this.#svg.append(
-        svgEl("path", {
-          class: "net-highlight-wire",
-          d: wirePath(ends.a, ends.b),
-        }),
-      );
+      let d = geometry.wirePathOf?.(wireId) ?? null;
+      if (!d) {
+        const ends = geometry.wireEndpointsOf(wireId);
+        if (!ends) continue;
+        d = wirePath(ends.a, ends.b);
+      }
+      this.#svg.append(svgEl("path", { class: "net-highlight-wire", d }));
     }
 
     // Member holes + PSU terminals: a glow dot on each point.

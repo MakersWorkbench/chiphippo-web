@@ -51,7 +51,13 @@ import {
 } from "../sim/spice/output-stage.js";
 import { normalizeSpiceConfig } from "../sim/spice/config.js";
 import { partDef } from "../catalog/index.js";
-import { bench, runner } from "./timing-fixtures.js";
+import {
+  bench,
+  darlingtonPair,
+  runner,
+  transistorFlasher,
+  transistorLatch,
+} from "./timing-fixtures.js";
 
 const spice = (doc, config) => runner(doc, { engine: "spice", spice: config });
 
@@ -1011,6 +1017,134 @@ test("a short through a transistor stands only as a short's current", () => {
   assert.deepEqual(shorts(npn(10e6), "spice"), [], "43 µA is no short");
   assert.equal(shorts(npn(1e3), "spice").length, 1, "0.43 A is");
   assert.equal(shorts(npn(1e3), "spice")[0].via, "transistor");
+});
+
+test("a diode-connected transistor settles: its base read off the solve, not its own switch", () => {
+  // Base tied to collector, 1 kΩ from +5 V, emitter to GND: read at its
+  // net's digital level, the switch turned itself off by turning on, every
+  // pass to the iteration cap — X, an oscillation, every tick. And a current
+  // mirror built on one.
+  const b = bench();
+  const q = b.seat("q1", "npn", "a10");
+  const r = b.seat("r1", "resistor", "a30", { ohms: 1e3 });
+  b.vcc(r.get(1));
+  b.link(r.get(2), q.get(3));
+  b.link(q.get(2), q.get(3));
+  b.gnd(q.get(1));
+  const sim = spice(b.doc);
+  const net = sim.netlist.netOfPoint.get(b.at(q.get(3)));
+  for (const t of [0, 0.001]) {
+    const res = sim.run(t).result;
+    assert.deepEqual(res.warnings, [], `at ${t}`);
+    assert.ok(res.iterations < 10, `${res.iterations} iterations`);
+    assert.equal(res.netLevels.get(net), L, "0.7 V reads LOW");
+    assert.ok(Math.abs(res.nodeVolts.get(net) - 0.7) < 0.05, `${res.nodeVolts.get(net)} V`); // prettier-ignore
+    assert.equal(res.transistors.get("q1").on, true);
+  }
+  const m = bench();
+  const q1 = m.seat("q1", "npn", "a10");
+  const q2 = m.seat("q2", "npn", "a14");
+  const r1 = m.seat("r1", "resistor", "a30", { ohms: 10e3 });
+  m.vcc(r1.get(1));
+  m.link(r1.get(2), q1.get(3));
+  m.link(q1.get(2), q1.get(3));
+  m.link(q2.get(2), q1.get(3));
+  m.gnd(q1.get(1));
+  m.gnd(q2.get(1));
+  const r2 = m.seat("r2", "resistor", "a40", { ohms: 1e3 });
+  m.vcc(r2.get(1));
+  m.link(r2.get(2), q2.get(3));
+  const res = spice(m.doc).run(0).result;
+  assert.deepEqual(res.warnings, [], "the mirror too");
+  const [a, c] = ["q1", "q2"].map((id) => res.transistors.get(id).amps);
+  close(c, a, 0.1, "the mirror's two currents");
+});
+
+test("every discrete transistor is read off the solve: a flip-flop falls one way, a Darlington of two conducts", () => {
+  // Read at its base's digital level, the flip-flop's two transistors
+  // switched each other on and off every pass to the cap (X, oscillation),
+  // and so did a Darlington built of two. Read off the solve, the flip-flop
+  // lands on its knife-edge — both half on, both collectors at a volt — so
+  // the solve falls off it (spice/network.js `fallOff`), the same way round
+  // as the logic engine's tie-break.
+  const latch = transistorLatch();
+  const sim = spice(latch.doc);
+  const r = sim.run(0).result;
+  assert.deepEqual(r.warnings, []);
+  const volt = (hole) => r.nodeVolts.get(sim.netlist.netOfPoint.get(latch.b.at(hole))); // prettier-ignore
+  const [c1, c2] = [volt(latch.q1.get(3)), volt(latch.q2.get(3))];
+  assert.ok(
+    Math.max(c1, c2) > 4 && Math.min(c1, c2) < 0.2,
+    `${c1} V / ${c2} V`,
+  );
+  const logic = runner(latch.doc).run(0);
+  assert.equal(logic.level(latch.q1.get(3)), c1 > c2 ? H : L, "the logic engine's way round"); // prettier-ignore
+  // …and it stays there, tick after tick.
+  for (const t of [0.001, 0.01]) {
+    const later = sim.run(t).result;
+    assert.ok(Math.abs(later.nodeVolts.get(sim.netlist.netOfPoint.get(latch.b.at(latch.q1.get(3)))) - c1) < 1e-6); // prettier-ignore
+  }
+  const pair = darlingtonPair();
+  const d = spice(pair.doc);
+  for (const [t, level] of [
+    [0, H],
+    [0.001, L],
+    [0.002, H],
+  ]) {
+    const out = d.run(t, new Map([["sig1", level]])).result;
+    assert.deepEqual(out.warnings, [], `in ${level}`);
+    assert.equal(out.transistors.get("q2").on, level === H, `in ${level}`);
+    assert.equal(d.level(pair.q2.get(3)), level === H ? L : H);
+  }
+});
+
+test("the two-transistor flasher flips every 0.33 s between the rails, from the same start at any tick rate", () => {
+  // Read off the plates' linear model, the base swung to −40 V and the pair
+  // flipped every 30 ms; powered up even (both half on), it stood on that
+  // knife-edge 0.2 s, its first flip wherever the ticks' noise tipped it.
+  const flasher = transistorFlasher();
+  const flipsAt = (step, wake) => {
+    const sim = spice(flasher.doc);
+    const flips = [];
+    let last = null;
+    let low = 0;
+    let high = 0;
+    for (let t = 0; t <= 1.2;) {
+      const r = sim.run(t).result;
+      assert.deepEqual(r.warnings, [], `at ${t} s`);
+      for (const q of [flasher.q1, flasher.q2]) {
+        for (const pin of [2, 3]) {
+          const v = r.nodeVolts.get(sim.netlist.netOfPoint.get(flasher.b.at(q.get(pin)))); // prettier-ignore
+          low = Math.min(low, v);
+          high = Math.max(high, v);
+        }
+      }
+      const level = sim.level(flasher.q1.get(3));
+      if (last && level !== last) flips.push(t);
+      last = level;
+      t = wake && r.wakeAt > t ? Math.min(r.wakeAt, t + step) : t + step;
+    }
+    // A base pulled one supply below its emitter (less the junction), and
+    // no further.
+    assert.ok(low > -4.5 && high <= 5 + 1e-6, `${low} V … ${high} V`);
+    return flips;
+  };
+  for (const [step, wake] of [
+    [0.0005, false],
+    [0.004, false],
+    [0.1, true],
+  ]) {
+    const flips = flipsAt(step, wake);
+    const what = `${step} s ticks${wake ? " to the wake" : ""}: ${flips.join(" ")}`; // prettier-ignore
+    assert.ok(flips.length >= 3, what);
+    // The first half period is short — a base charging from empty through
+    // 47 kΩ · 10 µF to 0.6 V, 55 ms — and the same at every rate; the rest
+    // are ln 2 · RC, and even.
+    close(flips[0], 0.055, 0.2, what);
+    for (let i = 1; i < flips.length; i++) {
+      close(flips[i] - flips[i - 1], 0.33, 0.12, what);
+    }
+  }
 });
 
 test("a short through a switch stands while its supply is limited, not at a channel's milliamps", () => {

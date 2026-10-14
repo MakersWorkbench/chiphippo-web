@@ -279,6 +279,7 @@ function resolveSpec(spec) {
   // same net, and silently merging them would hide a real modelling mistake.
   const owner = new Map(); // "partId.pin" → net name
   const nets = [];
+  const netNamesSeen = new Set();
   rawNets.forEach((n, i) => {
     const path = `nets[${i}]`;
     const name = typeof n?.name === "string" ? n.name.trim() : "";
@@ -287,7 +288,16 @@ function resolveSpec(spec) {
       errors.push(err("BAD_NET_NAME", "A net needs a name.", { path }));
       return;
     }
-    if (members.length < 2) {
+    // A supply binds by NET NAME as well as by member token. The system prompt
+    // documents the name form (`{ "name": "VCC", members: [...] }`) and it is
+    // the form a model reaches for, so honouring only the member form is the
+    // worst kind of near-miss: a WIDE power net fails to route, and a NARROW
+    // one quietly compiles into an island of pins tied to each other and to no
+    // supply at all — which loads, settles, and passes the declared-vs-derived
+    // gate while the switches hanging off it do nothing. So the name IS a
+    // member, and one pin is enough to make a rail-named net.
+    const named = RAIL_TOKENS[name.toUpperCase()];
+    if (members.length < (named ? 1 : 2)) {
       errors.push(
         err("NET_TOO_SMALL", `Net "${name}" needs at least two members.`, {
           path,
@@ -295,16 +305,24 @@ function resolveSpec(spec) {
       );
       return;
     }
+    // Two signal nets with one name are two nets the faults below cannot tell
+    // apart — every check that names a net would name both, and the ladder
+    // took the pair for a short. Two nets NAMED for a supply are one rail,
+    // which the name form already says.
+    if (!named && netNamesSeen.has(name)) {
+      errors.push(
+        err(
+          "DUPLICATE_NET",
+          `Two nets are named "${name}" — give each net its own name, or ` +
+            `merge them if they are one net.`,
+          { path },
+        ),
+      );
+      return;
+    }
+    netNamesSeen.add(name);
     const pins = [];
     const rails = new Set();
-    // A supply binds by NET NAME as well as by member token. The system prompt
-    // documents the name form (`{ "name": "VCC", members: [...] }`) and it is
-    // the form a model reaches for, so honouring only the member form is the
-    // worst kind of near-miss: a WIDE power net fails to route, and a NARROW
-    // one quietly compiles into an island of pins tied to each other and to no
-    // supply at all — which loads, settles, and passes the declared-vs-derived
-    // gate while the switches hanging off it do nothing.
-    const named = RAIL_TOKENS[name.toUpperCase()];
     if (named) rails.add(named);
     members.forEach((m, j) => {
       const mPath = `${path}.members[${j}]`;
@@ -999,6 +1017,16 @@ function lampLegs(def) {
 function assemble(resolved, title, notes) {
   const { parts, nets } = resolved;
   const warnings = [];
+  // The spec's own parts, before the compiler adds any. Each is written onto
+  // the desk under the id the spec gave it (and its `label` as the part's
+  // description): the caption the model writes cites "U1 feeds U2", and a
+  // part named nothing left the reader nowhere to find U1. What the compiler
+  // interposes (a lamp's resistor, a pull) is named by nothing it wrote.
+  const declared = new Set(parts.keys());
+  const named = (p) =>
+    declared.has(p.id)
+      ? { name: p.id, ...(p.label ? { description: String(p.label) } : {}) }
+      : {};
 
   // Split into board-seated parts and desk bricks.
   const seated = [];
@@ -1107,6 +1135,18 @@ function assemble(resolved, title, notes) {
     if (!nodes.has(leg.net)) nodes.set(leg.net, []);
     nodes.get(leg.net).push(leg);
   }
+  // A net the compiler mints is named for the one it came from, and two spec
+  // nets may share a RAIL name (two `GND` nets are one supply): so every name
+  // it mints is checked against the ones already taken.
+  const netNames = new Set(nets.map((n) => n.name));
+  const freshName = (...bases) => {
+    let name = bases.find((b) => !netNames.has(b));
+    for (let k = 2; !name; k++) {
+      if (!netNames.has(`${bases[0]}_${k}`)) name = `${bases[0]}_${k}`;
+    }
+    netNames.add(name);
+    return name;
+  };
   let limitSeq = 0;
   const limiterId = (node) => {
     const owners = new Set(node.map((l) => l.part.id));
@@ -1129,7 +1169,7 @@ function assemble(resolved, title, notes) {
         const lamp = (q) =>
           node.some((l) => l.part.id === q.partId && l.pin === q.pin);
         nets.push({
-          name: `${net.name}_LIMITED`,
+          name: freshName(`${net.name}_LIMITED`),
           pins: [
             ...net.pins.filter(lamp),
             // A pack's elements are pins 2–9 (pin 1 is COM); a lone resistor's
@@ -1141,7 +1181,7 @@ function assemble(resolved, title, notes) {
         net.pins = net.pins.filter((q) => !lamp(q));
       });
       nets.push({
-        name: `${rid}_${rail}`,
+        name: freshName(`${rid}_${rail}`),
         pins: [{ partId: rid, kind: "pin", pin: pack ? 1 : 2 }],
         rail,
       });
@@ -1174,15 +1214,6 @@ function assemble(resolved, title, notes) {
   // resistor's pin 1, nothing else. `plugOf` is the "net equality proven
   // first" `seatPlug` relies on, created here as the pull rule creates its own.
   const plugOf = new Map(); // resistor id → {hostId, hostPin, rail}
-  const netNames = new Set(nets.map((n) => n.name));
-  const freshName = (...bases) => {
-    let name = bases.find((b) => !netNames.has(b));
-    for (let k = 2; !name; k++) {
-      if (!netNames.has(`${bases[0]}_${k}`)) name = `${bases[0]}_${k}`;
-    }
-    netNames.add(name);
-    return name;
-  };
   for (const rail of ["GND", "VCC"]) {
     const mine = bareLegs.filter((leg) => leg.rail === rail);
     for (const leg of mine) {
@@ -1469,12 +1500,13 @@ function assemble(resolved, title, notes) {
     return id;
   };
   let above = addStrip(railStrip);
-  for (let k = 0; k < kitCount; k++) {
+  const addKit = () => {
     const pins = addStrip(pinsStrip);
     const below = addStrip(railStrip);
     kits.push({ pins, rails: [above, below] });
     above = below; // the next board's TOP rail is this one's bottom rail
-  }
+  };
+  for (let k = 0; k < kitCount; k++) addKit();
 
   const boardType = new Map(boards.map((b) => [b.id, b.type]));
   const boardAt = new Map(boards.map((b) => [b.id, b]));
@@ -1561,6 +1593,7 @@ function assemble(resolved, title, notes) {
       x: boardRight + 4,
       y: brickRow,
       params: {},
+      ...named(b),
     });
     brickAt.set(b.id, id);
     brickRow += 8;
@@ -1602,6 +1635,12 @@ function assemble(resolved, title, notes) {
           ),
         };
       }
+      // A part that is only ever WIDE (the 7-segment digit, `alwaysWide`)
+      // stands across the channel at its true 0.6 in, legs in rows d and h
+      // and its body over e–g — its own params say so, and the allocator
+      // keeps the covered holes free of wires. Every other DIP takes e/f.
+      const wideSeat = p.def.alwaysWide === true;
+      const seatParams = wideSeat ? (p.def.normalizeParams?.({}) ?? {}) : {};
       // A DIP straddles the trench; everything else lies along one row. A
       // character-LCD module is the one part whose row is not a free choice:
       // its body reaches off the header edge, so a body-UP module (the 16×2,
@@ -1611,7 +1650,9 @@ function assemble(resolved, title, notes) {
       // A lamp whose resistor plugs in goes one row up, in row b: row a of its
       // column is where that resistor's lead goes in (`seatPlug`).
       const row = p.def.package
-        ? "e"
+        ? wideSeat
+          ? "d"
+          : "e"
         : p.def.characterDisplay?.headerEdge === "bottom"
           ? "j"
           : lampsWithPlugs.has(p.id)
@@ -1653,9 +1694,9 @@ function assemble(resolved, title, notes) {
           const start = alloc.reserveColumns(kit.pins, cost, "both", p.id);
           if (start == null) continue;
           const anchor = `${row}${start}`;
-          const r = alloc.seat(kit.pins, p.ref, anchor, {}, p.id);
+          const r = alloc.seat(kit.pins, p.ref, anchor, seatParams, p.id);
           if (!r.ok) continue;
-          placed = { boardId: kit.pins, anchor, holes: r.holes };
+          placed = { boardId: kit.pins, anchor, holes: r.holes, params: seatParams }; // prettier-ignore
           break;
         }
       }
@@ -1680,6 +1721,7 @@ function assemble(resolved, title, notes) {
         // orientation IS the seat: its pins land where they land because of it.
         // Every other path seats a part as it comes (`{}`).
         params: { ...(p.params ?? {}), ...(placed.params ?? {}) },
+        ...named(p),
       });
       seatOf.set(p.id, { compId, ...placed });
     }
@@ -1696,8 +1738,31 @@ function assemble(resolved, title, notes) {
   // first board happened to run out. A companion is seated in its host's own
   // columns, so it costs nothing to place and nothing to split away from.
   let seating = seatPass();
-  if (!seating.ok) return { ok: false, errors: [seating.error] };
   let gap = GAP;
+  // The budget is a column COUNT, and a board is filled part by part: the
+  // columns each board leaves at its right-hand edge, too few for the next
+  // part, add up — fifteen inverters booked two boards' worth and found room
+  // for fourteen. Running out is the budget's mistake, never the spec's, so it
+  // is not a refusal yet: pack tighter first (the same gap the spill below
+  // gives up), then fetch one more board at a time.
+  const outOfRoom = () => !seating.ok && seating.error.code === "NO_ROOM";
+  if (outOfRoom()) {
+    const tight = seatPass(null, 0);
+    if (tight.ok) {
+      seating = tight;
+      gap = 0;
+    }
+  }
+  while (outOfRoom() && kits.length < 2 * kitCount + 1) {
+    const had = boards.length;
+    addKit();
+    for (const b of boards.slice(had)) {
+      boardType.set(b.id, b.type);
+      boardAt.set(b.id, b);
+    }
+    seating = seatPass();
+  }
+  if (!seating.ok) return { ok: false, errors: [seating.error] };
 
   // Before accepting a second board, TRY HARDER TO AVOID ONE. The blank column
   // between parts is a courtesy; a whole breadboard fetched to hold a single

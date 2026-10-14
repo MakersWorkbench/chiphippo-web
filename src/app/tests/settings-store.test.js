@@ -30,6 +30,7 @@ const {
   DEFAULTS,
   MAIN_OWNED,
   rendererPatch,
+  firstRunPatch,
 } = require("../store/settings-store");
 
 function freshStore() {
@@ -187,4 +188,60 @@ test("rendererPatch: a datasheet folder must be one main vouches for", () => {
   assert.deepEqual(rendererPatch({ datasheetDir: "/anywhere" }, { mayUseDir: vouched }), {}); // prettier-ignore
   // Clearing it is always allowed.
   assert.deepEqual(rendererPatch({ datasheetDir: null }, { mayUseDir: vouched }), { datasheetDir: null }); // prettier-ignore
+});
+
+// ── The first-run stamp (the what's-new banner's evidence) ──────────────────
+
+test("firstRunPatch: a fresh install is stamped with the running version", () => {
+  assert.deepEqual(
+    firstRunPatch({}, { priorInstall: false, version: "1.5.0" }),
+    { firstRunVersion: "1.5.0" },
+  );
+});
+
+test("firstRunPatch: an earlier install's leftovers make it legacy", () => {
+  assert.deepEqual(
+    firstRunPatch({ viewport: {} }, { priorInstall: true, version: "1.5.0" }),
+    { firstRunVersion: "legacy" },
+  );
+});
+
+test("firstRunPatch: a stamp is decided once and never rewritten", () => {
+  for (const firstRunVersion of ["legacy", "1.5.0"]) {
+    assert.equal(
+      firstRunPatch({ firstRunVersion }, { priorInstall: true, version: "9.0.0" }), // prettier-ignore
+      null,
+    );
+  }
+  // The defaults' null is no stamp.
+  assert.deepEqual(
+    firstRunPatch({ ...DEFAULTS }, { priorInstall: false, version: "1.5.0" }),
+    { firstRunVersion: "1.5.0" },
+  );
+});
+
+test("exists() says whether the settings file is on disk", () => {
+  const { dir, store } = freshStore();
+  try {
+    assert.equal(store.exists(), false, "reading creates nothing");
+    store.get();
+    assert.equal(store.exists(), false);
+    store.set({ firstRunVersion: "1.5.0" });
+    assert.equal(store.exists(), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the stamp is main's: the renderer can close notices, not fake an upgrade", () => {
+  assert.ok(MAIN_OWNED.includes("firstRunVersion"));
+  assert.deepEqual(
+    rendererPatch(
+      { firstRunVersion: "legacy", dismissedNotices: ["x"] },
+      { mayUseDir: () => false },
+    ),
+    { dismissedNotices: ["x"] },
+  );
+  assert.equal(DEFAULTS.firstRunVersion, null);
+  assert.deepEqual(DEFAULTS.dismissedNotices, []);
 });

@@ -316,6 +316,17 @@ function buildBridges(groups) {
 }
 
 /**
+ * The bit a bridge sets in a node's mask (`nodeBridge`). Every terminal
+ * corridor shares ONE: corridors are only ever allowed all together
+ * (`bridgeMaskFor`), and a bit apiece — two for every brick lead — ran the
+ * 31-bit mask out past about fifteen leads, leaving the rest no way off the
+ * boards at all. A gap between two board groups keeps a bit of its own, while
+ * there are bits left (`buildBridges` lists them first, so `i` counts gaps).
+ */
+const TERMINAL_BIT = 1 << 30;
+const bridgeBit = (r, i) => (!r.joins ? TERMINAL_BIT : i < 30 ? 1 << i : 0);
+
+/**
  * An L-shaped corridor from an off-board point to the nearest board rect — the
  * only way a wire can reach a PSU or clock terminal, and the reason "stay inside
  * the boards" is stated as a region rather than as a rule with an exception.
@@ -446,6 +457,12 @@ export function buildRouteSpace(doc, opts = {}) {
   // This is `occupancy.js`'s map, which is the app's one collision authority, so
   // the router cannot disagree with it about what is occupied. A wire's OWN two
   // ends are of course in it, and are exempted per wire by the caller.
+  //
+  // …and so is every grid point too close to one to clear it (the conflict
+  // ranges). Bricks stand on whole pitches and board rows on hundredths, so a
+  // brick terminal and a rail hole can seed tracks 0.01 apart: blocking the
+  // terminal's own point left its twin open, and a run drawn straight past
+  // the clock's `out` went along it.
   const leadNodes = new Set();
   for (const address of buildOccupancy(doc).keys()) {
     const p = addressWorld(boards, doc.components ?? [], address);
@@ -453,7 +470,11 @@ export function buildRouteSpace(doc, opts = {}) {
     const i = xAt.get(q(p.x));
     const j = yAt.get(q(p.y));
     if (i === undefined || j === undefined) continue;
-    leadNodes.add(j * nx + i);
+    for (let jj = yConflict.lo[j]; jj <= yConflict.hi[j]; jj += 1) {
+      for (let ii = xConflict.lo[i]; ii <= xConflict.hi[i]; ii += 1) {
+        leadNodes.add(jj * nx + ii);
+      }
+    }
   }
   const inflated = obstacles.map((o) => ({
     id: o.id,
@@ -471,7 +492,7 @@ export function buildRouteSpace(doc, opts = {}) {
       } else {
         let mask = 0;
         bridges.forEach((r, bi) => {
-          if (bi < 31 && covers(r, x, y)) mask |= 1 << bi;
+          if (covers(r, x, y)) mask |= bridgeBit(r, bi);
         });
         if (mask === 0) continue;
         nodeKind[n] = ON_BRIDGE;
@@ -619,17 +640,14 @@ export function bridgeMaskFor(space, from, to) {
   const bridges = space.bridges;
   // An end that is not on a board can only be reached through a corridor, and a
   // corridor joins no groups — so those are exactly the untagged bridges.
-  const terminalMask = bridges.reduce(
-    (m, r, i) => (i < 31 && !r.joins ? m | (1 << i) : m),
-    0,
-  );
+  const terminalMask = bridges.some((r) => !r.joins) ? TERMINAL_BIT : 0;
   if (from < 0 || to < 0) return -1; // a brick lead: every corridor is fair game
   if (from === to) return 0;
 
   // Shortest paths through the graph of groups joined by gaps.
   const adjacency = new Map();
   bridges.forEach((r, i) => {
-    if (!r.joins || i >= 31) return;
+    if (!r.joins || !bridgeBit(r, i)) return;
     const [a, b] = r.joins;
     if (!adjacency.has(a)) adjacency.set(a, []);
     if (!adjacency.has(b)) adjacency.set(b, []);
@@ -655,13 +673,13 @@ export function bridgeMaskFor(space, from, to) {
   if (span === undefined) return terminalMask; // not reachable board to board
   let mask = terminalMask;
   bridges.forEach((r, i) => {
-    if (!r.joins || i >= 31) return;
+    if (!r.joins || !bridgeBit(r, i)) return;
     const [a, b] = r.joins;
     const ab =
       (fromStart.get(a) ?? Infinity) + 1 + (fromGoal.get(b) ?? Infinity);
     const ba =
       (fromStart.get(b) ?? Infinity) + 1 + (fromGoal.get(a) ?? Infinity);
-    if (ab === span || ba === span) mask |= 1 << i;
+    if (ab === span || ba === span) mask |= bridgeBit(r, i);
   });
   return mask;
 }

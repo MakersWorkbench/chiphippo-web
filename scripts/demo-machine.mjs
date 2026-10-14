@@ -68,8 +68,9 @@ export function builder() {
     }
     // A 600-mil DIP seated at its real width (anchor row d) stands its body
     // over rows e–g, and those holes are the body's: occupancy.js refuses a
-    // lead there, so a wire must never be handed one.
-    for (const hole of partCoverHoles(ref, anchor)) {
+    // lead there, so a wire must never be handed one. The params say which
+    // seat a row-e anchor is (the e/i one carries `wide`).
+    for (const hole of partCoverHoles(ref, anchor, params)) {
       claimed.add(`${boardId}.${hole}`);
     }
   };

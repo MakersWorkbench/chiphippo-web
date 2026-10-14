@@ -105,6 +105,11 @@
       "message": "Zugriff auf dieses Projekt bestätigen",
       "button": "Zugriff gewähren"
     },
+    "reserved": {
+      "message": "Wählen Sie einen anderen Namen",
+      "slot": "In „{file}“ bewahrt Chip Hippo noch nicht gespeicherte Arbeit auf, deshalb kann unter diesem Namen nichts anderes gespeichert werden.",
+      "open": "„{file}“ ist das geöffnete Projekt. Ein darüber exportiertes Arbeitsblatt würde das ganze Projekt ersetzen."
+    },
     "exportKicad": {
       "title": "Nach KiCad exportieren",
       "message": "Wählen Sie den Ordner für das KiCad-Projekt – einen neuen oder den, in den zuvor exportiert wurde.",
@@ -1082,6 +1087,7 @@
     "buildCrashed": "Der Aufbau ist unerwartet fehlgeschlagen: {message}",
     "compilerFault": "Die Schaltung wurde richtig beschrieben, konnte aber nicht aufgebaut werden. Das ist ein Fehler in Chip Hippos Compiler, nicht im Entwurf.",
     "gaveUp": "Nach {total} Korrekturversuchen aufgegeben. Was noch falsch ist:",
+    "declined": "Laut Modell lässt sich das mit den Bauteilen im Katalog nicht aufbauen:",
     "retrying": "Dieser Entwurf ist nicht bestanden — es wird um eine Korrektur gebeten (Versuch {n} von {total}):",
     "untitledCircuit": "Schaltung",
     "summary": "{title} — {parts} Bauteile, {wires} Drähte, {strips} Steckbrettstreifen.",
@@ -1495,6 +1501,7 @@
     "description": "Entwirf und simuliere Logikschaltungen auf virtuellen lötfreien Steckbrettern — setze Chips, Drähte, Schalter, LEDs und Stromversorgung, und sieh zu, wie sich der Strom durch jedes Netz einstellt.",
     "byline": "Erstellt von Jason, programmiert von Claude",
     "support": "Support:",
+    "donate": "Chip Hippo unterstützen…",
     "versionInfo": "Versionsinformationen",
     "version": "Version",
     "platform": "Plattform",
@@ -1603,7 +1610,7 @@
       "analyzer": "Logikanalysator ein-/ausblenden",
       "fit": "An Fenster anpassen",
       "pan": "Arbeitsfläche verschieben",
-      "panKeys": "Leertaste+Ziehen oder mittlere Maustaste",
+      "panKeys": "Leertaste+Ziehen, {alt}+Ziehen oder mittlere Maustaste",
       "zoomOut": "Ganz herauszoomen (ein verlorenes Bauteil finden)",
       "zoom": "Vergrößern / verkleinern / zurücksetzen",
       "fontSize": "Editor-Schriftgröße größer / kleiner / zurücksetzen",
@@ -2531,6 +2538,17 @@
     "more": {
       "one": "+{count} weitere",
       "other": "+{count} weitere"
+    }
+  },
+  "notice": {
+    "dragModel": {
+      "title": "Ziehen funktioniert jetzt anders",
+      "band": "Über die Arbeitsfläche ziehen, um alles im Rahmen auszuwählen.",
+      "pickLead": "{alt}+Ziehen bewegt ein einzelnes Drahtende oder Bein für sich.",
+      "toggle": "{mod}+Klick fügt ein Element zur Auswahl hinzu oder entfernt es.",
+      "carry": "Ein Bauteil ziehen – seine Verdrahtung kommt mit.",
+      "bare": "{shift}+Ziehen bewegt Bauteile und lässt ihre Drähte stecken.",
+      "pan": "Arbeitsfläche mit Leertaste+Ziehen, {alt}+Ziehen abseits eines Beins oder der mittleren Maustaste verschieben."
     }
   }
 }

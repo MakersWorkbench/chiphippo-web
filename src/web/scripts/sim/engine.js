@@ -974,10 +974,33 @@ function solve(
   { mode = "incremental", carry = null, stats = null, warm = null } = {},
 ) {
   const cap = hooks?.maxIterations ?? MAX_ITERATIONS;
-  if (mode === "full") {
-    return solveFull(ctx, warmStart, state, clockPhase, images, signalLevels, observer, hooks, cap, stats); // prettier-ignore
-  }
-  return solveIncremental(ctx, warmStart, state, clockPhase, images, signalLevels, observer, hooks, cap, carry, stats, warm); // prettier-ignore
+  const once = (start, carried, warmed) =>
+    mode === "full"
+      ? solveFull(ctx, start, state, clockPhase, images, signalLevels, observer, hooks, cap, stats) // prettier-ignore
+      : solveIncremental(ctx, start, state, clockPhase, images, signalLevels, observer, hooks, cap, carried, stats, warmed); // prettier-ignore
+  const solved = once(warmStart, carry, warm);
+  // A latch whose two inputs are idle at once — a cross-coupled pair settled
+  // from all-floating at Run, or both of its inputs released in one tick —
+  // has two steady states and no reason in a simultaneous update to pick
+  // either: its gates flip together, L/L, H/H, … to the cap, and it was
+  // reported oscillating, X until an input was pressed. Real silicon falls
+  // one way. Break the tie once, deterministically: settle again from where
+  // this one ended (the rails and everything else steady), the first racing
+  // net in netId order — so both modes pick the same — taken LOW and the rest
+  // HIGH, which is a cross-coupled pair's own resting state. Any settle that
+  // comes of it IS a steady state of the circuit; a real ring oscillator
+  // never settles from any start, and keeps its report. (The logic engine
+  // only: Spice Lite's hooks own their own capped settles.)
+  if (solved.settled || hooks) return solved;
+  const racing = new Set(
+    solved.warnings.find((w) => w.type === "oscillation")?.nets ?? [],
+  );
+  const first = ctx.netIds.find((id) => racing.has(id));
+  if (first == null) return solved;
+  const seeded = new Map(solved.levels);
+  for (const id of racing) seeded.set(id, id === first ? L : H);
+  const tie = once(seeded, null, null);
+  return tie.settled ? tie : solved;
 }
 
 /** The settle loop as it always ran: every pass evaluates every chip and
@@ -1002,6 +1025,7 @@ function solveFull(
   let lastWarnings = [];
   let lastStrong = new Map();
   let prev = levels;
+  let forced = null; // the self-fed transistors' controls (channelGroups)
   if (stats) stats.solves = (stats.solves ?? 0) + 1;
   while (iterations < cap) {
     // The pass's starting levels, and the strong levels that go with them
@@ -1019,7 +1043,8 @@ function solveFull(
       observer,
       hooks,
     );
-    const channels = channelGroups(ctx, levels, state, hooks?.input);
+    const channels = channelGroups(ctx, levels, state, hooks?.input, drivers); // prettier-ignore
+    forced = channels?.forced ?? null;
     const resolved = resolveReadings(ctx, drivers, hard, channels);
     let next = resolved.next;
     if (hooks?.levels) next = hooks.levels(next, { start: levels, state });
@@ -1045,7 +1070,7 @@ function solveFull(
     for (const id of nets) levels.set(id, X);
     if (nets.length) warnings.push({ type: "oscillation", nets });
   }
-  return { levels, iterations, settled, warnings, strong: lastStrong };
+  return { levels, iterations, settled, warnings, strong: lastStrong, forced }; // prettier-ignore
 }
 
 /**
@@ -1085,15 +1110,17 @@ function floatingInputWarnings(ctx, levels) {
  * `compId → [{a, b, on, held}]` (chip-eval.js `channelStates`): what a
  * transistor draws itself conducting from, and whether a MOSFET is holding.
  */
-function channelsOf(ctx, levels, state, hooks = null) {
+function channelsOf(ctx, levels, state, hooks = null, forced = null) {
   const out = new Map();
   for (const c of ctx.chips) {
     if (!c.analogSwitch || c.status !== CHIP_STATUS.OK) continue;
     const pinLevels = new Map();
     for (const [pin, net] of c.pinNet) {
-      // Read as the settle's channels read it (`channelGroups`).
+      // Read as the settle's channels read it (`channelGroups`) — a
+      // self-fed transistor's control as its last pass read it (`forced`).
       const level = net ? (levels.get(net) ?? Z) : Z;
-      pinLevels.set(pin, hooks?.input ? hooks.input(c, pin, net, level) : level); // prettier-ignore
+      const set = forced?.get(net ?? `${c.comp.id}#${pin}`);
+      pinLevels.set(pin, set ?? (hooks?.input ? hooks.input(c, pin, net, level) : level)); // prettier-ignore
     }
     const own = state.get(c.comp.id) ?? initialState(c.def);
     out.set(c.comp.id, channelStates(c.def, pinLevels, own));
@@ -1148,7 +1175,7 @@ function assemble(
     iterations: solved.iterations,
     settled: solved.settled,
     timing,
-    channels: channelsOf(ctx, solved.levels, state, hooks),
+    channels: channelsOf(ctx, solved.levels, state, hooks, solved.forced),
     // Each clock source's supply, volts — null while it is unpowered (and
     // so stopped), which the desk's clock lamp reads.
     clockSupply: new Map(ctx.clocks.map((c) => [c.id, c.volts])),

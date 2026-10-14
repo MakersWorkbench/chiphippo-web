@@ -32,9 +32,11 @@
 import { partDef } from "../catalog/index.js";
 import { isMemory, isVolatileMemory, memoryConfig } from "../sim/chip-eval.js";
 import {
+  looksLikeIntelHex,
   parseIntelHex,
   parseIntelHexWrites,
   placeHexWrites,
+  requireHexData,
 } from "../model/hex-format.js";
 import { t } from "../i18n.js";
 
@@ -211,12 +213,18 @@ export class MemoryBridge {
       return this.#warn("danger", t("memory.importFailed"), picked.error);
     }
     let bytes = picked.bytes;
-    if (/\.hex$/i.test(picked.path ?? "")) {
+    // HEX by its name (`.hex`, SDCC's `.ihx`, `.ihex`), or by what it holds:
+    // picked through "All files", a HEX image read as raw bytes would program
+    // the ROM with its own ASCII.
+    if (
+      /\.(hex|ihx|ihex)$/i.test(picked.path ?? "") ||
+      looksLikeIntelHex(picked.bytes)
+    ) {
       try {
         const text = new TextDecoder().decode(picked.bytes);
         // At its own addresses, modulo the ROM (placeHexWrites says why);
         // rebased to its lowest address only when it spans more than fits.
-        const parsed = parseIntelHexWrites(text);
+        const parsed = requireHexData(parseIntelHexWrites(text));
         const current = await this.#currentBytes(info);
         bytes =
           placeHexWrites(parsed, info.byteLength, current) ??

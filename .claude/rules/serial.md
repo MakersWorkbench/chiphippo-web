@@ -87,7 +87,9 @@ integration-runtime,integration-codegen,serial-connections,serial-wire}.js` +
   level differs from the previous boundary's in the configured direction
   (`triggerInit` stands in for "previous" at the first) — or, on Auto, when the value its
   pins settle to differs from the last one it SENT, and unconditionally at a run's first
-  boundary (so the sketch learns the starting state); an Input's value is buffered
+  boundary (so the sketch learns the starting state) — a PLANTED one: an Auto Output with
+  nothing on the board reaches no net and sends nothing, not even that first round of
+  zeros (2026-10-14); an Input's value is buffered
   (latest wins) and applied at a boundary — immediately if LIVE (on Auto), else on its
   trigger's edge — all at once, then the board settles again. A value arriving DURING a
   stall still counts for that boundary, which is what makes request/response work.

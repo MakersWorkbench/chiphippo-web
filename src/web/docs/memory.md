@@ -49,7 +49,9 @@ The only way to put data into a ROM is the **external programmer**:
 
 1. Right-click the chip on the desk and choose **Properties…**.
 2. Click **Load image… (program)**.
-3. Pick a `.bin` (raw bytes) or `.hex` (Intel HEX) file.
+3. Pick a `.bin` (raw bytes) or an Intel HEX file — `.hex`, SDCC's `.ihx`,
+   `.ihex`, or a HEX file under any other name (Chip Hippo recognises it by
+   what it holds).
 
 A `.bin` image is copied to the start of the chip's memory. If the file is
 smaller than the chip, only the start is overwritten and the rest is left
@@ -119,8 +121,9 @@ Beyond loading a raw `.bin`, the inspector's toolbar can **Export** the
 current contents as either a raw `.bin` or an **Intel HEX** `.hex` file —
 useful for round-tripping through an assembler toolchain or another tool
 that expects the hex format. The external programmer (above) accepts either
-extension coming in: a `.hex` file is decoded before it's written to the
-chip.
+coming in: a HEX file is decoded before it's written to the chip, and one
+with no data records in it at all is refused rather than flagging the chip
+programmed.
 
 ## A missing backing file
 

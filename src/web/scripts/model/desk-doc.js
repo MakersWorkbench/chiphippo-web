@@ -113,6 +113,7 @@ import {
   partCoverAddresses,
   partPinAddresses,
   partPinHoles,
+  worldOfAddress,
 } from "./occupancy.js";
 import { withSeat } from "./footprints.js";
 
@@ -372,6 +373,21 @@ function wireCoord(n) {
  */
 function boardCoord(n) {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Each pin of a part as the vector from pin 1's HOLE to its own — the
+ * holes they resolve to, not the offsets stored — or null when one of them
+ * resolves to nothing. A turned lead lands ON the hole it reaches
+ * (lead-offset.js): a vector only NEAR one (2.76 turned on its side is 0.24
+ * short of a column) would be drawn beside the hole it is electrically in.
+ */
+function pinVectors(doc, comp) {
+  const pins = partPinAddresses(doc, comp);
+  if (!pins?.length || pins.some((p) => p.address == null)) return null;
+  const at = pins.map((p) => worldOfAddress(doc.boards, p.address));
+  if (at.some((w) => !w)) return null;
+  return at.map((w) => ({ dx: w.x - at[0].x, dy: w.y - at[0].y }));
 }
 
 /** Where a board is PLACED: x snaps to the integer column lattice, so a strip
@@ -636,6 +652,10 @@ export function normalizeDocument(raw) {
     }
     claims.push(...partCoverAddresses(doc, record));
     if (claims.some((a) => claimedPoints.has(a))) continue;
+    // …and one lead per hole within the part itself: a bend ending in its
+    // own anchor's hole (or under its own body) is the two-leads-in-one-hole
+    // part `canPlacePart` refuses — loaded, a resistor shorted across itself.
+    if (new Set(claims).size !== claims.length) continue;
     for (const a of claims) claimedPoints.add(a);
     compIds.add(c.id);
     maxCompSeq = Math.max(maxCompSeq, Number(m[1]));
@@ -1125,11 +1145,23 @@ export class DeskDoc {
    * board or another brick? Testing a rounded y let a brick recentred onto a
    * fractional row slide half a pitch into a board.
    */
-  canPlaceBrick(ref, x, y, { ignoreId = null, ignoreIds = null } = {}) {
+  canPlaceBrick(
+    ref,
+    x,
+    y,
+    { ignoreId = null, ignoreIds = null, boardShift = null } = {},
+  ) {
     const { width, height } = partDef(ref).size;
     const rect = { x: Math.round(x), y: boardCoord(y), width, height };
+    // `boardShift` ({ids, dx, dy}): boards moving in the SAME gesture, judged
+    // where they will be — a brick carried beside its circuit must not be
+    // refused for landing where a board it travels with used to sit.
+    const at = (b) =>
+      boardShift?.ids.has(b.id)
+        ? { ...b, x: boardCoord(b.x + boardShift.dx), y: boardCoord(b.y + boardShift.dy) } // prettier-ignore
+        : b;
     return (
-      this.#doc.boards.every((b) => !rectsOverlap(rect, outlineRect(b))) &&
+      this.#doc.boards.every((b) => !rectsOverlap(rect, outlineRect(at(b)))) &&
       this.#brickRects({ ignoreId, ignoreIds }).every(
         (r) => !rectsOverlap(rect, r),
       )
@@ -1393,7 +1425,7 @@ export class DeskDoc {
    * or a 14.02-tall pin-board that value is fractional, and rounding it away
    * here is a snap that lands short and silently fails to mate.
    */
-  canMoveBoardsBy(ids, dx, dy) {
+  canMoveBoardsBy(ids, dx, dy, { brickTargets = null } = {}) {
     const moving = new Set(ids);
     const members = this.#doc.boards.filter((b) => moving.has(b.id));
     if (members.length === 0 || members.length !== moving.size) return false;
@@ -1405,11 +1437,22 @@ export class DeskDoc {
       }),
     );
     const others = this.#doc.boards.filter((b) => !moving.has(b.id));
+    // `brickTargets` (id → {x, y}): bricks moving in the SAME gesture, judged
+    // where they will land rather than where they stand.
+    const bricks = [
+      ...this.#brickRects({
+        ignoreIds: brickTargets ? new Set(brickTargets.keys()) : null,
+      }),
+      ...[...(brickTargets ?? new Map())].map(([id, pos]) => {
+        const { width, height } = partDef(this.getComponent(id).ref).size;
+        return { x: Math.round(pos.x), y: boardCoord(pos.y), width, height };
+      }),
+    ];
     return (
       rects.every(
         (rect) =>
           others.every((b) => !rectsOverlap(rect, outlineRect(b))) &&
-          this.#brickRects().every((r) => !rectsOverlap(rect, r)),
+          bricks.every((r) => !rectsOverlap(rect, r)),
       ) && !this.#bentLeadsCollide(moving, dx, dy)
     );
   }
@@ -1839,11 +1882,18 @@ export class DeskDoc {
 
   /** A component's params re-seated with pin 1 at `anchor`: a DIP's e/i
       marker as `wide` says (footprints.js `withSeat`), when it says; every
-      other part's, and a DIP's without `wide`, as they are. */
+      other part's, and a DIP's without `wide`, as they are. Back through the
+      def's own contract, which has the last word: the 7-segment digit is
+      wide in every seat (`alwaysWide`), and a seat in row d is no reason to
+      strip that from it — stripped, its next move into row e seated it
+      narrow, its legs 0.3 in apart. */
   #seatParams(comp, anchor, wide) {
-    const pkg = partDef(comp.ref)?.package;
-    if (!pkg || wide === undefined) return comp.params;
-    return withSeat(pkg, comp.params, String(anchor).charAt(0), wide);
+    const def = partDef(comp.ref);
+    if (!def?.package || wide === undefined) return comp.params;
+    return normalizeParams(
+      def,
+      withSeat(def.package, comp.params, String(anchor).charAt(0), wide),
+    );
   }
 
   // ── Re-seating a part WITH its wiring (Feature 290 — every part drag) ──────
@@ -2015,11 +2065,23 @@ export class DeskDoc {
     // staying in its hole; one with nowhere to go is stepped past.
     if (def?.turns) {
       const cur = ROTATIONS.includes(comp.params?.rot) ? comp.params.rot : 0;
+      // A rigid body: its far leg must stand IN a hole, not merely near one
+      // (from row a, three pitches down is 0.24 off a dovetailed rail's row)
+      // — the quarter the placement ghost could not have shown is skipped.
+      const exact = (params) => {
+        const offsets = footprintOffsets(def, params);
+        const want = offsets.map((dx) => rotateOffset({ dx, dy: 0 }, params.rot ?? 0)); // prettier-ignore
+        const got = pinVectors(this.#doc, { ...comp, params });
+        return Boolean(got) && want.every((v, i) => Math.hypot(got[i].dx - v.dx, got[i].dy - v.dy) < 0.005); // prettier-ignore
+      };
       for (let step = 1; step < ROTATIONS.length; step++) {
         const rot = ROTATIONS[(ROTATIONS.indexOf(cur) + step) % ROTATIONS.length]; // prettier-ignore
         const params = normalizeParams(def, { ...comp.params, rot });
         const opts = { ignoreId: id, params };
-        if (this.canPlacePart(comp.ref, comp.board, comp.anchor, opts)) {
+        if (
+          this.canPlacePart(comp.ref, comp.board, comp.anchor, opts) &&
+          exact(params)
+        ) {
           comp.params = params;
           return { ...comp };
         }
@@ -2089,7 +2151,16 @@ export class DeskDoc {
     // break value comparisons, so fold it back.
     const swing = (n) => (n === 0 ? 0 : n);
     const fits = (end) => {
-      const params = normalizeParams(def, { ...comp.params, rot: 90, end });
+      // The swung lead is stored as the vector to the hole it lands in
+      // (pinVectors), so it is drawn IN that hole and turns on from there.
+      const swung = normalizeParams(def, { ...comp.params, rot: 90, end });
+      const vectors = pinVectors(this.#doc, { ...comp, params: swung });
+      if (!vectors) return null;
+      const params = normalizeParams(def, {
+        ...comp.params,
+        rot: 90,
+        end: vectors[1],
+      });
       const ok = this.canPlacePart(comp.ref, comp.board, comp.anchor, {
         ignoreId: id,
         params,
@@ -2624,8 +2695,22 @@ export class DeskDoc {
     const movingBricks = new Set(
       [...compIds].filter((id) => byId.get(id).board == null),
     );
+    // The leads that float NOW (their strip moved or deleted from under them):
+    // a part carried by its other lead keeps such a one where it is, still in
+    // mid-air — a state it was already in, not one the move puts it into.
+    const floatingNow = new Map();
+    for (const id of compIds) {
+      const comp = byId.get(id);
+      if (comp.board == null) continue;
+      const loose = (partPinAddresses(real, comp) ?? [])
+        .filter((p) => p.address == null)
+        .map((p) => p.pin);
+      if (loose.length) floatingNow.set(id, new Set(loose));
+    }
 
-    return (placements, wireMoves = []) => {
+    // `boardShift` ({ids, dx, dy}): the strips moving in the same gesture,
+    // which a moving brick is checked against where they will be.
+    return (placements, wireMoves = [], boardShift = null) => {
       if (placements.length !== componentIds.length) return false;
       if (wireMoves.length !== wireIds.length) return false;
       const seen = new Set();
@@ -2647,7 +2732,10 @@ export class DeskDoc {
           };
           if (bricks.some((r) => rectsOverlap(rect, r))) return false;
           if (
-            !this.canPlaceBrick(comp.ref, p.x, p.y, { ignoreIds: movingBricks })
+            !this.canPlaceBrick(comp.ref, p.x, p.y, {
+              ignoreIds: movingBricks,
+              boardShift,
+            })
           ) {
             return false;
           }
@@ -2664,12 +2752,16 @@ export class DeskDoc {
           anchor: p.anchor,
           params: p.params ?? comp.params,
         };
-        if (!canPlacePart(reduced, { ...seat, occupancy: occupied })) {
+        const floating = floatingNow.get(p.id) ?? null;
+        if (
+          !canPlacePart(reduced, { ...seat, occupancy: occupied, floating })
+        ) {
           return false;
         }
         const pins = partPinAddresses(reduced, seat);
         if (!pins) return false;
-        for (const { address } of pins) {
+        for (const { pin, address } of pins) {
+          if (address == null && floating?.has(pin)) continue;
           if (address == null || claimed.has(address)) return false;
           claimed.add(address);
         }
@@ -2714,7 +2806,10 @@ export class DeskDoc {
    *
    * @param {Array} placements - brick `{id, x, y}` / board part
    *   `{id, board, anchor, params?}` (params only when the part's FORM changes)
-   * @param {{moves?:Array, points?:Array}} [plan] - from planClusterRiders
+   * @param {{moves?:Array, points?:Array, boardShift?:object}} [plan] - from
+   *   planClusterRiders; `boardShift` ({ids, dx, dy}) names the strips moving
+   *   in the same gesture, which a moving brick is checked against where they
+   *   will be (`prepareClusterMove`)
    * @returns {{components: Array, wires: Array}}
    */
   moveClusterWithWires(placements, plan = null) {
@@ -2723,7 +2818,7 @@ export class DeskDoc {
       componentIds: placements.map((p) => p.id),
       wireIds: wireMoves.map((m) => m.id),
     });
-    if (!check(placements, wireMoves)) {
+    if (!check(placements, wireMoves, plan?.boardShift ?? null)) {
       throw taggedError("cluster move is illegal", "ILLEGAL_PLACEMENT");
     }
     const before = this.snapshot();
@@ -2959,7 +3054,8 @@ export class DeskDoc {
     if (wire.layout !== "routed") {
       throw taggedError(`wire ${id} is not routed`, "INVALID_ARG");
     }
-    wire.points ??= [];
+    // Not given an empty `points` here: a call refused after this would leave
+    // one behind, and a routed wire with no bends keeps none (omit-when-empty).
     return wire;
   }
 
@@ -2971,18 +3067,20 @@ export class DeskDoc {
    */
   addWirePoint(id, index, point) {
     const wire = this.#routedWire(id);
-    if (!Number.isInteger(index) || index < 0 || index > wire.points.length) {
+    const count = wire.points?.length ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index > count) {
       throw taggedError(`bad waypoint index: ${index}`, "INVALID_ARG");
     }
     if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
       throw taggedError("a waypoint needs finite coordinates", "INVALID_ARG");
     }
-    if (wire.points.length >= MAX_WIRE_POINTS) {
+    if (count >= MAX_WIRE_POINTS) {
       throw taggedError(
         `wire ${id} already has ${MAX_WIRE_POINTS} waypoints`,
         "ILLEGAL_PLACEMENT",
       );
     }
+    wire.points ??= [];
     wire.points.splice(index, 0, { x: wireCoord(point.x), y: wireCoord(point.y) }); // prettier-ignore
     return copyWire(wire);
   }
@@ -2991,7 +3089,8 @@ export class DeskDoc {
       copy of the wire. */
   moveWirePoint(id, index, point) {
     const wire = this.#routedWire(id);
-    if (!Number.isInteger(index) || index < 0 || index >= wire.points.length) {
+    const count = wire.points?.length ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index >= count) {
       throw taggedError(`bad waypoint index: ${index}`, "INVALID_ARG");
     }
     if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
@@ -3005,7 +3104,8 @@ export class DeskDoc {
       Throws NOT_FOUND / INVALID_ARG. Returns a copy of the wire. */
   removeWirePoint(id, index) {
     const wire = this.#routedWire(id);
-    if (!Number.isInteger(index) || index < 0 || index >= wire.points.length) {
+    const count = wire.points?.length ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index >= count) {
       throw taggedError(`bad waypoint index: ${index}`, "INVALID_ARG");
     }
     wire.points.splice(index, 1);
@@ -3085,19 +3185,21 @@ export class DeskDoc {
   updateBus(id, patch = {}) {
     const bus = this.#doc.buses.find((b) => b.id === id);
     if (!bus) throw taggedError(`no bus ${id}`, "NOT_FOUND");
+    // Every field is checked before any is written: a patch refused for its
+    // colour must not leave the bus renamed.
+    const parsed = "name" in patch ? parseBusName(patch.name) : null;
+    if ("name" in patch && !parsed) {
+      throw taggedError(`bad bus name: ${patch.name}`, "INVALID_ARG");
+    }
+    if ("color" in patch && !WIRE_COLORS.includes(patch.color)) {
+      throw taggedError(`unknown bus color: ${patch.color}`, "INVALID_ARG");
+    }
     let declaredWidth = null;
     if ("name" in patch) {
-      const parsed = parseBusName(patch.name);
-      if (!parsed) throw taggedError(`bad bus name: ${patch.name}`, "INVALID_ARG"); // prettier-ignore
       bus.name = patch.name.trim();
       declaredWidth = parsed.width;
     }
-    if ("color" in patch) {
-      if (!WIRE_COLORS.includes(patch.color)) {
-        throw taggedError(`unknown bus color: ${patch.color}`, "INVALID_ARG");
-      }
-      bus.color = patch.color;
-    }
+    if ("color" in patch) bus.color = patch.color;
     if ("members" in patch) {
       const seen = new Set();
       const members = [];
@@ -3296,7 +3398,13 @@ export class DeskDoc {
     if (this.#doc.signals.length >= MAX_SIGNALS) {
       throw taggedError(`at most ${MAX_SIGNALS} signals`, "SIGNALS_FULL");
     }
-    const color = nextSignalColor(this.#doc.signals);
+    // The colour least in use across the signals AND the Output/Input cards
+    // — the same pool a new card picks from (addIntegration), so a new signal
+    // does not take the colour a card on the rail already wears.
+    const color = nextSignalColor([
+      ...this.#doc.signals,
+      ...this.#doc.integrations,
+    ]);
     const sig = {
       id: `sig${this.#doc.nextSignalId++}`,
       ...normalizeSignalFields({ color, type, rest }),
@@ -3314,20 +3422,24 @@ export class DeskDoc {
   updateSignal(id, patch = {}) {
     const sig = this.#doc.signals.find((s) => s.id === id);
     if (!sig) throw taggedError(`no signal ${id}`, "NOT_FOUND");
+    // Judged whole, then written: a patch refused for one field must leave
+    // the signal as it was, not half changed.
+    const next = { ...sig };
     if (patch.color !== undefined) {
       if (!SIGNAL_COLORS.includes(patch.color)) {
         throw taggedError(`bad signal color: ${patch.color}`, "INVALID_ARG");
       }
-      sig.color = patch.color;
+      next.color = patch.color;
     }
     for (const key of ["type", "rest"]) {
       if (patch[key] === undefined) continue;
-      const next = normalizeSignalFields({ ...sig, [key]: patch[key] });
-      if (next[key] !== patch[key]) {
+      const fields = normalizeSignalFields({ ...next, [key]: patch[key] });
+      if (fields[key] !== patch[key]) {
         throw taggedError(`bad signal ${key}: ${patch[key]}`, "INVALID_ARG");
       }
-      sig[key] = patch[key];
+      next[key] = patch[key];
     }
+    for (const key of ["color", "type", "rest"]) sig[key] = next[key];
     return { ...sig, ...(sig.flag ? { flag: { ...sig.flag } } : {}) };
   }
 

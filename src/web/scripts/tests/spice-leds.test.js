@@ -569,6 +569,103 @@ test("a shared lead carries the sum; an output pin what it drives", () => {
   close(res.currents.get(s.at(u.get(2))), res.lamps.get("d1").amps, 1e-5, "1Y");
 });
 
+test("every LED of a series string lights, and so does what lies between two of them", () => {
+  // 12 V → 330 Ω → three red LEDs → GND: the nets between them are reached
+  // through junctions alone, so nothing HOLDS them — the middle LED, both
+  // its ends such a net, was dropped from the report and read dark.
+  const b = bench({ volts: 12 });
+  const r = b.seat("r1", "resistor", "a5", { ohms: 330 });
+  const leds = ["d1", "d2", "d3"].map((id, i) => b.seat(id, "led", `a${20 + 10 * i}`, { color: "red" })); // prettier-ignore
+  b.vcc(r.get(1));
+  b.link(r.get(2), leds[0].get(1));
+  b.link(leds[0].get(2), leds[1].get(1));
+  b.link(leds[1].get(2), leds[2].get(1));
+  b.gnd(leds[2].get(2));
+  const res = spice(b.doc).run(0).result;
+  const amps = res.lamps.get("d1").amps;
+  assert.ok(amps > 0.015, `${amps} A`);
+  for (const id of ["d2", "d3"]) {
+    assert.equal(res.lamps.get(id).lit, true, id);
+    close(res.lamps.get(id).amps, amps, 1e-6, id);
+  }
+  close(res.currents.get(b.at(leds[1].get(1))), amps, 1e-5, "d2's anode lead");
+
+  // + → LED → 330 Ω → LED → GND: the resistor between the two.
+  const c = bench();
+  const e1 = c.seat("d1", "led", "a20", { color: "red" });
+  const rr = c.seat("r1", "resistor", "a30", { ohms: 330 });
+  const e2 = c.seat("d2", "led", "a40", { color: "red" });
+  c.vcc(e1.get(1));
+  c.link(e1.get(2), rr.get(1));
+  c.link(rr.get(2), e2.get(1));
+  c.gnd(e2.get(2));
+  const out = spice(c.doc).run(0).result;
+  const through = out.lamps.get("d1").amps;
+  assert.ok(through > 1e-4, `${through} A`);
+  close(
+    out.currents.get(c.at(rr.get(1))),
+    through,
+    1e-5,
+    "the resistor's lead",
+  );
+});
+
+test("a 7-segment digit's current leaves by the common that is wired, pin 3 or pin 8", () => {
+  // Its two commons are one strip inside it; the segments name pin 3. Wired
+  // through pin 8 alone, every segment's milliamps were booked on pin 3's
+  // hole, with nothing plugged into it.
+  for (const com of [3, 8]) {
+    const b = bench();
+    const d = b.seat("d1", "seg7cc", "e20", { color: "red" });
+    b.gnd(d.get(com));
+    const r = b.seat("r1", "resistor", "a40", { ohms: 330 });
+    b.link(r.get(1), d.get(7)); // segment a
+    b.vcc(r.get(2));
+    const res = spice(b.doc).run(0).result;
+    const amps = res.lamps.get("d1#a").amps;
+    assert.ok(amps > 5e-3, `lit: ${amps} A`);
+    const other = com === 3 ? 8 : 3;
+    close(res.currents.get(b.at(d.get(com))), amps, 1e-5, `pin ${com}, wired`);
+    assert.ok(!res.currents.get(b.at(d.get(other))), `pin ${other}, empty`);
+    close(res.currents.get(b.at(d.get(7))), amps, 1e-5, "segment a's pin");
+  }
+});
+
+test("an input pin carries what its own stage does: a 74LS input's bias out of it", () => {
+  // A 74LS04's 1A pulled down through 1 kΩ: the resistor carries the
+  // input's bias, and so does the pin it comes out of.
+  const b = bench();
+  const u = inverter(b, "u1", "74LS04", "e10");
+  const r = b.seat("r1", "resistor", "a30", { ohms: 1e3 });
+  b.link(u.get(1), r.get(1));
+  b.gnd(r.get(2));
+  let res = spice(b.doc).run(0).result;
+  const bias = res.currents.get(b.at(r.get(1)));
+  assert.ok(bias > 1e-4, `${bias} A`);
+  close(res.currents.get(b.at(u.get(1))), bias, 1e-6, "1A");
+
+  // Fed through 10 Ω, off the rails: its VCC pin carries what the feed
+  // does — its ICC and the bias that leaves by 1A, tied to GND.
+  const c = bench();
+  const v = c.seat("u1", "74LS04", "e10");
+  const feed = c.seat("rf", "resistor", "a30", { ohms: 10 });
+  c.vcc(feed.get(1));
+  c.link(feed.get(2), v.get(14));
+  c.gnd(v.get(7));
+  c.gnd(v.get(1));
+  res = spice(c.doc).run(0).result;
+  const fed = res.currents.get(c.at(feed.get(1)));
+  close(res.currents.get(c.at(v.get(14))), fed, 1e-6, "VCC");
+  const out = res.currents.get(c.at(v.get(1)));
+  assert.ok(out > 1e-4, `1A: ${out} A`);
+  close(
+    res.currents.get(c.at(v.get(7))) + out,
+    fed,
+    1e-6,
+    "GND and 1A, what VCC took",
+  );
+});
+
 // ── Diodes and Zeners in the same solve (spice/diodes.js) ───────────────────
 
 test("an LED fed through a diode lights, a diode's drop below the supply", () => {

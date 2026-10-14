@@ -181,3 +181,25 @@ test("Escape cancels the editor without committing", () => {
   assert.equal(view.editing, false);
   assert.equal(layer.querySelector(".annotation-text").textContent, "keep");
 });
+
+test("another document on the desk closes the editor uncommitted, and draws the new one", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  doc.addAnnotation("label", 0, 0, "desk A");
+  const commits = [];
+  const { layer, view } = mount(doc, {
+    onEditCommit: (id, text) => commits.push([id, text]),
+  });
+  layer
+    .querySelector(".annotation")
+    .dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true }));
+  const editor = layer.querySelector(".annotation-editor");
+  editor.value = "typed on A";
+  // A desktop switch: B's first label has A's id.
+  doc.load({ annotations: [{ id: "an1", kind: "label", x: 5, y: 5, text: "desk B" }] }); // prettier-ignore
+  window.dispatchEvent(new window.CustomEvent("chiphippo:desk-loaded"));
+  editor.dispatchEvent(new window.FocusEvent("blur"));
+  assert.deepEqual(commits, [], "nothing written into desk B");
+  assert.equal(view.editing, false);
+  assert.equal(layer.querySelector(".annotation-text").textContent, "desk B");
+});

@@ -35,7 +35,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { H, L, Z, X } from "../sim/levels.js";
-import { settle } from "../sim/engine.js";
+import { settle, tick } from "../sim/engine.js";
 import { buildNetlist } from "../sim/netlist.js";
 import { junctionState, isLit } from "../sim/junction.js";
 import { PALETTE_DEFS, footprintOffsets, partDef } from "../catalog/index.js";
@@ -58,7 +58,7 @@ import { partPinHoles } from "../model/occupancy.js";
 import { partSeatAt } from "../model/seating.js";
 import { DeskDoc } from "../model/desk-doc.js";
 import { ghostOrient } from "../components/desk-placement.js";
-import { bench, runner } from "./timing-fixtures.js";
+import { bench, darlingtonPair, runner } from "./timing-fixtures.js";
 
 const SHELF = ["cap-ceramic", "cap-electrolytic", "diode", "zener", "inductor", "npn", "pnp", "nmos", "pmos"]; // prettier-ignore
 const TRANSISTORS = ["npn", "pnp", "nmos", "pmos"];
@@ -367,13 +367,13 @@ test("the holes between its leads put pin 2 that far along, everywhere", () => {
   // last anchor is 61 for two holes along, 60 for three, 59 for four.
   const boards = [{ id: "bb1", type: "pins-full", x: 0, y: 0 }];
   const far = { x: 63, y: 12.51 }; // over a63
-  assert.equal(partSeatAt(boards, "inductor", far, 0, {})?.anchor, "a60");
+  assert.equal(partSeatAt(boards, "inductor", far, null, {})?.anchor, "a60");
   assert.equal(
-    partSeatAt(boards, "inductor", far, 0, { bodyHoles: 1 })?.anchor,
+    partSeatAt(boards, "inductor", far, null, { bodyHoles: 1 })?.anchor,
     "a61",
   );
   assert.equal(
-    partSeatAt(boards, "inductor", far, 0, { bodyHoles: 3 })?.anchor,
+    partSeatAt(boards, "inductor", far, null, { bodyHoles: 3 })?.anchor,
     "a59",
   );
   // The ghost turned with R reaches as far as the leads do.
@@ -910,4 +910,103 @@ test("the Digital export says why each of the discretes is left out", () => {
   assert.equal(reason("diode"), "diode");
   assert.equal(reason("inductor"), "inductor");
   assert.equal(reason("npn"), "transistor");
+});
+
+test("every discrete drawn with its own hit shape takes the pointer only there", async () => {
+  // app.css lets a part whose drawing has a .part-display-hit, or that draws
+  // as a span, give its box back to the holes under it — by the class the
+  // view sets, so no part can be left off a list (the 7-segments, the
+  // regulators and the relay once were).
+  const { resetDom } = await import("./jsdom-setup.js");
+  resetDom();
+  const { DiscreteView } = await import("../components/discrete-view.js");
+  const { PART_DEFS } = await import("../catalog/parts.js");
+  const layer = document.createElement("div");
+  for (const def of PART_DEFS) {
+    if (def.size) continue; // a desk brick has views of its own
+    const view = new DiscreteView(layer, { id: def.id, ref: def.id, params: def.normalizeParams?.({}) ?? {} }); // prettier-ignore
+    const node = view.element;
+    if (def.rotatable) {
+      view.updateSpanWorld({ x: 0, y: 0 }, { x: 3, y: 0 });
+      assert.ok(node.classList.contains("part-discrete--span"), def.id);
+      assert.ok(node.querySelector(".part-span-hit"), `${def.id} has a lead to grab`); // prettier-ignore
+      continue;
+    }
+    const hit = node.querySelector(".part-display-hit") != null;
+    assert.equal(node.classList.contains("part-discrete--body-hit"), hit, def.id); // prettier-ignore
+  }
+  const css = (await import("node:fs")).readFileSync(
+    new URL("../../styles/app.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(css, /\.part-discrete--body-hit \{\s*pointer-events: none;/);
+  assert.match(css, /\.part-discrete--span \{\s*pointer-events: none;/);
+});
+
+test("R lands a turned lead IN the hole it reaches, and stores that vector", async () => {
+  const { DeskDoc } = await import("../model/desk-doc.js");
+  const { partPinAddresses, worldOfAddress } =
+    await import("../model/occupancy.js");
+  const doc = new DeskDoc(null);
+  doc.addKit("full", 0, 0); // bb1 rail · bb2 pins · bb3 rail
+  const r = doc.addComponent({ kind: "discrete", ref: "resistor", board: "bb2", anchor: "a10" }); // prettier-ignore
+  // Its far lead bent down into the bottom rail: 2.76 below row a, not whole.
+  doc.movePartEnds(r.id, "bb2", "a10", { dx: 1, dy: 3.76 });
+  for (let turn = 0; turn < 4; turn++) {
+    try {
+      doc.rotateComponent(r.id);
+    } catch {
+      continue; // a quarter with nowhere to go
+    }
+    const comp = doc.getComponent(r.id);
+    const [a, b] = partPinAddresses(doc, comp).map((p) =>
+      worldOfAddress(doc.boards, p.address),
+    );
+    const { end } = comp.params;
+    assert.ok(
+      Math.abs(b.x - a.x - end.dx) < 0.005 &&
+        Math.abs(b.y - a.y - end.dy) < 0.005,
+      `turn ${turn}: ${JSON.stringify(end)} reaches the hole's centre`,
+    );
+  }
+});
+
+test("a transistor its own channel feeds conducts — a diode-connected one, a Darlington of two — in both settle modes", () => {
+  // As a plain switch neither has an answer: on, its channel joins its base
+  // to its emitter's LOW and turns it off; off, the base is pulled up again —
+  // every pass to the iteration cap, X and an oscillation. Its base is read
+  // as it resolves with its own channel out of the way (settle-pass.js
+  // `selfFedControls`).
+  const diode = bench();
+  const q = diode.seat("q1", "npn", "a10");
+  const r = diode.seat("r1", "resistor", "a30", { ohms: 1e3 });
+  diode.vcc(r.get(1));
+  diode.link(r.get(2), q.get(3));
+  diode.link(q.get(2), q.get(3));
+  diode.gnd(q.get(1));
+  const { doc, b, q2 } = darlingtonPair();
+  for (const mode of ["full", "incremental"]) {
+    const one = buildNetlist(diode.doc);
+    const d = tick({ document: diode.doc, netlist: one, mode });
+    assert.deepEqual(d.warnings, [], `diode-connected, ${mode}`);
+    assert.equal(d.netLevels.get(one.netOfPoint.get(diode.at(q.get(3)))), L);
+    assert.equal(d.channels.get("q1")[0].on, H, "and it shows conducting");
+    const netlist = buildNetlist(doc);
+    const out = netlist.netOfPoint.get(b.at(q2.get(3)));
+    let state = new Map();
+    let warm = new Map();
+    for (const [now, level, want] of [
+      [0, H, L],
+      [0.001, L, H],
+      [0.002, H, L],
+    ]) {
+      // prettier-ignore
+      const res = tick({ document: doc, netlist, warmStart: warm, state, signalLevels: new Map([["sig1", level]]), now, mode }); // prettier-ignore
+      assert.deepEqual(res.warnings, [], `Darlington in ${level}, ${mode}`);
+      assert.equal(res.netLevels.get(out), want, `Darlington in ${level}, ${mode}`); // prettier-ignore
+      assert.equal(res.channels.get("q2")[0].on, level);
+      state = res.state;
+      warm = res.netLevels;
+    }
+  }
 });

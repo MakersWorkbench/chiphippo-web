@@ -31,15 +31,19 @@
 //   • process.mas          true in a Mac App Store build (sandboxed MAS Electron).
 //   • process.windowsStore true in an appx/MSIX build (Microsoft Store).
 //
-// Today there is ONE gate, `isStoreBuild()`: the self-updater. Both stores
-// deliver their own updates, electron-builder strips the update feed from a
-// MAS/appx package, and Apple's sandbox forbids an app replacing itself — so a
-// store build offers no "Check for Updates…" menu item, no About-tab controls,
-// and never makes the outbound check at all. `isMas()` is kept distinct because
-// the two stores are NOT interchangeable (MSIX is full-trust where MAS is
-// sandboxed), so the next gate can be scoped to the store that needs it rather
-// than to both. Chip Hippo has no Microsoft Store channel yet; the flag costs
-// nothing and means adding one is a packaging change, not a code change.
+// Two gates today:
+//   • `isStoreBuild()` — the self-updater. Both stores deliver their own
+//     updates, electron-builder strips the update feed from a MAS/appx
+//     package, and Apple's sandbox forbids an app replacing itself — so a
+//     store build offers no "Check for Updates…" menu item, no About-tab
+//     controls, and never makes the outbound check at all.
+//   • `allowsDonations()` — the About card's voluntary sponsor link. Apple's
+//     Guideline 3.1.1 bars a link to a purchase mechanism other than in-app
+//     purchase, and a tip jar counts; the Microsoft Store permits one. So it is
+//     scoped to the MAS alone (as Rest Hippo's is), which is why `isMas()` is
+//     kept distinct: the two stores are NOT interchangeable.
+// Chip Hippo has no Microsoft Store channel yet; the flag costs nothing and
+// means adding one is a packaging change, not a code change.
 "use strict";
 
 /** True in a Mac App Store (sandboxed) build. */
@@ -57,6 +61,12 @@ function isStoreBuild() {
   return isMas() || isAppx();
 }
 
+/** May this build offer the voluntary donation link? Everywhere but the Mac
+    App Store (Guideline 3.1.1 — see the header). */
+function allowsDonations() {
+  return !isMas();
+}
+
 /**
  * Which channel produced this build, surfaced in the About dialog so a bug
  * report records it — "my updater does nothing" and "I installed it from the
@@ -67,4 +77,10 @@ function distribution() {
   return isStoreBuild() ? "store" : "direct";
 }
 
-module.exports = { isMas, isAppx, isStoreBuild, distribution };
+module.exports = {
+  isMas,
+  isAppx,
+  isStoreBuild,
+  allowsDonations,
+  distribution,
+};

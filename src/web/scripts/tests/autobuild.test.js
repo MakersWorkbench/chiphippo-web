@@ -644,6 +644,33 @@ test("a ROM says it arrives unprogrammed", () => {
   assert.ok(!ram.warnings.some((x) => x.code === "ROM_UNPROGRAMMED"));
 });
 
+test("two signal nets with one name are refused as the spec's mistake; a rail name may repeat, and is enough alone", () => {
+  // Every fault that names a net would name both, and the ladder once took the
+  // pair for a SHORT — an abort, blaming the compiler, with no repair round.
+  const errs = fails(
+    {
+      parts: [{ id: "U1", ref: "74LS04" }],
+      nets: [
+        { name: "IN", members: ["U1.1A", "U1.2Y"] },
+        { name: "IN", members: ["U1.2A", "U1.3Y"] },
+      ],
+    },
+    "DUPLICATE_NET",
+  );
+  assert.equal(errs.find((e) => e.code === "DUPLICATE_NET").kind, "repair");
+  // Two nets NAMED for a supply are one rail, and the name is a member: one
+  // pin is a whole net.
+  const out = compileNetlist({
+    parts: [{ id: "U1", ref: "74LS04" }],
+    nets: [
+      { name: "GND", members: ["U1.1A"] },
+      { name: "GND", members: ["U1.3A", "GND"] },
+      { name: "VCC", members: ["U1.5A"] },
+    ],
+  });
+  assert.ok(out.ok, JSON.stringify(out.errors));
+});
+
 test("a net joining the rails, or with one member, is rejected", () => {
   fails(
     {
@@ -1560,6 +1587,28 @@ test("the blank column goes before a second breadboard does", () => {
   assert.equal(pins.length, 1, "one breadboard, packed, not two with a gap");
 });
 
+test("running out of board is the budget's mistake: pack tighter, then fetch another", () => {
+  // The kit count is a column COUNT, but each board is filled part by part, and
+  // the columns every board leaves at its edge add up: fifteen inverters booked
+  // two boards and found room for fourteen, and seven 32-pin RAMs two boards
+  // and room for six — each refused NO_ROOM, an abort no repair round reaches.
+  const chain = (ref, n, member) => ({
+    parts: [...Array(n)].map((_, i) => ({ id: `U${i + 1}`, ref })),
+    nets: [{ name: "N", members: [...Array(n)].map((_, i) => `U${i + 1}.${member}`) }], // prettier-ignore
+  });
+  for (const [ref, n, member, kits] of [
+    ["74LS04", 15, "1A", 2], // packed without the blank column
+    ["AS6C1024", 7, "A0", 3], // one more board
+  ]) {
+    const out = compileNetlist(chain(ref, n, member));
+    assert.ok(out.ok, `${n} × ${ref}: ${JSON.stringify(out.errors)}`);
+    const seated = out.document.components.filter((c) => c.ref === ref);
+    assert.equal(seated.length, n);
+    const pins = out.document.boards.filter((b) => b.type.startsWith("pins"));
+    assert.equal(pins.length, kits, `${n} × ${ref}`);
+  }
+});
+
 test("the split between boards is CHOSEN, not fallen into", () => {
   // Cutting purely for an even split severs whatever happens to be at the
   // halfway column — and for a byte-wide design that is the bus itself, eight
@@ -1809,4 +1858,36 @@ test("a full-length note is not truncated", () => {
     notes,
     "every word of it reaches the desk",
   );
+});
+
+test("a spec's parts arrive NAMED as the spec named them, its labels as descriptions", () => {
+  // The caption the model writes says "U1 inverts the switch onto D1"; with
+  // no part named anything, the reader had nowhere to find U1.
+  const { doc } = build({
+    title: "inv",
+    parts: [
+      { id: "SW", ref: "sw-dip1", label: "input" },
+      { id: "U1", ref: "74LS04", label: "the inverter" },
+      { id: "D1", ref: "led" },
+      { id: "CLK", ref: "clock" },
+    ],
+    nets: [
+      { name: "VCC", members: ["SW.1A", "VCC"] },
+      { name: "IN", members: ["SW.1B", "U1.1A"] },
+      { name: "OUT", members: ["U1.1Y", "D1.A"] },
+      { name: "GND", members: ["D1.K", "GND"] },
+      { name: "TICK", members: ["CLK.out", "U1.3A"] },
+    ],
+  });
+  const byName = new Map(doc.components.filter((c) => c.name).map((c) => [c.name, c])); // prettier-ignore
+  assert.deepEqual([...byName.keys()].sort(), ["CLK", "D1", "SW", "U1"]);
+  assert.equal(byName.get("U1").ref, "74LS04");
+  assert.equal(byName.get("U1").description, "the inverter");
+  assert.equal(
+    byName.get("D1").description,
+    undefined,
+    "no label, no description",
+  );
+  // What the compiler added (D1's resistor, the PSU) is named by nothing.
+  assert.ok(doc.components.filter((c) => c.ref === "resistor").every((c) => !c.name)); // prettier-ignore
 });

@@ -385,6 +385,44 @@ test("a 4-bit counter with an asynchronous active-low reset", () => {
   assert.equal(q(), "4'b0001"); // 17 mod 16
 });
 
+test("a reset held from the first sample applies at once — the clock alone never fires there", () => {
+  // Time zero: every input was x a moment before, and x→0 is a negedge.
+  const ports = [port("CLK"), port("RN"), port("D"), port("Q", "output")];
+  const r = ok(
+    "reg q; always @(posedge CLK or negedge RN) if (!RN) q <= 1'b0; else q <= D; assign Q = q;", // prettier-ignore
+    ports,
+  );
+  const p = r.program;
+  const q = (st) => V.format(p.outputValues([k(1, 0), k(1, 1), k(1, 1)], st)[0]); // prettier-ignore
+  // RN low from Run: cleared on the first sample, prev null.
+  assert.equal(q(p.step(p.initialState(), [k(1, 0), k(1, 0), k(1, 1)], null)), "1'b0"); // prettier-ignore
+  // RN high, the clock already high: nothing fires — no part latches on its
+  // first sample.
+  assert.equal(q(p.step(p.initialState(), [k(1, 1), k(1, 1), k(1, 1)], null)), "1'bx"); // prettier-ignore
+  // The debugger's step agrees with the engine's.
+  const t = p.traceStep(p.initialState(), [k(1, 0), k(1, 0), k(1, 1)], null);
+  assert.ok(t.frames.length > 0);
+  assert.equal(q(t.state), "1'b0");
+});
+
+test("a full case meeting an x subject: the debugger shows the x the pins drive", () => {
+  // No label matches and there is no default; the engine starts every comb
+  // reg at x, so a trace from the last-seen values must not show the old one.
+  const ports = [port("S", "input", 2), port("Y", "output", 2)];
+  const r = ok(
+    "reg [1:0] r;\nalways @(*)\n  case (S)\n    2'b00: r = 2'd0;\n    2'b01: r = 2'd1;\n    2'b10: r = 2'd2;\n    2'b11: r = 2'd3;\n  endcase\nassign Y = r;\n", // prettier-ignore
+    ports,
+  );
+  const p = r.program;
+  const y = p.signals.findIndex((s) => s.name === "Y");
+  const first = p.traceComb(null, [k(2, 2)], null);
+  assert.equal(V.format(first.vals[y]), "2'b10");
+  const xs = [V.make(2, 0, 1)];
+  const second = p.traceComb(first.vals, xs, null);
+  assert.equal(V.format(p.evaluate(xs, null)[y]), "2'bxx");
+  assert.equal(V.format(second.vals[y]), "2'bxx");
+});
+
 test("initial blocks and declaration initialisers set the power-up state", () => {
   const r = ok(
     "reg [1:0] s = 2'd2; reg t; initial t = 1'b1; assign Y = {s, t};",

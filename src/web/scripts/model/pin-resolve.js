@@ -192,12 +192,13 @@ export function resolvePin(ref, pinToken) {
   }
 
   // ① A bare integer usually IS the pin number — but a handful of parts name
-  //    their pins numerically too. For bar8/rnet9/resistor/switches the two
-  //    readings agree, so nothing is at stake. For 74LS148 — a priority
-  //    encoder whose inputs are NAMED 0..7 — they disagree: `74LS148.4` could
-  //    mean pin 4 (which is named "7") or the input named "4" (which is pin
-  //    1). Guessing there would silently mis-wire an encoder, so both readings
-  //    are reported and the caller picks with `#4` or an unambiguous name.
+  //    their pins numerically too. For bar8/rnet9/resistor and most switches
+  //    the two readings agree, so nothing is at stake. Where they disagree —
+  //    74LS148's inputs NAMED 0..7, the CD4017B/CD4022B/CD4028B's decoded
+  //    outputs, the slide switch's pin 3 (named "2") — `74LS148.4` could mean
+  //    pin 4 (which is named "7") or the input named "4" (which is pin 1).
+  //    Guessing there would silently mis-wire the part, so both readings are
+  //    reported and the caller picks with `#4` or an unambiguous name.
   if (/^\d+$/.test(token)) {
     const n = Number(token);
     const byNumber = pins.find((p) => p.n === n);

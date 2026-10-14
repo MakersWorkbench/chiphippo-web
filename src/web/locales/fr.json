@@ -105,6 +105,11 @@
       "message": "Confirmer l'accès à ce projet",
       "button": "Autoriser l'accès"
     },
+    "reserved": {
+      "message": "Choisissez un autre nom",
+      "slot": "« {file} » est l'endroit où Chip Hippo conserve le travail non encore enregistré ; rien d'autre ne peut donc être enregistré sous ce nom.",
+      "open": "« {file} » est le projet ouvert. Un bureau exporté par-dessus remplacerait le projet tout entier."
+    },
     "exportKicad": {
       "title": "Exporter vers KiCad",
       "message": "Choisissez le dossier du projet KiCad : un nouveau, ou celui d'une exportation précédente.",
@@ -1083,6 +1088,7 @@
     "buildCrashed": "La construction a échoué de façon inattendue : {message}",
     "compilerFault": "Le circuit a été décrit correctement mais n'a pas pu être construit. C'est un défaut du compilateur de Chip Hippo, pas de la conception.",
     "gaveUp": "Abandon après {total} tentatives de correction. Ce qui ne va toujours pas :",
+    "declined": "D'après le modèle, cela ne peut pas être construit avec les composants du catalogue :",
     "retrying": "Cette conception n'a pas été validée — une correction est demandée (tentative {n} sur {total}) :",
     "untitledCircuit": "Circuit",
     "summary": "{title} — {parts} composants, {wires} fils, {strips} bandes de platine.",
@@ -1498,6 +1504,7 @@
     "description": "Conçois et simule des circuits logiques sur des platines d'essai virtuelles sans soudure — pose des puces, des fils, des interrupteurs, des LED et l'alimentation, puis regarde l'électricité se stabiliser dans chaque net.",
     "byline": "Créé par Jason, codé par Claude",
     "support": "Assistance :",
+    "donate": "Soutenir Chip Hippo…",
     "versionInfo": "Informations de version",
     "version": "Version",
     "platform": "Plateforme",
@@ -1606,7 +1613,7 @@
       "analyzer": "Afficher ou masquer l'analyseur logique",
       "fit": "Ajuster à la fenêtre",
       "pan": "Faire défiler le bureau",
-      "panKeys": "Espace+glisser ou bouton du milieu",
+      "panKeys": "Espace+glisser, {alt}+glisser ou bouton du milieu",
       "zoomOut": "Dézoomer au maximum (retrouver un composant perdu)",
       "zoom": "Zoomer / dézoomer / réinitialiser",
       "fontSize": "Taille de police de l'éditeur : augmenter / réduire / réinitialiser",
@@ -2534,6 +2541,17 @@
     "more": {
       "one": "+{count} de plus",
       "other": "+{count} de plus"
+    }
+  },
+  "notice": {
+    "dragModel": {
+      "title": "Le glisser a changé",
+      "band": "Glissez sur le plan de travail pour sélectionner tout ce qui est dans le cadre.",
+      "pickLead": "{alt}+glisser déplace une seule extrémité de fil ou une seule patte.",
+      "toggle": "{mod}+clic ajoute un élément à la sélection, ou l’en retire.",
+      "carry": "Glissez un composant : son câblage le suit.",
+      "bare": "{shift}+glisser déplace les composants et laisse leurs fils en place.",
+      "pan": "Faites défiler le plan de travail avec Espace+glisser, {alt}+glisser hors d’une patte ou le bouton du milieu."
     }
   }
 }

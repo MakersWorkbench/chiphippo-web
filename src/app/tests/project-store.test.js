@@ -917,3 +917,89 @@ test("importing from a whole project brings that project's chips", () => {
     );
   });
 });
+
+test("the working slot is the slot however it is spelt — never a save target", () => {
+  withStore((store) => {
+    store.newProject(); // the slot exists
+    const saves = store.savesDir;
+    for (const name of [
+      "default.chiphippo",
+      "Default.chiphippo", // a case-insensitive volume opens the slot itself
+      "DEFAULT.CHIPHIPPO",
+      "default.project.chiphippo", // v3's slot: swallowed at the next launch
+      "Default.Project.chiphippo",
+    ]) {
+      const p = path.join(saves, name);
+      assert.equal(store.isSlotPath(p), true, name);
+      assert.equal(store.saveClash(p), "slot", name);
+    }
+    for (const name of ["Default 2.chiphippo", "default.desktop.chiphippo"]) {
+      assert.equal(store.isSlotPath(path.join(saves, name)), false, name);
+    }
+    // The same NAME anywhere else is a file like any other.
+    assert.equal(store.isSlotPath(path.join(os.tmpdir(), "default.chiphippo")), false); // prettier-ignore
+  });
+});
+
+test("an alias of the slot (a symlinked folder) is the slot too", () => {
+  withStore((store, dir) => {
+    store.newProject();
+    const alias = path.join(dir, "elsewhere");
+    fs.symlinkSync(store.savesDir, alias);
+    assert.equal(store.isSlotPath(path.join(alias, "default.chiphippo")), true);
+  });
+});
+
+test("a project named for the slot is offered a name beside it", () => {
+  withStore((store) => {
+    const saves = store.savesDir;
+    const offer = (name) =>
+      path.basename(
+        store.besideSlot(path.join(saves, suggestFileName(name, PROJECT_EXT))),
+      );
+    assert.equal(offer("Default"), "Default 2.chiphippo");
+    assert.equal(offer("default.project"), "default 2.chiphippo");
+    assert.equal(offer("Counter"), "Counter.chiphippo");
+  });
+});
+
+test("the slot read under another spelling has no location — Open never deletes it", () => {
+  withStore((store) => {
+    store.newProject();
+    const upper = path.join(store.savesDir, "Default.chiphippo");
+    if (!fs.existsSync(upper)) return; // a case-sensitive volume: no alias
+    assert.equal(store.read(upper).location, null);
+  });
+});
+
+test("a desktop is never exported over the open project's own file", () => {
+  withStore((store) => {
+    const mine = path.join(store.savesDir, "Counter.chiphippo");
+    store.write(mine, store.newProject());
+    assert.equal(store.saveClash(mine, mine), "open");
+    assert.equal(store.saveClash(path.join(store.savesDir, "Other.desktop.chiphippo"), mine), null); // prettier-ignore
+    assert.equal(
+      store.saveClash(mine, null),
+      null,
+      "no project open with a file",
+    );
+  });
+});
+
+test("a recovery restored homeless is unstamped: the slot is the untitled project's own", () => {
+  withStore((store) => {
+    const meta = store.newProject();
+    store.writeRecovery(meta, "/gone/Work.chiphippo");
+    assert.equal(store.peekRecovery().recoveryFor, "/gone/Work.chiphippo");
+    const before = JSON.parse(
+      fs.readFileSync(store.defaultProjectPath, "utf8"),
+    );
+    assert.equal(store.unstampRecovery(), true);
+    // Not a crash flag any more — a quit that keeps it restores nothing next time.
+    assert.equal(store.peekRecovery().recoveryFor, null);
+    const after = JSON.parse(fs.readFileSync(store.defaultProjectPath, "utf8"));
+    const { recoveryFor: _drop, ...rest } = before;
+    assert.deepEqual(after, rest, "every other byte as it was");
+    assert.equal(store.unstampRecovery(), false, "nothing left to drop");
+  });
+});

@@ -975,6 +975,18 @@ export class AiPanel {
       return;
     }
 
+    // The model said it cannot be done (catalog-brief.js: "return no parts
+    // rather than substituting"). That is its answer, not a broken design:
+    // show it, and send nothing back.
+    if (built.declined) {
+      this.#setBusy(false);
+      this.#history.push({ role: "assistant", content: text });
+      this.#sayList("fail", t("ai.declined"), [built.title]);
+      if (built.notes) this.#say("note", built.notes);
+      this.#settle();
+      return;
+    }
+
     const { abort, repair } = partitionFaults(built.faults);
     if (abort.length) {
       // Our bug. Say so plainly rather than blaming the model, and do not

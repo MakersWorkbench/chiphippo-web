@@ -182,3 +182,17 @@ test("a bipolar transistor's currents are smooth enough to differentiate, its co
     assert.match(bjtPiece(m, vbe, m.vceoV + 1), /v$/);
   }
 });
+
+test("the answer memo is bounded by its answers, not its base voltages", () => {
+  // A transistor held at one VBE while its collector rides a capacitor's
+  // curve asks a new VCE every pass: one VBE's map grew without end. The
+  // memo hands back the very answer it kept, so a kept one is the same
+  // object — and one flooded out is computed again.
+  const m = BJT_GRADES.npn["small-signal"];
+  const first = bjtCurrents(m, 0, 1);
+  assert.equal(bjtCurrents(m, 0, 1), first, "kept");
+  for (let i = 1; i <= 10000; i++) bjtCurrents(m, 0, 1 + i * 1e-6);
+  const again = bjtCurrents(m, 0, 1);
+  assert.notEqual(again, first, "flooded out, not kept forever");
+  assert.deepEqual(again, first, "and computed to the same answer");
+});

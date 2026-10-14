@@ -91,6 +91,7 @@ import {
   duplicateDesktop,
   findDesktop,
   importDesktop,
+  MAX_NAME,
   normalizeProject,
   projectForFile,
   projectSignature,
@@ -977,6 +978,7 @@ export class ProjectWorkspace {
     PartPropertiesDialog.open({
       title: t("workspace.projectProperties"),
       fields: [locationField()],
+      universal: { name: { maxLength: MAX_NAME } },
       values: {
         name: this.#project.name,
         description: this.#project.description,
@@ -1476,6 +1478,8 @@ export class ProjectWorkspace {
         doc: snap.doc,
         // A snapshot is self-contained: the designed chips on it go too.
         customChips: customChipsUsedBy(snap.doc, this.customChips),
+        // The project's own file, which main will not export it over.
+        openProject: this.#project.location ?? null,
       });
       return res != null; // null is a cancelled dialog, not a failure
     } catch (err) {
@@ -1513,6 +1517,7 @@ export class ProjectWorkspace {
     PartPropertiesDialog.open({
       title: t("workspace.desktopProperties"),
       values: { name: tab.name, description: tab.description },
+      universal: { name: { maxLength: MAX_NAME } },
       onChange: (key, value) => this.#setTabProperty(id, key, value),
     });
   }
@@ -2225,11 +2230,18 @@ export class ProjectWorkspace {
       that has gone missing, above all) — one notice, listing every one. The
       boot's notes about a working slot it could not read come as FACTS,
       `{key, path}` (boot-slot.js), worded here in the user's language, and
-      under their own title: no desktop is missing. */
+      under their own title: no desktop is missing; and a recent project the
+      sandbox refused as `{deniedRecent: path}`, answered with the re-grant
+      offer. */
   #warn(warnings) {
     if (!Array.isArray(warnings) || warnings.length === 0) return;
     const slot = warnings.filter((w) => SLOT_NOTES.has(w?.key));
     const rest = warnings.filter((w) => typeof w === "string");
+    // The most recent project was THERE but the sandbox would not open it, so
+    // the boot opened another (main.js `isDeniedRecent`): offer to re-grant
+    // it, exactly as Open Recent does for the same answer.
+    const denied = warnings.find((w) => typeof w?.deniedRecent === "string");
+    if (denied) this.#offerRegrantRecent(denied.deniedRecent);
     if (slot.length) {
       PopupManager.notify({
         title: t("workspace.slotUnreadTitle"),

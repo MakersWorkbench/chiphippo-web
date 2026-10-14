@@ -132,6 +132,32 @@ test("a leg put back in the row stands the part straight again", () => {
   );
 });
 
+test("a leg drawn bent mid-drag is drawn straight again the moment it is back in the row", () => {
+  const { doc, world, viewport, surface, q } = desk();
+  const send = (type, client) =>
+    viewport.dispatchEvent(
+      new window.PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        pointerId: 9,
+        clientX: client,
+        clientY: 0,
+        altKey: true,
+      }),
+    );
+  const legs = () => partEl(surface, q.id).querySelector(".part-discrete-svg--legs"); // prettier-ignore
+  Object.assign(world, { x: 12, y: ROW.a });
+  send("pointerdown", 0);
+  Object.assign(world, { x: 14, y: ROW.c }); // out of the row: drawn bent
+  send("pointermove", 40);
+  assert.ok(legs(), "drawn bent");
+  Object.assign(world, { x: 12, y: ROW.a }); // back where it stood
+  send("pointermove", 41);
+  assert.equal(legs(), null, "drawn straight");
+  send("pointerup", 41);
+  assert.deepEqual(pins(doc, q.id), ["bb1.a10", "bb1.a11", "bb1.a12"]);
+});
+
 test("a bent TO-92 drags WHOLE by its body, every leg keeping its bend", () => {
   const ctx = desk();
   const { doc, surface, world, q } = ctx;

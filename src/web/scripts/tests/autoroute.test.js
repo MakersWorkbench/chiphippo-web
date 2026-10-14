@@ -34,7 +34,8 @@ import assert from "node:assert/strict";
 
 import { DeskDoc } from "../model/desk-doc.js";
 import { addressWorld } from "../model/part-geometry.js";
-import { partPinAddresses } from "../model/occupancy.js";
+import { buildOccupancy, partPinAddresses } from "../model/occupancy.js";
+import { drawnWire } from "../model/wire-crossing.js";
 import { nodeOf, parseAddress } from "../model/breadboard.js";
 import { ROUTE_CONFIG, makeRouteConfig } from "../model/route-config.js";
 import {
@@ -964,4 +965,115 @@ test("the swap pass is deterministic, and so are the addresses it moves", () => 
   const key = (r) => JSON.stringify(r.swaps);
   assert.equal(key(twice), key(first), "twice running");
   assert.equal(key(reversed), key(first), "and whatever order they arrive in");
+});
+
+// ── Review fixes (2026-10-14) ───────────────────────────────────────────────
+
+/** Every routed run's distance from every lead it does not end on. */
+function nearestForeignLead(json, result) {
+  const occupied = [...buildOccupancy(json).keys()]
+    .map((address) => ({
+      address,
+      p: addressWorld(json.boards, json.components, address),
+    }))
+    .filter((x) => x.p);
+  let nearest = Infinity;
+  for (const [id, route] of result.routes) {
+    const w = json.wires.find((x) => x.id === id);
+    const at = (a) => addressWorld(json.boards, json.components, a);
+    const poly = [at(w.from), ...route.points, at(w.to)];
+    for (const [a, b] of segments(poly)) {
+      for (const { address, p } of occupied) {
+        if (address === w.from || address === w.to) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0; // prettier-ignore
+        nearest = Math.min(nearest, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy)); // prettier-ignore
+      }
+    }
+  }
+  return nearest;
+}
+
+test("a run never slips past a brick terminal on a track 0.01 beside it", () => {
+  // A brick stands on whole pitches and a rail line on hundredths, so a
+  // clock's terminals and the rail beside them seed two tracks 0.01 apart:
+  // blocking the terminal's own point left its twin open, and the clock's
+  // supply lead ran along it straight over its own `gnd` (the shipped W65C02
+  // and Z80A computers did it to `clk1.out`).
+  const { doc } = bench();
+  const raw = doc.toJSON();
+  raw.components.push({ id: "clk1", kind: "clock", ref: "clock", x: -14, y: -2.74, params: {} }); // prettier-ignore
+  const desk = new DeskDoc(raw); // terminals at y 1.26, the + line at 1.25
+  desk.addWire({ from: "clk1.out", to: "bb2.a40" });
+  desk.addWire({ from: "clk1.vcc", to: "bb1.+40" });
+  desk.addWire({ from: "clk1.gnd", to: "bb1.-40" });
+  const json = desk.toJSON();
+  const result = routeDesk(json, {});
+  assert.deepEqual(result.skipped, []);
+  assert.ok(nearestForeignLead(json, result) > 0.1);
+});
+
+test("twenty brick leads all find their way off the boards", () => {
+  // Each lead's terminal adds two corridors, and they took a bit apiece of a
+  // 31-bit mask: past fifteen leads the rest had no way off the board at all.
+  const { doc, pins } = bench();
+  for (let i = 0; i < 20; i += 1) {
+    const x = (i % 7) * 9;
+    const y = i < 7 ? -8 : i < 14 ? 24 : -16;
+    const clk = doc.addBrick("clock", x, y);
+    const hole = i < 7 || i >= 14 ? `j${3 + i * 3}` : `a${3 + (i - 7) * 7}`;
+    doc.addWire({ from: `${clk.id}.out`, to: `${pins}.${hole}` });
+  }
+  const result = routeDesk(doc.toJSON(), {});
+  assert.deepEqual(result.skipped, []);
+  assert.equal(result.routes.size, 20);
+});
+
+test("a fixed wire is terrain in the shape it is DRAWN — its sag, not its chord", () => {
+  // A long direct wire hangs well below its chord: e5→e55 sags to y 13.8, a
+  // fifth of a pitch from row c. Held to its chord, the terrain left row c
+  // free, and a run along it lay on the wire as the user sees it.
+  const { doc, pins } = bench();
+  const fixed = doc.addWire({ from: `${pins}.e5`, to: `${pins}.e55` });
+  const free = doc.addWire({ from: `${pins}.c25`, to: `${pins}.c35` });
+  const json = doc.toJSON();
+  const result = run(doc, { only: new Set([free.id]) });
+  const at = (a) => addressWorld(json.boards, json.components, a);
+  const sag = drawnWire(at(fixed.from), at(fixed.to), 48);
+  const route = shape(doc, result, free.id);
+  // Sampled along the middle of the run (its ends are pinned in row c).
+  for (const [a, b] of segments(route)) {
+    for (let k = 0; k <= 20; k += 1) {
+      const p = { x: a.x + ((b.x - a.x) * k) / 20, y: a.y + ((b.y - a.y) * k) / 20 }; // prettier-ignore
+      if (p.x < 27 || p.x > 33) continue;
+      const gap = Math.min(...sag.map((q) => Math.hypot(q.x - p.x, q.y - p.y)));
+      assert.ok(
+        gap > 0.3,
+        `(${p.x}, ${p.y}) is ${gap.toFixed(2)} from the sag`,
+      );
+    }
+  }
+});
+
+test("a reseat whose wire cannot be routed is routed AROUND, not through", () => {
+  // The routing space is built with every planned reseat applied, so the hole
+  // a power lead was to leave read as free. When that lead then found no path
+  // (here: a board with no gap facing the kit), its reseat was dropped and it
+  // stayed in that hole — with another wire laid straight through it.
+  const { doc, railTop } = bench();
+  const far = doc.addBoard("pins-half", 100, 40);
+  const lead = doc.addWire({ from: `${railTop}.+25`, to: `${far.id}.a5` });
+  const along = doc.addWire({ from: `${railTop}.+24`, to: `${railTop}.+26` });
+  const json = doc.toJSON();
+  const result = routeDesk(json, {});
+  assert.deepEqual(result.skipped, [{ wireId: lead.id, reason: SKIP_NO_PATH }]);
+  assert.deepEqual(result.reseats, [], "it stays where it was");
+  const hole = addressWorld(json.boards, json.components, `${railTop}.+25`);
+  const path = shape(doc, result, along.id);
+  assert.ok(
+    segments(path).every(([a, b]) => !(Math.abs(a.y - hole.y) < 0.1 && Math.abs(b.y - hole.y) < 0.1 && Math.min(a.x, b.x) <= hole.x && Math.max(a.x, b.x) >= hole.x)), // prettier-ignore
+    `${JSON.stringify(path)} runs through ${railTop}.+25`,
+  );
 });

@@ -88,7 +88,10 @@ to turn this on.
   an app replacing itself — so `checkForUpdates` short-circuits, the Help item is absent
   rather than disabled, and About hides its controls and says why. The renderer learns this
   from **`app:info:get`'s `distribution`** rather than a bridge flag of its own: main is the
-  side where `process.mas` is unambiguous, and the panel already awaits that object.
+  side where `process.mas` is unambiguous, and the panel already awaits that object. The
+  second gate, **`allowsDonations()`** (the About card's sponsor link, `app:info:get`'s
+  `donate`, `app:donate`), is MAS-only — Apple's Guideline 3.1.1 bars a non-IAP purchase
+  link; the Microsoft Store allows one — which is why `isMas()` stays distinct.
 - **The check is OPT-IN** (`autoUpdateCheck`, default false) — an outbound call, and Chip
   Hippo makes none unasked. Off still leaves both manual routes working; on adds one delayed
   check ~10 s after launch, off the busy launch path. **`require("electron-updater")` is

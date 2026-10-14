@@ -212,8 +212,12 @@ export function* verifySteps(compiled, spec = null) {
   // fact, and `settle` reports it as one.
   const wiring = buildNetlist(doc, new Map(), { bridges: false });
   const addressOf = pinAddresser(doc, compiled.partMap);
-  const netIdOfDeclared = new Map(); // declared name → conducting netId (L6)
-  const wiredIdOfDeclared = new Map(); // declared name → wiring-only netId (L4)
+  // Keyed by the declared NET, not its name: two nets may share a rail name
+  // (two `GND` nets are one supply), and a lookup by name answered for the
+  // last of them — which once read two signal nets called "IN" as a short.
+  const netIdOfDeclared = new Map(); // declared name → conducting netId (namer)
+  const liveIdOf = new Map(); // declared net → conducting netId (L6)
+  const wiredIdOf = new Map(); // declared net → wiring-only netId (L4)
   for (const net of compiled.nets ?? []) {
     const ids = new Set();
     let unreachable = false;
@@ -227,6 +231,7 @@ export function* verifySteps(compiled, spec = null) {
       if (id == null) unreachable = true;
       else ids.add(id);
       const live = netlist.netOfPoint.get(address);
+      if (live != null && !liveIdOf.has(net)) liveIdOf.set(net, live);
       if (live != null && !netIdOfDeclared.has(net.name)) {
         netIdOfDeclared.set(net.name, live);
       }
@@ -253,21 +258,19 @@ export function* verifySteps(compiled, spec = null) {
       );
       continue;
     }
-    if (ids.size === 1) wiredIdOfDeclared.set(net.name, [...ids][0]);
+    if (ids.size === 1) wiredIdOf.set(net, [...ids][0]);
   }
   // Two DIFFERENT declared nets landing on one derived net is a short. Rail
   // nets legitimately merge (every VCC member is one net), so only non-rail
   // nets are held apart — and held apart from the rails too.
   const railIds = new Set();
   for (const net of compiled.nets ?? []) {
-    if (net.rail && wiredIdOfDeclared.has(net.name)) {
-      railIds.add(wiredIdOfDeclared.get(net.name));
-    }
+    if (net.rail && wiredIdOf.has(net)) railIds.add(wiredIdOf.get(net));
   }
   const seen = new Map(); // derived netId → declared name
   for (const net of compiled.nets ?? []) {
     if (net.rail) continue;
-    const id = wiredIdOfDeclared.get(net.name);
+    const id = wiredIdOf.get(net);
     if (id == null) continue;
     if (railIds.has(id)) {
       faults.push(
@@ -374,7 +377,7 @@ export function* verifySteps(compiled, spec = null) {
   const letGo = openCollectorNets(doc, netlist);
   for (const net of compiled.nets ?? []) {
     if (net.rail) continue;
-    const id = netIdOfDeclared.get(net.name);
+    const id = liveIdOf.get(net);
     if (id == null) continue;
     const level = first.netLevels.get(id);
     if (level !== undefined && level !== "Z" && level !== "X") continue;

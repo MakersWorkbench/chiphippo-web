@@ -37,6 +37,8 @@ import {
 import { DeskView } from "./components/desk-view.js";
 import { ZoomControl } from "./components/zoom-control.js";
 import { DeskLock } from "./components/desk-lock.js";
+import { NoticeBanner } from "./components/notice-banner.js";
+import { pendingNotices } from "./model/notices.js";
 import { DeskController } from "./components/desk-controller.js";
 import { SchematicView } from "./components/schematic-view.js";
 import { Desk3DView } from "./components/desk-3d-view.js";
@@ -1451,6 +1453,29 @@ async function init() {
   const main = el("div", { class: "app-main" });
   const header = buildHeader();
   app.append(header.header, main);
+  // What's new, for someone who used an earlier version (model/notices.js):
+  // a bar between the toolbar and the desk until its ✕ is clicked, and a
+  // closed notice stays closed — written here, as the capacitor note's
+  // "Don't show again" is.
+  const owed = pendingNotices(settings);
+  const noticeBanner = owed.length
+    ? new NoticeBanner(app, {
+        notices: owed,
+        before: main,
+        onDismiss: (id) => {
+          const dismissedNotices = [
+            ...(currentSettings.dismissedNotices ?? []),
+            id,
+          ];
+          currentSettings = { ...currentSettings, dismissedNotices };
+          bridge.settings
+            .set({ dismissedNotices })
+            .catch((err) =>
+              console.error("[renderer] settings:set failed:", err),
+            );
+        },
+      })
+    : null;
   let workspace = null;
   // Desktop ▸ Export To (Feature 390) — built once the toast stack exists;
   // the menu and the tab strip reach it late-bound, like the workspace.
@@ -2601,6 +2626,7 @@ async function init() {
       () => integration,
       () => schematicView,
       () => view3d,
+      () => noticeBanner,
     ],
     // Relabel functions the app ALREADY had, for their own reasons: each
     // owns a control whose label depends on state, so re-running it with the

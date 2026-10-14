@@ -79,7 +79,7 @@ export const PSU_CURRENT_LIMITS = Object.freeze([0.1, 0.25, 0.5, 1, 2, 3, 5]);
 export const DEFAULT_CURRENT_LIMIT = 1;
 
 /** A current as a supply's label says it: "500 mA", "2 A". */
-const ampsLabel = (amps) =>
+export const ampsLabel = (amps) =>
   amps < 1 ? `${Math.round(amps * 1000)} mA` : `${amps} A`;
 /** Clock rates (Hz) plus click-to-toggle "manual"; the timing lives in the
     renderer's SimController — the def carries only the pure contract. A 1-2-5
@@ -213,7 +213,7 @@ export const CLOCK_WAVES = Object.freeze([
 export const LEVEL_WAVES = Object.freeze(["square", "pwm"]);
 
 /** Each wave's English name (the dialog translates `properties.option.<value>`). */
-const CLOCK_WAVE_LABELS = Object.freeze({
+export const CLOCK_WAVE_LABELS = Object.freeze({
   square: "Square",
   pwm: "PWM",
   triangle: "Triangle",
@@ -762,7 +762,7 @@ function sevenSegmentDef({ anode }) {
     group: "LEDs",
     package: "DIP-10-600",
     // Seated wide wherever it goes (normalizeParams) — the data hook the AI
-    // builder's catalog reads to leave it out for now (ai/catalog-brief.js).
+    // compiler reads to seat it in rows d/h rather than e/f (autobuild.js).
     alwaysWide: true,
     pins: Array.from({ length: 10 }, (_, i) => {
       const n = i + 1;

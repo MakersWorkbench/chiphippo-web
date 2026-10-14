@@ -542,11 +542,16 @@ test("reset takes seven cycles and leaves S at $FD; an IRQ takes seven", () => {
   m.runTo(0x8001); // the NOP once more, with interrupts on
   // Raise IRQ: it is taken at the next boundary, and its sequence is 7.
   const seen = [];
+  const sync = [];
   for (let i = 0; i < 40 && m.state.cur !== "irq"; i++) m.cycle({ irq: true });
   while (m.state.cur === "irq") {
     seen.push(`${m.state.rw}${m.state.addr.toString(16)}`);
+    sync.push(m.state.sync ? 1 : 0);
     m.cycle({ irq: true });
   }
   assert.equal(seen.length, 7);
   assert.deepEqual(seen.slice(5), ["rfffe", "rffff"]);
+  // Its first cycle is the opcode fetch it abandons, SYNC high like any fetch
+  // (a SYNC + RDY single-stepper stops there); the rest are not fetches.
+  assert.deepEqual(sync, [1, 0, 0, 0, 0, 0, 0]);
 });

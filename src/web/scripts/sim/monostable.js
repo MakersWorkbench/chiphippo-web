@@ -465,11 +465,17 @@ function step4047(state, ins, prev, env) {
   const a = env?.timing?.sections?.[0];
   const now = env?.now ?? 0;
   if (a?.mode !== "multivibrator") return IDLE_4047;
-  const reset = ins.get(P4047.RESET);
   const astable = or(ins.get(P4047.ASTABLE), inv(ins.get(P4047.ASTABLE_N)));
-  if (astable === X || reset === X) {
+  if (astable === X) {
     return { mode: "unknown", q: X, osc: X, wake: null };
   }
+  // A floating EXTERNAL RESET may or may not be holding Q LOW. The part runs
+  // on as though it were not (the one way it can still be HIGH), and Q reads
+  // X wherever that and a reset disagree — until a clean RESET HIGH, or a
+  // pulse that ends either way. Forgetting it, as the "unknown" mode did,
+  // put Q LOW mid-pulse the moment RESET was tied LOW again.
+  const resetX = ins.get(P4047.RESET) === X;
+  const reset = resetX ? L : ins.get(P4047.RESET);
   const rc = a.r * a.c;
 
   if (astable === H) {
@@ -485,7 +491,8 @@ function step4047(state, ins, prev, env) {
     }
     const { index, next } = scheduleAt(schedule, t0, now);
     const osc = index % 2 === 0 ? H : L;
-    const q = reset === H ? L : Math.floor(index / 2) % 2 === 0 ? H : L;
+    const run = Math.floor(index / 2) % 2 === 0 ? H : L;
+    const q = reset === H ? L : resetX && run === H ? X : run;
     return { mode: "astable", t0, rc, q, osc, wake: next };
   }
 
@@ -496,6 +503,13 @@ function step4047(state, ins, prev, env) {
   const later = { high: CD4047.t1 * rc * scale, low: CD4047.t2 * rc * scale };
   const idle = { mode: "mono", pulse: null, q: L, osc: L, wake: null };
   if (reset === H) return idle;
+  // A pulse a floating RESET may have ended: HIGH in one reading, LOW in the
+  // other, for as long as it runs.
+  const doubt = resetX || (state?.mode === "mono" && state.doubt === true);
+  const pulsing = (out) =>
+    doubt && out.q === H
+      ? { ...out, q: X, osc: out.osc === H ? X : out.osc, doubt: true }
+      : out;
   const trig = and(ins.get(P4047.TRIG_P), inv(ins.get(P4047.TRIG_N)));
   const was = prev
     ? and(prev.get(P4047.TRIG_P), inv(prev.get(P4047.TRIG_N)))
@@ -528,13 +542,13 @@ function step4047(state, ins, prev, env) {
   // LOW for the rest (t2).
   const oscFall = pulse.start + (pulse.first ? first.high : later.high);
   const osc = now < oscFall - EPS ? H : L;
-  return {
+  return pulsing({
     mode: "mono",
     pulse,
     q: H,
     osc,
     wake: earliest(oscFall > now + EPS ? oscFall : null, pulse.ends),
-  };
+  });
 }
 
 /** The CD4047B's `logic` block. */

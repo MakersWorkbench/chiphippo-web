@@ -198,6 +198,18 @@ DOM-free throughout, so `tests/hdl.test.js` exercises it under `node --test`.
 - **One clock per module**: every edge block shares one clock input; any other edge
   signal must be an asynchronous control tested in the block's LEADING `if` chain (the
   synthesis convention) — otherwise `clockAmbiguous` / `multipleClocks`.
+- **Time zero** (2026-10-14): a chip's first sample (`prev` null) is IEEE's time zero,
+  every input x a moment before — so an asynchronous control already at its active level
+  FIRES its block there (x→0 is a negedge), and a reset held from Run applies at once, as a
+  built-in part's CLR does (`firedBlocks`). The block's `clock` never fires there: no part
+  latches on its first sample.
+- **A comb reg the run did not write is x — in the engine AND the debugger** (2026-10-14).
+  The engine starts every comb reg at x each evaluation (`#fresh`); a traced run starts
+  from the values last seen, so `runComb` records the bits each traced run writes
+  (`ctx.written`) and makes the rest of the block's targets x. The one way to reach it
+  past the latch check is a FULL case with no default meeting an x subject: it matches
+  nothing and drives x — not IEEE's held value, which a chip with no memory of its comb
+  regs cannot have — and the watch shows the x the pins drive.
 - **The module header is GENERATED** (`header.js` `moduleHeader`), never typed: the user
   edits only the body, so the code's pins cannot drift from the package. An output an
   `always` block drives is declared `output reg`; an inout is always `inout wire`. The module name is the part number made

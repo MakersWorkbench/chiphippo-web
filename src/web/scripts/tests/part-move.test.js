@@ -27,9 +27,11 @@ import {
   partNodeKeys,
   partsRidingPart,
   planPartMove,
+  ridePointShift,
   wiresRidingPart,
 } from "../model/part-move.js";
 import { DeskDoc } from "../model/desk-doc.js";
+import { partPinAddresses } from "../model/occupancy.js";
 import { buildNetlist } from "../sim/netlist.js";
 
 const FULL = { id: "bb1", type: "pins-full", x: 0, y: 0 };
@@ -715,4 +717,43 @@ test("a PLAIN move of the same chip rewires it — what this feature is for", ()
   // circuit quietly computing something else, which is the whole motivation.
   assert.deepEqual(before["bb1.a40"], [1]);
   assert.deepEqual(after["bb1.a40"], [3]);
+});
+
+test("a part whose OTHER lead already floats still rides a moved chip — floating is no new refusal", () => {
+  const doc = new DeskDoc(null);
+  doc.addKit("full", 0, 0); // bb1 rail · bb2 pins · bb3 rail
+  const chip = doc.addComponent({ kind: "chip", ref: "74LS00", board: "bb2", anchor: "e10" }); // prettier-ignore
+  const r = doc.addComponent({ kind: "discrete", ref: "resistor", board: "bb2", anchor: "a10" }); // prettier-ignore
+  doc.movePartEnds(r.id, "bb2", "a10", { dx: 1, dy: 3.76 }); // into the rail…
+  doc.removeBoard("bb3"); // …which is taken away: that lead floats
+  assert.equal(partPinAddresses(doc, doc.getComponent(r.id))[1].address, null);
+  const plan = doc.planPartMove(chip.id, {
+    board: "bb2",
+    anchor: "e20",
+    riding: doc.wiresRidingPart(chip.id),
+    ridingParts: doc.partsRidingPart(chip.id),
+  });
+  doc.moveComponentWithWires(chip.id, "bb2", "e20", plan);
+  const pins = partPinAddresses(doc, doc.getComponent(r.id));
+  assert.equal(pins[0].address, "bb2.a20", "its seated lead rode");
+  assert.equal(pins[1].address, null, "the other floats on where it was");
+  // A lead put INTO mid-air is still refused, as ever.
+  assert.equal(
+    doc.canPlacePart("resistor", "bb2", "a40", { params: { rot: 90, end: { dx: 0, dy: 9 } } }), // prettier-ignore
+    false,
+  );
+});
+
+test("ridePointShift: two ends carried by the same delta agree, however the floats round", () => {
+  // Rows are measured, so the same carry read off rows j and i of boards at
+  // these heights differs in the last bit (70.55 against 70.55000000000001).
+  const boards = [
+    { id: "bb1", type: "pins-full", x: 0, y: 30.17, rot: 0 },
+    { id: "bb2", type: "pins-full", x: 0, y: 100.72, rot: 0 },
+  ];
+  const wire = { from: "bb1.j5", to: "bb1.i9", layout: "routed", points: [{ x: 7, y: 20 }] }; // prettier-ignore
+  assert.deepEqual(
+    ridePointShift(boards, wire, { from: "bb2.j5", to: "bb2.i9" }, true),
+    { dx: 0, dy: 70.55 },
+  );
 });

@@ -1056,7 +1056,10 @@ function beginNextOp(committed, base, nmiPending, ctl, irqMask) {
       addr: bus.pending.addr,
       rw: bus.pending.rw,
       dout: bus.pending.dout,
-      sync: cur === "instr",
+      // An interrupt's first cycle is the opcode fetch it abandons — a read
+      // of PC with SYNC high like any other, so a SYNC + RDY single-stepper
+      // or an analyzer sees it; the monitor tells it apart by `cur`.
+      sync: true,
     };
   }
   throw new Error("W65C02: op produced no bus access");

@@ -166,6 +166,9 @@ contextBridge.exposeInMainWorld("chiphippo", {
   // versions). Distinct from getVersion() — the About panel wants the fuller
   // picture (Electron / Chromium / Node / platform).
   getAppInfo: () => ipcRenderer.invoke("app:info:get"),
+  // Open the voluntary donation page in the OS browser (main owns the URL;
+  // the About card shows the link only where `getAppInfo().donate` says so).
+  openDonatePage: () => ipcRenderer.invoke("app:donate"),
 
   // The answer to `chiphippo:confirm-close`: true to let the window go, false
   // to stay open. Main waits for this indefinitely — it is a user decision —

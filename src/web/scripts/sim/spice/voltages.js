@@ -536,7 +536,7 @@ export function voltageTopology(doc, netlist, ctx) {
   // names (`sense`, `drives`), whatever their roles; a comparator whose trip
   // point is another net's voltage is read again when that net moves
   // (`senseRefs`).
-  const readers = new Map(); // net → [{comp, pin}]
+  const readers = new Map(); // net → [{comp, pin, at}]
   const drivers = new Map(); // net → [{comp, pin, at}]
   const senseRefs = new Map(); // a comparator's reference net → its own nets
   const push = (map, net, entry) => {
@@ -560,7 +560,7 @@ export function voltageTopology(doc, netlist, ctx) {
         sense?.[p.n]
       ) {
         // prettier-ignore
-        push(readers, net, { comp: c.comp.id, pin: p.n });
+        push(readers, net, { comp: c.comp.id, pin: p.n, at: at?.get(p.n) ?? null });
       }
       if (
         ((DRIVES.has(p.role) && !c.analogSwitch) || drives?.includes(p.n)) &&
@@ -629,7 +629,21 @@ export function voltageTopology(doc, netlist, ctx) {
     for (const net of cl.nets) if (readers.has(net)) watch.push(net);
   }
 
-  const topo = { rails, clusters, clusterOf, order, rank, channels, devices, gates, gateUsers, railBranches, railDevices, railDrivers, railReaders, readers, drivers, senseRefs, sources, clockPsu, offRail, sup, watch, coils, railCoils }; // prettier-ignore
+  // Every discrete transistor's control is read off the solve
+  // (`selfControl`) — whether the device conducts there — never at its
+  // net's digital level. Read that way a transistor that feeds its own base
+  // (diode-connected, a mirror's reference, the second of a Darlington of
+  // two) switched itself on and off every pass, its channel joining its base
+  // to its emitter's LOW; and a flip-flop of two switched each other the
+  // same way (2026-10-14). A desk whose voltages agree with its levels reads
+  // the same either way: engine-parity holds.
+  const selfControlled = new Map(); // comp → its device
+  for (const d of devices) {
+    if (d.key !== d.comp || d.array || d.outPin != null) continue;
+    selfControlled.set(d.comp, d);
+  }
+
+  const topo = { rails, clusters, clusterOf, order, rank, channels, devices, gates, gateUsers, railBranches, railDevices, railDrivers, railReaders, readers, drivers, senseRefs, sources, clockPsu, offRail, sup, watch, coils, railCoils, selfControlled }; // prettier-ignore
   TOPOLOGY.set(netlist, topo);
   return topo;
 }
@@ -754,7 +768,7 @@ const LINEARIZE_I = 1e-12;
  * what it last drove (else the load that pulled the supply down would vanish
  * with it, and the supply flicker back).
  */
-function makePlan(ctx, config, sup, atSet, offRail = EMPTY) {
+function makePlan(ctx, config, sup, atSet, offRail = EMPTY, clockPsu = EMPTY) {
   const setOf = new Map(); // + net → the highest supply SET on it
   if (atSet) {
     for (const p of sup.psus) {
@@ -887,6 +901,16 @@ function makePlan(ctx, config, sup, atSet, offRail = EMPTY) {
   let lowestSet = null;
   for (const psu of sup.psus) {
     if (psu.plus && psu.set > 0 && (lowestSet == null || psu.set < lowestSet)) lowestSet = psu.set; // prettier-ignore
+  }
+  // At SET, a clock brick's HIGH is its supply's SET too: what it delivers
+  // droops with what the clock itself sources, and booking that at the
+  // drooped HIGH flipped a limited supply between two answers every tick
+  // (1.73 V and 5 V, a clock into an LED on a 10 mA PSU).
+  if (atSet) {
+    for (const [net, { psu }] of clockPsu) {
+      const plus = sup.psus.find((x) => x.id === psu)?.plus;
+      if (sourceHigh.get(net) != null && setOf.has(plus)) sourceHigh.set(net, setOf.get(plus)); // prettier-ignore
+    }
   }
   for (const [net, v] of sourceHigh) {
     if (v == null && lowestSet != null) sourceHigh.set(net, lowestSet);
@@ -1393,7 +1417,7 @@ export function createVoltages({
           // clamp diode draw from its supply pin, the lower clamp from its
           // ground.
           const feed = st.clamp === Boolean(st.sources) ? gndNode : vccNode;
-          branches.push({ kind: "s", key: `${comp}#${r.pin}#in`, comp, out: nodeOf(r.net), ref: gndNode, feed, stage: st, offset: st.volts }); // prettier-ignore
+          branches.push({ kind: "s", key: `${comp}#${r.pin}#in`, comp, out: nodeOf(r.net), ref: gndNode, feed, stage: st, offset: st.volts, outAt: r.at, feedAt: feed === vccNode ? chip.vccAt : chip.gndAt }); // prettier-ignore
         }
       }
     }
@@ -2020,9 +2044,39 @@ export function createVoltages({
     own.shown().set(net, level);
   }
 
+  /** The level a discrete transistor's base or gate reads (`selfControl`):
+      its on-level while the solve has it conducting, the other while it has
+      it off — or null where a net of it has no voltage. */
+  function selfLevel(dev) {
+    let known = true;
+    const vAt = (net) => {
+      const v = voltOfNet(net);
+      if (v == null) known = false;
+      return v ?? 0;
+    };
+    const on = deviceConducts(dev, vAt);
+    if (!known) return null;
+    const onLevel = (dev.kind === "q" ? dev.pnp : dev.p) ? L : H;
+    return on ? onLevel : onLevel === H ? L : H;
+  }
+
   /** Solve every cluster something moved in (all, after a change of power);
       returns the nets solved, each re-read. */
   function solveDirty() {
+    // A self-controlled transistor whose reading the solve turns is read
+    // again, as an input whose reading changed is.
+    const selfWas = new Map();
+    for (const [comp, dev] of topo.selfControlled) selfWas.set(comp, selfLevel(dev)); // prettier-ignore
+    const nets = solveDirtyClusters();
+    for (const [comp, dev] of topo.selfControlled) {
+      if (selfLevel(dev) === selfWas.get(comp)) continue;
+      reread.add(comp);
+      moved = true;
+    }
+    return nets;
+  }
+
+  function solveDirtyClusters() {
     const nets = [];
     // Solving every cluster is the first of the gate rounds below, as a
     // carried solve's first round is the clusters it carries in (`dirty`) —
@@ -2246,6 +2300,15 @@ export function createVoltages({
       // its own network's flows (`flows`), where that ground has a voltage.
       if (chip.off && !vNet) continue;
       const v = chip.off ? at - vNet(chip.off.gndNet) : at;
+      // The current its own stages carry through the pin (an off-rail chip's
+      // are "s" branches, `stageBranchFlow`): a 74LS input's bias out of it,
+      // a CMOS input's clamp — what the probe reads there. Its draw is
+      // inside its chip's ICC, and booked as none.
+      if (!chip.off && r.at && p === plan) {
+        let into = 0;
+        for (const st of chip.inputsFor(r.pin)) into += stageCurrent(st, v);
+        if (into) entry.leads.push([r.at, -into]);
+      }
       if (chip.family === "74LS") {
         if (v > TTL_INPUT_MAX_V) entry.stress.push({ comp: r.comp, pin: r.pin, volts: v, family: "74LS" }); // prettier-ignore
         continue;
@@ -2400,9 +2463,17 @@ export function createVoltages({
         stageBranchFlow(entry, br, vAt, nodePsu, nodeMinus, p);
         continue;
       }
-      if (!nw.held.has(br.a) && !nw.held.has(br.b)) continue;
+      // A branch between two UNHELD nets (reached through junctions alone):
+      // their voltages are the solve's own — noise, on a net nothing holds —
+      // unless the cluster balanced and a real current runs through it. The
+      // middle LED of a series string, a resistor between two: dropped
+      // here, it read dark with its neighbours lit at 18 mA, and was never
+      // judged for overdrive or burning.
+      const unheld = !nw.held.has(br.a) && !nw.held.has(br.b);
+      if (unheld && !nw.balanced) continue;
       const vd = vAt(br.a) - vAt(br.b);
       const amps = br.kind === "r" ? vd / br.ohms : br.kind === "l" ? br.amps : junctionCurrent(br, vd); // prettier-ignore
+      if (unheld && !(Math.abs(amps) > BOOK_FLOOR_A)) continue;
       if (br.kind === "j") entry.junctions.push([br.key, amps, vd]);
       if (br.channel) entry.switches.push([br.comp, br.channel, Math.abs(amps), p.chips.get(br.comp)?.c.def.contacts?.limits]); // prettier-ignore
       if (br.aAt) entry.leads.push([br.aAt, amps]);
@@ -2454,9 +2525,11 @@ export function createVoltages({
       is on a rail; and an output's own load against its family's limits. */
   function stageBranchFlow(entry, br, vAt, nodePsu, nodeMinus, p) {
     const [[, amps]] = deviceCurrents(br, vAt); // into the output's net
-    if (!br.d) return; // an input's own stage: inside its chip's ICC
     if (br.outAt) entry.leads.push([br.outAt, -amps]);
     if (br.feedAt) entry.leads.push([br.feedAt, amps]);
+    // An input's own stage: through its pin and its supply pin, as the probe
+    // reads them — its draw inside its chip's ICC.
+    if (!br.d) return;
     if (amps > BOOK_FLOOR_A && nodePsu.has(br.feed)) entry.sources.push({ psu: nodePsu.get(br.feed), amps, plusAt: br.feedAt }); // prettier-ignore
     if (amps < -BOOK_FLOOR_A && nodeMinus.has(br.feed)) entry.returns.push({ amps: -amps, minusAt: br.feedAt }); // prettier-ignore
     const limits = p.chips.get(br.comp)?.limitsFor(br.d.pin) ?? null;
@@ -2642,7 +2715,7 @@ export function createVoltages({
   function report({ atSet = false } = {}) {
     if (!topo) return { junctions: new Map(), currents: new Map(), draws: [], outputs: [], stress: [], transistors: new Map(), switches: [], devices: [], brownouts: [], analog: new Map() }; // prettier-ignore
     if (atSet) {
-      const p = makePlan(ctxNow, config, topo.sup, true, topo.offRail);
+      const p = makePlan(ctxNow, config, topo.sup, true, topo.offRail, topo.clockPsu); // prettier-ignore
       const every = p.signature !== setSignature;
       setSignature = p.signature;
       const draws = [];
@@ -2754,6 +2827,13 @@ export function createVoltages({
         nothing. */
     reading(comp, pin, net) {
       return readings.get(net)?.get(readerKey(comp, pin)) ?? null;
+    },
+    /** What a discrete transistor's base or gate reads — whether the solve
+        has it conducting (`selfControlled`) — or null: any other part, or
+        none of its nets with a voltage yet. */
+    selfControl(comp) {
+      const dev = topo?.selfControlled.get(comp);
+      return dev ? selfLevel(dev) : null;
     },
     /** The reader pins spice/engine.js reads itself (`owned`), by their keys:
         their nets' readings here leave them out. */

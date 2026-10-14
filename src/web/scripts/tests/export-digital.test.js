@@ -483,3 +483,33 @@ test("a chip no supply reaches is REPORTED unpowered — Digital would run it", 
   assert.equal(entry.kind, "changed");
   assert.equal(entry.ref, "74LS00");
 });
+
+test("a 7-segment digit grounded through its pin-8 common is lit in Digital, not left open", () => {
+  // seg7cc at d20 (wide): pin 8, a COM, is h22 — wired to the − rail by its
+  // column (f–j node), pin 3 left bare. The commons are one inside the part,
+  // and the export reads the wiring alone.
+  let n = 0;
+  const wire = (from, to) => ({ id: `w${++n}`, from, to, color: "black" });
+  const doc = {
+    boards: [
+      { id: "bb1", type: "pins-full", x: 0, y: 3.5 },
+      { id: "bb2", type: "rail-full", x: 0, y: 0 },
+      { id: "bb3", type: "rail-full", x: 0, y: 17.52 },
+    ],
+    components: [
+      { id: "psu1", kind: "psu", ref: "psu", x: 80, y: 0, params: { volts: 5 } }, // prettier-ignore
+      { id: "c1", kind: "discrete", ref: "seg7cc", board: "bb1", anchor: "d20", params: { color: "red", wide: true } }, // prettier-ignore
+    ],
+    wires: [
+      wire("psu1.+", "bb2.+1"),
+      wire("psu1.-", "bb3.-1"),
+      wire("bb1.j22", "bb3.-5"), // pin 8 (COM)
+      wire("bb1.i23", "bb2.+5"), // pin 7 (a)
+    ],
+  };
+  const circuit = parse(exportOf(doc).files[0].text);
+  const reach = tunnelAt(circuit);
+  const seg = circuit.elements.find((el) => el.name === "Seven-Seg");
+  assert.equal(seg.attr("Label").textContent, "DS1");
+  assert.equal(reach(seg.x + 4 * SIZE, seg.y + 7 * SIZE), "GND");
+});

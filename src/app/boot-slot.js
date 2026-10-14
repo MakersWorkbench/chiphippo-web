@@ -49,4 +49,36 @@ function keepUnreadSlot(store, notes, err) {
   }
 }
 
-module.exports = { keepUnreadSlot };
+/**
+ * Run the boot, and if it THROWS part-way, answer with a new project rather
+ * than an error — never at the cost of the slot. The renderer meets a failed
+ * boot with `project:new`, which takes the slot over, and the slot may hold
+ * work the boot never got as far as showing (a recovery it had just read, when
+ * a bookmark write after it failed). So the slot is kept exactly as an unread
+ * one is (`keepUnreadSlot`: moved aside, or held, and said); the new project
+ * is then written to the slot set free, or — held — nowhere.
+ *
+ * @param {object} store - the ProjectStore.
+ * @param {() => object} boot - the boot proper (main.js `bootProject`).
+ * @returns {object} the project to open.
+ */
+function bootKeepingSlot(store, boot) {
+  try {
+    return boot();
+  } catch (err) {
+    const notes = [];
+    let there = false;
+    try {
+      there = store.hasDefaultProject();
+    } catch {
+      there = true; // could not even ask: treat it as there, and keep it
+    }
+    if (there) keepUnreadSlot(store, notes, err);
+    else console.error("[main] project:boot failed:", err && err.message);
+    const meta = store.newProject();
+    if (notes.length) meta.warnings = notes;
+    return meta;
+  }
+}
+
+module.exports = { keepUnreadSlot, bootKeepingSlot };

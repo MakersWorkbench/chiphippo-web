@@ -94,6 +94,19 @@ maker). The one matrix is a small Newton solve per CLUSTER of nets (below).
     the set-volts plan signature holds) — used while something droops, sags or is
     underpowered, i.e. every tick on any desk whose wires drop over 1 mV. A report
     entry's junction/output/draw objects are built once per entry (`shareOf`).
+    At SET a clock brick's HIGH is its supply's SET too (`makePlan`'s `clockPsu`): booked
+    at the drooped HIGH, a clock into an LED on a 10 mA supply flipped it between 1.73 V
+    and 5 V every tick. Fixed 2026-10-14 in the report: a branch between two UNHELD nets
+    (reached through junctions alone — the middle LED of a series string, a resistor
+    between two) is reported where its cluster balanced and it carries more than
+    `BOOK_FLOOR_A` (it read dark beside its lit neighbours, never judged for overdrive or
+    burning); an input pin's lead carries its own stages' current (a 74LS input's bias,
+    a CMOS clamp; an off-rail chip's input "s" branch books its pin AND its supply pin) —
+    still no draw, inside ICC; a display's bridged commons (`internalBridges`, the
+    7-segment's 3 and 8) book their segments' current on whichever the BUILD wired
+    (`lamps.js` `commonLeads` — a board node holding anything else), not always pin 3;
+    and a chip's supply-wire drop (`sag.js`) sums each wire ONCE over all its draws (its
+    ICC and its CMOS band draws counted each wire's whole current once per draw).
   - Transistors (`spice/network.js` `deviceCurrents`, numeric slopes) are each their
     GRADE's part (`spice/transistors.js`, 2026-10-08, plan Phase 4; the catalog's
     `TRANSISTOR_GRADES` + `transistorGrade`, a `spiceOnly` select whose default follows
@@ -132,7 +145,28 @@ maker). The one matrix is a small Newton solve per CLUSTER of nets (below).
     when floating (`settleNet`, `gates`) — `held`. Discrete ones report
     `transistors` (`{on, held, amps}`), which SimController's `#shownChannels` puts in
     place of the digital `channels` it publishes (the result's own `channels` stay
-    digital — parity). The CD4007UB's six are `"m"` devices.
+    digital — parity). The CD4007UB's six are `"m"` devices. EVERY discrete one (`topo.
+    selfControlled`, 2026-10-14) has its base or gate answered by the `input` hook from
+    whether the solve has it conducting (`volt.selfControl`; re-read when a solve turns
+    it, as a reading is), never at its net's digital level: read there, one feeding its
+    own base (diode-connected, a mirror's reference, the second of a Darlington of two
+    discretes) turned itself off by turning on, and a flip-flop of two switched each other,
+    every pass to the iteration cap — X and `oscillation` every tick. A desk whose voltages
+    agree with its levels reads the same either way (engine-parity holds). **A balance
+    the nets would fall OFF** (`newtonSolve` → `unstable`/`fallOff`, spice/network.js):
+    Newton finds a balance, not a stable one, and a symmetric flip-flop from a symmetric
+    guess lands on its knife-edge (both transistors half on, both collectors at a volt,
+    both read LOW). In a network with two or more transistors a balanced solve checks the
+    Jacobian's determinant sign — with a unit capacitance per net a stable balance has the
+    sign (−1)ⁿ, the other sign is an odd number of runaway modes — and falls off along the
+    runaway mode (`runawayMode`: backward Euler's step `g(gI − J)⁻¹` squared forty times),
+    by backward-Euler steps kept short while they run away and lengthened once clear, then
+    Newton from where they rest. Nudged first-net-DOWN (then up), the first net in
+    `ctx.netIds` order, as the logic engine's tie-break counts — so a cold flip-flop comes
+    up the same way in both engines. Kept only if it lands on a stable balance. The
+    memo of a BJT's answers (`bjtCurrents`) is bounded by ANSWERS (4096 a model), not by
+    VBE: one held off at one VBE with its collector on a capacitor's curve grew one VBE's
+    map 0.8 MB a simulated second.
   - Chip power: a chip NOT straight across the rails (`railFed` false) gets its status
     from the new `chipVolts` hook — V(VCC) − V(GND) from the last solve (`fedStatus`); the
     resettle loop runs again when that moved. Rail-fed chips are the digital rule exactly.
@@ -239,7 +273,9 @@ maker). The one matrix is a small Newton solve per CLUSTER of nets (below).
   delay edited absurdly short cannot turn a tick into minutes. **Per island**
   (2026-10-09, `features/13-per-island-quantum.md`): "the desk" is the islands the tick
   is FOR (`pace()` in spice/engine.js, over `analyze`'s `delays`) — a CD4000 island
-  ticked on its own runs at 125 ns with holds of 1, not cut into a 74LS board's 10 ns.
+  ticked on its own runs at 125 ns with holds of 1, not cut into a 74LS board's 10 ns
+  (and a chip driving straight through at a hold of 1 keeps NO commitment — `holdOutputs`
+  deletes it — or the next co-tick's hold drove a stale map for its count, 2026-10-14).
   An island whose chips have no gate delay (a lone 555) counts at the 74LS fallback
   (`quantumOf`'s `bare`), as it would alone — leaving it out let a co-tick with a
   CD4000 island run the 555 at 125 ns. Holds are in the TICK's quantum, so a chip's
@@ -311,9 +347,25 @@ maker). The one matrix is a small Newton solve per CLUSTER of nets (below).
     (`tEnd`: `piecesAt` — every net carried along the solve's affine map — sampled over
     the time constants and bisected); `rc-curve.js` reads both kinds (`isCoupled`,
     `heading(curve, t)` — at a corner, the way it was going), `firstCrossing` samples
-    them (`sampleTimes`, `searchEnd`). A common mode is balanced on the TRUE networks
+    them (`sampleTimes`, `searchEnd`) — a ringing one (`scale.osc`) every eighth of a
+    period for its first `RING_PERIODS` 50, and `firstRoot` looks at the crest between
+    three samples that rise and fall short of the level (the parabola through them):
+    a grid a radian or two apart missed one crossing in six near a Q-50 ring's crest
+    (2026-10-14). A common mode is balanced on the TRUE networks
     first (`balance`: bracketed then Illinois on `volt.currentsAt`) — balanced on a
-    linear piece it jumped past a clamp or a saturating stage and back, forever. Nodes
+    linear piece it jumped past a clamp or a saturating stage and back, forever. Two or
+    more modes are balanced TOGETHER first (`balanceTogether`, 2026-10-14: Newton on the
+    modes' residuals, slopes read `BALANCE_SLOPE_V` apart, steps halved until they gain),
+    the one-at-a-time sweeps only where that fails: a two-transistor FLASHER's two
+    capacitors are two modes coupled through both transistors, and swept in turn the
+    bracket jumped to the far root (a flip every 1.5 ms) or the linear model's algebraic
+    modes extrapolated (a base at −43 V, flips every 30 ms). A joint balance the plates
+    would fall OFF — the flasher powered up even, both transistors half on, which stood
+    0.2 s and flipped wherever the ticks' noise tipped it — is moved onto a stable one by
+    `fallOffBalance` (spice/network.js, `fallOff`'s fall for a residual over the mode
+    coordinates), first coordinate down, so it comes up the same way at every tick rate:
+    first flip at 55 ms (an empty capacitor), then ln 2 · RC (0.33 s) a half, −4.2…5 V.
+    Nodes
     not yet seen start TOGETHER (`chargedNets`, one charge system): one at a time, a plate
     started where its partner's network held it, capacitor open. One free node in a group
     is still a single curve (`curveFrom`), exact because the rest of its group is held.
@@ -828,12 +880,19 @@ tiedLow)`: `supplyMaOf` hands a silicon block a `tiedLow(pin)` read off the wiri
   element — the param is `impedance`, not `ohms`, because `properties.field.ohms` reads
   "Resistance"). Inductance left out. `noteReadouts` (every settle and replayed
   segment) samples `voltsAt(a) − voltsAt(b)` per speaker into `analog.tones` with the
-  readout's drawn-cycle `scale`; HIGH/LOW past the middle of the swing ± `TONE_BAND`
+  readout's drawn-cycle `scale` — and `noteSpeakersBetween` (2026-10-14) samples it
+  BETWEEN settles too, along the curves its nodes ran on since the last one (`ranFrom`,
+  kept as that settle left them; the last tick's at first): every eighth of the fastest
+  ringing, ≥ `SPEAKER_SAMPLES` 16, ≤ 256 — read at settles alone a sine through a
+  coupling capacitor was read at its clock's edges, its slope's zeros, and played nothing
+  at 440 Hz; HIGH/LOW past the middle of the swing ± `TONE_BAND`
   (20 %), the swing = last whole cycle's extremes (widened as it goes; re-measured from
   scratch once `STALE_PERIODS` pass with no rise, so a quieter tone is heard again).
   Sampling at settles catches every driver edge, even where an RC node's jump lands
   after the settle (the alternation is what counts). `clearMarks` clears tones with the
-  island's marks. Result `tones`: id → `{hz, vpp, watts = (vpp/2)²/Z, volume}`; an
+  island's marks — only the speakers ON that island (2026-10-14: one on a logic island of
+  its own fell silent for two periods whenever another island's cycle started or ended);
+  on a desk of one analog island it still clears every tone, as it clears every mark. Result `tones`: id → `{hz, vpp, watts = (vpp/2)²/Z, volume}`; an
   out-of-scope island's speaker carries `analog.sounding` from its last tick.
   SimController publishes `tones` only while RUNNING (not stalled/deciding);
   `app.js`'s `SpeakerAudio` plays a square OscillatorNode per speaker at hz × the

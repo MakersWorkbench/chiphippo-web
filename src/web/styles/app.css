@@ -306,6 +306,72 @@
 /* ── Main row: palette beside the desk ───────────────────────────────────── */
 /* The parts tray (or, shut, the rail it shuts down to) then the desk column —
    both layout columns, so nothing floats over the desk's left edge. */
+/* ── What's-new banner (components/notice-banner.js) ─────────────────────── */
+/* A bar IN FLOW between the toolbar and the main row, so it covers nothing —
+   the desk, tray and tabs simply start below it, and get the room back when
+   its ✕ is clicked. Info-blue edge, as an info toast has. */
+.notice-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  background: var(--color-surface-0);
+  border-bottom: 1px solid var(--color-crust);
+  border-left: 4px solid var(--color-info);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.notice-banner-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notice-banner-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size);
+  font-weight: 600;
+}
+
+/* The lines flow into as many columns as the window has room for — never
+   more than three (each at least 30 % wide), so six lines make two even rows
+   on a desktop-sized window rather than a ragged four and two. */
+.notice-banner-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(max(22em, 30%), 1fr));
+  gap: 2px var(--space-4);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+/* Each line's bullet hangs outside it, so it needs room of its own — or a
+   column's bullet sits flush against the line to its left. */
+.notice-banner-list li {
+  margin-left: var(--space-3);
+}
+
+.notice-banner-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  /* One line of text plus constant chrome, like the zoom cluster's buttons. */
+  width: calc(var(--font-size) + 11px);
+  height: calc(var(--font-size) + 11px);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-size: var(--font-size);
+  cursor: pointer;
+}
+
+.notice-banner-close:hover {
+  background: var(--color-surface-1);
+  color: var(--color-text);
+}
+
 .app-main {
   position: relative;
   display: flex;
@@ -968,6 +1034,12 @@
   cursor: default !important;
 }
 
+/* …until an Option/Alt drag that picked no lead pans the desk. */
+.desk-viewport--pin-mode.desk-viewport--panning,
+.desk-viewport--pin-mode.desk-viewport--panning * {
+  cursor: grabbing !important;
+}
+
 /* Something grabbed and being moved: a board, part, brick, annotation, signal
    flag or Output/Input tag (`--dragging`), or a wire or bus end
    (`--wire-dragging`) — the closed hand, as a pan shows. It is forced on every
@@ -1462,12 +1534,9 @@
 
 /* A part spanning a rail and a far row covers a tall, mostly-empty box, so only
    its lead takes the pointer — every hole under the box stays clickable. The
-   widened invisible hit stroke mirrors .wire-hit. */
-.part-discrete--resistor,
-.part-discrete--led,
-.part-discrete--diode,
-.part-discrete--zener,
-.part-discrete--inductor {
+   widened invisible hit stroke mirrors .wire-hit. Every two-lead (rotatable)
+   part draws as a span, so the view's own --span class says which. */
+.part-discrete--span {
   pointer-events: none;
 }
 
@@ -1630,25 +1699,10 @@
    pointer — every hole under the row stays clickable. A transparent hit rect
    over the block reports the drag/select (same trick as .part-span-hit). A
    DIP switch bank instead layers several .part-display-hit rects (one per
-   switch position, one for the body) so each actuator addresses itself. */
-.part-discrete--seg8cc,
-.part-discrete--bar8,
-.part-discrete--bar8iso,
-.part-discrete--rnet9,
-.part-discrete--pot,
-.part-discrete--npn,
-.part-discrete--pnp,
-.part-discrete--nmos,
-.part-discrete--pmos,
-.part-discrete--osc-full,
-.part-discrete--osc-half,
-.part-discrete--sw-dip1,
-.part-discrete--sw-dip2,
-.part-discrete--sw-dip4,
-.part-discrete--sw-dip8,
-.part-discrete--lcd16x2,
-.part-discrete--lcd20x4,
-.part-discrete--speaker {
+   switch position, one for the body) so each actuator addresses itself.
+   DiscreteView sets --body-hit on every drawing that HAS one: a hand-kept list
+   of refs fell behind (the 7-segments, the regulators, the relay). */
+.part-discrete--body-hit {
   pointer-events: none;
 }
 
@@ -3511,25 +3565,66 @@ textarea.annotation-editor {
   color: var(--color-subtext);
 }
 
-/* The support line. `--space-1` of gap rather than a space in the catalog
-   string, so a translation cannot lose the separator between the label and the
+/* The footer's two lines — the credit with the copyright, the support address
+   with the sponsor link — each two items with a dot between them, wrapping
+   between items rather than inside one. Gaps rather than spaces in the catalog
+   strings, so a translation cannot lose the separator between a label and the
    address (and a language that ends its label with a full-width colon does not
    get a stray Latin space after it). */
+.about-credit,
 .about-support {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
-  gap: var(--space-1);
+  gap: var(--space-1) var(--space-2);
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-xs);
+}
+
+.about-credit {
+  color: var(--color-muted);
+}
+
+.about-support {
   /* The card sets `user-select: none`; the address is the one thing on it a
      user needs to be able to select and copy. */
   user-select: text;
 }
 
+.about-dot {
+  color: var(--color-muted);
+}
+
+.about-support-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
 .about-support-label {
   color: var(--color-subtext);
+}
+
+/* The voluntary sponsor link: a button (main opens the page) drawn as the link
+   beside it. */
+.about-donate {
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.about-donate:hover,
+.about-donate:focus-visible {
+  text-decoration: underline;
+}
+
+.about-donate-heart {
+  margin-right: var(--space-1);
 }
 
 .about-support-link {
@@ -3540,18 +3635,6 @@ textarea.annotation-editor {
 .about-support-link:hover,
 .about-support-link:focus-visible {
   text-decoration: underline;
-}
-
-.about-byline {
-  margin: var(--space-1) 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-
-.about-credit {
-  margin: var(--space-1) 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
 }
 
 .about-close {

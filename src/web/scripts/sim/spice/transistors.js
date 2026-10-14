@@ -307,17 +307,22 @@ function darlingtonAt(d, vbe, vce) {
  * @param {object} m - a BJT grade (`BJT_GRADES`)
  */
 export function bjtCurrents(m, vbe, vce) {
-  let byVbe = MEMO.get(m);
-  if (!byVbe) MEMO.set(m, (byVbe = new Map()));
-  let byVce = byVbe.get(vbe);
+  let memo = MEMO.get(m);
+  if (!memo) MEMO.set(m, (memo = { byVbe: new Map(), size: 0 }));
+  let byVce = memo.byVbe.get(vbe);
   const known = byVce?.get(vce);
   if (known) return known;
   const r = m.kind === "darlington" ? darlingtonAt(m, vbe, vce) : bjtAt(m, vbe, vce); // prettier-ignore
   const over = vce > m.vceoV ? (vce - m.vceoV) / BREAKDOWN_OHMS : 0;
   const out = Object.freeze({ ib: r.ib, ic: r.ic + over, tf: r.tf, over, r });
-  if (byVbe.size >= MEMO_SIZE) byVbe.clear();
-  if (!byVce) byVbe.set(vbe, (byVce = new Map()));
+  if (memo.size >= MEMO_SIZE) {
+    memo.byVbe.clear();
+    memo.size = 0;
+    byVce = undefined;
+  }
+  if (!byVce) memo.byVbe.set(vbe, (byVce = new Map()));
   byVce.set(vce, out);
+  memo.size++;
   return out;
 }
 
@@ -325,9 +330,12 @@ export function bjtCurrents(m, vbe, vce) {
     many times over — once for each terminal's current, again around each
     slope it reads — and a Darlington's answer is two nested solves, so a
     point answered once is answered from here. Pure, so any answer kept is
-    the one it would compute again. */
+    the one it would compute again. Bounded by its ANSWERS, not its VBEs: a
+    transistor held off at one VBE while its collector rode a capacitor's
+    curve asked a new VCE every pass, and grew one VBE's map without end —
+    0.8 MB a simulated second in the sim worker. */
 const MEMO = new WeakMap();
-const MEMO_SIZE = 512;
+const MEMO_SIZE = 4096;
 
 /** Which piece a bipolar transistor is on: its junctions' segments and
     whether it has broken down. */

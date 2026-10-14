@@ -505,6 +505,20 @@ test("normalizeDocument: a rotated part's BENT lead claims its hole too", () => 
   );
 });
 
+test("normalizeDocument: a part whose bend ends in its OWN anchor's hole is dropped", () => {
+  // 0.3 along is still a10's hole: both leads of one resistor in one hole,
+  // a part `canPlacePart` refuses, and loaded it was shorted across itself.
+  const raw = {
+    boards: [{ id: "bb1", type: "pins-full", x: 0, y: 0 }],
+    components: [
+      { id: "c1", kind: "discrete", ref: "resistor", board: "bb1", anchor: "a10", params: { rot: 90, end: { dx: 0.3, dy: 0 } } }, // prettier-ignore
+      { id: "c2", kind: "discrete", ref: "resistor", board: "bb1", anchor: "a20", params: { rot: 90, end: { dx: 3, dy: 0 } } }, // prettier-ignore
+    ],
+    wires: [],
+  };
+  assert.deepEqual(normalizeDocument(raw).components.map((c) => c.id), ["c2"]); // prettier-ignore
+});
+
 test("normalizeDocument: flush boards are NOT an overlap — that is a mating", () => {
   // The whole dovetail rule depends on strips touching edge-to-edge, so a
   // shared edge must never read as an intersection. A kit is three strips
@@ -1723,9 +1737,11 @@ test("rotateComponent: a swung lead reaches a NEIGHBOURING strip's rail", () => 
     anchor: "j5",
   });
   // So the CCW swing wins, and it takes the lead clean OFF this strip: (0, −3)
-  // from world (5, 1) is the rail strip's `-` hole 3.
+  // from row j reaches the rail strip's `-` hole 3 — and is stored as the
+  // vector to that hole's CENTRE, 3.26 up (the rail's rows are measured, not
+  // on the pin-board's lattice), so the lead is drawn in the hole it is in.
   const rotated = doc.rotateComponent("c2");
-  assert.deepEqual(rotated.params.end, { dx: 0, dy: -3 });
+  assert.deepEqual(rotated.params.end, { dx: 0, dy: -3.26 });
   assert.equal(rotated.board, "bb1"); // still seated on the pin-board
   assert.equal(doc.isHoleFree("bb1.j5"), false);
   assert.equal(doc.isHoleFree("bb2.-3"), false);
@@ -2798,6 +2814,12 @@ test("addSignal mints ids and cycling colours, and one past the cap is refused",
   assert.throws(() => doc.addSignal({}), { code: "SIGNALS_FULL" });
 });
 
+test("a new signal skips the colour an Output/Input card already wears", () => {
+  const doc = new DeskDoc(null);
+  const card = doc.addIntegration({ kind: "output" });
+  assert.notEqual(doc.addSignal({}).color, card.color);
+});
+
 test("a deleted signal's colour is the next one handed out", () => {
   const doc = new DeskDoc(null);
   doc.addSignal({});
@@ -2818,6 +2840,31 @@ test("updateSignal takes any signal colour — a shared one too — but never bl
   assert.throws(() => doc.updateSignal(b.id, { type: "sideways" }), {
     code: "INVALID_ARG",
   });
+});
+
+test("a refused patch changes nothing: a bus, a signal, a routed wire's bends", () => {
+  const doc = new DeskDoc(null);
+  doc.addBoard("pins-full", 0, 0);
+  const w = doc.addWire({ from: "bb1.a1", to: "bb1.a9" });
+  const bus = doc.addBus("D[0]", [w.id]);
+  assert.throws(() => doc.updateBus(bus.id, { name: "A[0:7]", color: "plaid" }), { code: "INVALID_ARG" }); // prettier-ignore
+  assert.equal(
+    doc.getBus(bus.id).name,
+    "D[0]",
+    "not renamed by a refused patch",
+  );
+  const sig = doc.addSignal({});
+  const before = doc.getSignal(sig.id);
+  const other = before.color === "red" ? "blue" : "red";
+  assert.throws(() => doc.updateSignal(sig.id, { color: other, type: "sideways" }), { code: "INVALID_ARG" }); // prettier-ignore
+  assert.deepEqual(doc.getSignal(sig.id), before, "not recoloured either");
+  doc.setWireLayout(w.id, "routed");
+  assert.throws(() => doc.addWirePoint(w.id, 5, { x: 1, y: 1 }), { code: "INVALID_ARG" }); // prettier-ignore
+  assert.equal(
+    "points" in doc.toJSON().wires[0],
+    false,
+    "no empty bend list left",
+  );
 });
 
 test("a flag plugs into a BOARD hole, and claims it like any other lead", () => {

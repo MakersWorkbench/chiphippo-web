@@ -35,7 +35,7 @@ const FULL = { id: "bb1", type: "pins-full", x: 0, y: 0 };
 const TINY = { id: "bb2", type: "pins-tiny", x: 100, y: 0 };
 const RAIL = { id: "bb3", type: "rail-full", x: 0, y: 13 };
 
-const at = (boards, ref, x, y, grab = 0) =>
+const at = (boards, ref, x, y, grab = null) =>
   partSeatAt(boards, ref, { x, y }, grab);
 
 test("a DIP centres on the cursor and anchors in row e", () => {
@@ -63,7 +63,7 @@ test("a chip can be asked to keep the width it is seated at", () => {
   // A rigid group move keeps a narrow-seated 600-mil chip narrow (row e) —
   // and a 300-mil part has no wide seat to be asked for.
   const keep = (ref, chipRow) =>
-    partSeatAt([FULL], ref, { x: 20, y: 6.5 }, 0, null, { chipRow });
+    partSeatAt([FULL], ref, { x: 20, y: 6.5 }, null, null, { chipRow });
   assert.equal(keep("HM62256", "e")?.anchor, "e14");
   assert.equal(keep("HM62256", "d")?.anchor, "d14");
   assert.equal(keep("74LS00", "d"), null);

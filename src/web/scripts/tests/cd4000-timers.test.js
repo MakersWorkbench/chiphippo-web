@@ -470,6 +470,63 @@ test("CD4060B counts an external clock on φI's falling edges", () => {
   assert.equal(sim.level("f16"), L, "φ̄O");
 });
 
+test("CD4060B: a count a floating RESET may have cleared stays unknown until a clean RESET", () => {
+  // As a CD4040's does. Tied LOW again after floating, the 4060 used to show
+  // a clean 0 — and a φI floating from power-up counted a clean 0 too. The
+  // part's own step, handed the X a floating CMOS input reads as.
+  const logic = chipDef("CD4060B").logic;
+  const ext = { sections: [{ mode: "external" }], problems: [] };
+  const pins = (phi, reset) => new Map([[11, phi], [12, reset]]); // prettier-ignore
+  let s = logic.state0();
+  for (let i = 0; i < 8; i++) {
+    s = logic.step(s, pins(H, L), pins(L, L), { timing: ext });
+    s = logic.step(s, pins(L, L), pins(H, L), { timing: ext });
+  }
+  assert.equal(logic.outputs(s, pins(L, L)).get(7), H, "Q4 after 8 counts");
+  s = logic.step(s, pins(L, X), pins(L, L), { timing: ext });
+  s = logic.step(s, pins(L, L), pins(L, X), { timing: ext });
+  assert.equal(logic.outputs(s, pins(L, L)).get(7), X, "Q4 unknown, RESET LOW again"); // prettier-ignore
+  s = logic.step(s, pins(H, L), pins(L, L), { timing: ext });
+  s = logic.step(s, pins(L, L), pins(H, L), { timing: ext });
+  assert.equal(logic.outputs(s, pins(L, L)).get(7), X, "a count does not cure it"); // prettier-ignore
+  s = logic.step(s, pins(L, H), pins(L, L), { timing: ext });
+  assert.equal(logic.outputs(s, pins(L, H)).get(7), L, "a clean RESET does");
+  // In oscillator mode the same: the oscillator runs, the count is unknown.
+  const osc = { sections: [{ mode: "oscillator", period: 0.1 }], problems: [] };
+  let o = logic.step({ mode: "unknown" }, pins(L, L), pins(L, X), { now: 1, timing: osc }); // prettier-ignore
+  assert.equal(logic.outputs(o, pins(L, L)).get(7), X);
+  assert.ok([H, L].includes(logic.outputs(o, pins(L, L)).get(9)), "φO runs");
+  o = logic.step(o, pins(L, H), pins(L, L), { now: 1.1, timing: osc });
+  o = logic.step(o, pins(L, L), pins(L, H), { now: 1.2, timing: osc });
+  assert.equal(logic.outputs(o, pins(L, L)).get(7), L, "known after a reset");
+  // A φI floating from power-up might be counting: unknown, as a 4040's.
+  let f = logic.state0();
+  f = logic.step(f, pins(X, L), null, { timing: ext });
+  f = logic.step(f, pins(X, L), pins(X, L), { timing: ext });
+  assert.equal(logic.outputs(f, pins(X, L)).get(7), X);
+});
+
+test("CD4047B: a pulse a floating RESET may have ended is unknown, not LOW, once RESET is tied again", () => {
+  const logic = chipDef("CD4047B").logic;
+  const a = { sections: [{ mode: "multivibrator", r: 10e3, c: 1e-6, period: 0.044, frequency: 1 / 0.044, oscPeriod: 0.022, width: 0.0248 }], problems: [] }; // prettier-ignore
+  // ASTABLĒ (4) HIGH, ASTABLE (5) LOW: a one-shot; +TRIGGER 8, RESET 9.
+  const pins = (trig, reset) => new Map([[4, H], [5, L], [6, L], [8, trig], [9, reset], [12, L]]); // prettier-ignore
+  const Q = (s) => logic.outputs(s).get(10);
+  let s = logic.step(logic.state0(), pins(H, L), pins(L, L), { now: 0, timing: a }); // prettier-ignore
+  assert.equal(Q(s), H, "triggered");
+  s = logic.step(s, pins(H, X), pins(H, L), { now: 0.005, timing: a });
+  assert.equal(Q(s), X, "RESET floating: maybe held LOW");
+  s = logic.step(s, pins(H, L), pins(H, X), { now: 0.006, timing: a });
+  assert.equal(Q(s), X, "tied LOW again mid-pulse: still unknown");
+  s = logic.step(s, pins(H, L), pins(H, L), { now: 0.03, timing: a });
+  assert.equal(Q(s), L, "the pulse is over either way");
+  // A clean RESET HIGH settles it at once.
+  s = logic.step(logic.state0(), pins(H, L), pins(L, L), { now: 0, timing: a });
+  s = logic.step(s, pins(H, X), pins(H, L), { now: 0.005, timing: a });
+  s = logic.step(s, pins(H, H), pins(H, X), { now: 0.006, timing: a });
+  assert.equal(Q(s), L);
+});
+
 test("CD4060B with half an RC network says so instead of guessing", () => {
   const { b } = rc4060({ withRs: false });
   const r = runner(b.doc).run(0).result;
@@ -652,15 +709,17 @@ test("CD4541B counts an external clock's FALLING edges on RS (its clock is RS in
       L,
       "a rise counts nothing",
     );
+    assert.deepEqual([sim.level("e11"), sim.level("e10")], [H, L], "CTC = RS"); // prettier-ignore
     sim.run((t += 0.01), clk(L));
     assert.equal(
       sim.level(OUT41),
       edge < 128 ? L : H,
       `after falling edge ${edge}`,
     );
-    // CTC is the clock — RS inverted — and RTC its complement.
-    assert.equal(sim.level("e11"), H, "CTC");
-    assert.equal(sim.level("e10"), L, "RTC");
+    // CTC follows RS (in phase, as the silicon's — the only way round
+    // Fig. 2's network oscillates) and RTC is its complement.
+    assert.equal(sim.level("e11"), L, "CTC");
+    assert.equal(sim.level("e10"), H, "RTC");
   }
 });
 

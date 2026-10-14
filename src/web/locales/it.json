@@ -105,6 +105,11 @@
       "message": "Conferma l'accesso a questo progetto",
       "button": "Concedi accesso"
     },
+    "reserved": {
+      "message": "Scegli un altro nome",
+      "slot": "In «{file}» Chip Hippo conserva il lavoro non ancora salvato, quindi nient'altro può essere salvato con quel nome.",
+      "open": "«{file}» è il progetto aperto. Una scrivania esportata sopra di esso sostituirebbe l'intero progetto."
+    },
     "exportKicad": {
       "title": "Esporta in KiCad",
       "message": "Scegli la cartella del progetto KiCad: una nuova, o quella di un'esportazione precedente.",
@@ -1083,6 +1088,7 @@
     "buildCrashed": "La costruzione è fallita in modo inatteso: {message}",
     "compilerFault": "Il circuito è stato descritto correttamente ma non è stato possibile costruirlo. È un difetto del compilatore di Chip Hippo, non del progetto.",
     "gaveUp": "Rinuncia dopo {total} tentativi di correzione. Ciò che è ancora sbagliato:",
+    "declined": "Secondo il modello, non si può costruire con i componenti del catalogo:",
     "retrying": "Quel progetto non ha superato le verifiche — si chiede una correzione (tentativo {n} di {total}):",
     "untitledCircuit": "Circuito",
     "summary": "{title} — {parts} componenti, {wires} fili, {strips} strisce di breadboard.",
@@ -1498,6 +1504,7 @@
     "description": "Progetta e simula circuiti logici su breadboard virtuali senza saldature — posiziona chip, fili, interruttori, LED e alimentazione, poi guarda l'elettricità stabilizzarsi in ogni net.",
     "byline": "Creato da Jason, programmato da Claude",
     "support": "Assistenza:",
+    "donate": "Sostieni Chip Hippo…",
     "versionInfo": "Informazioni sulla versione",
     "version": "Versione",
     "platform": "Piattaforma",
@@ -1606,7 +1613,7 @@
       "analyzer": "Mostra o nascondi l'analizzatore logico",
       "fit": "Adatta alla finestra",
       "pan": "Sposta il banco",
-      "panKeys": "Spazio+trascina o tasto centrale",
+      "panKeys": "Spazio+trascina, {alt}+trascina o tasto centrale",
       "zoomOut": "Riduci al massimo (ritrova un componente perduto)",
       "zoom": "Ingrandisci / riduci / ripristina",
       "fontSize": "Dimensione del carattere dell'editor: aumenta / riduci / ripristina",
@@ -2534,6 +2541,17 @@
     "more": {
       "one": "+altri {count}",
       "other": "+altri {count}"
+    }
+  },
+  "notice": {
+    "dragModel": {
+      "title": "Il trascinamento è cambiato",
+      "band": "Trascina sul piano di lavoro per selezionare tutto ciò che sta nel riquadro.",
+      "pickLead": "{alt}+trascina sposta da solo un capo di filo o un piedino.",
+      "toggle": "{mod}+clic aggiunge un elemento alla selezione, o lo toglie.",
+      "carry": "Trascina un componente e i suoi collegamenti lo seguono.",
+      "bare": "{shift}+trascina sposta i componenti e lascia i fili dove sono.",
+      "pan": "Sposta il piano con Spazio+trascina, {alt}+trascina lontano da un piedino o con il tasto centrale del mouse."
     }
   }
 }

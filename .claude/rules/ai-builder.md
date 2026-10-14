@@ -107,6 +107,11 @@ anchor and wire.
 - **Seating is two passes, and a second breadboard is a LAST RESORT.** Pass 1 fills each
   board before starting the next — the only way to learn how many boards a design
   actually needs, which the column budget cannot know.
+  - **Running out is the budget's mistake, never a refusal** (2026-10-14). The kit count
+    is a column COUNT and a board fills part by part, so the columns each board leaves at
+    its edge add up (15 × '04 booked two boards and fitted 14). A pass-1 `NO_ROOM` re-seats
+    with `gap = 0`, then adds one kit at a time (`addKit`, up to `2 × kitCount + 1`)
+    before it gives up — it used to return the abort straight away, unrepairable.
   - **The blank column goes before the board does.** `GAP` is a courtesy (so neighbours
     do not read as one block), but insisting on it fetched a whole breadboard for a
     1-column shortfall, so a spilled design is re-seated with `gap = 0` and that is kept
@@ -159,10 +164,24 @@ anchor and wire.
     above, signal from f/g below. Row e was measured and is worse (where every
     trench-crossing wire passes). Together: knobs covered 219 → 3, drawn crossings over
     any part 1840 → 167, wire length +0.5%, same wires and strips.
+- **Names and refusals** (2026-10-14). Net names are unique (`DUPLICATE_NET`, repair) —
+  except a supply name, which may repeat (two `GND` nets are one rail) and counts as a
+  member, so `{name:"GND", members:["D.K"]}` is a whole net; the verifier keys declared
+  nets by OBJECT, never by name, and every name the compiler mints goes through
+  `freshName`. A spec part arrives NAMED by its spec id (its `label` the description), so
+  a caption's "U1 feeds U2" can be found; what the compiler interposes is unnamed. A
+  reply with `parts: []` and a title is the prompt's own "cannot be built" — `declinedReply`
+  (generate.js) returns it `declined`, and the panel shows it with no repair round
+  (`ai.declined`). The always-wide 7-segment digit seats in rows d/h with its normalized
+  params (the allocator claims its covered holes), so it is on the card and the retired
+  seg8 digits are off it (`d.retired`). The clock is on the card: its `duty` range is a
+  wave setting, not a knob (`hasKnob` exempts `kind === "clock"`).
 - `pin-resolve.js` is FAIL-CLOSED and case-FIRST: pin names are case-distinguished in the
   catalog (74LS47's `A`–`D` inputs vs its `a`–`g` outputs), so folding case would
-  MANUFACTURE ambiguity. The one real ambiguity is `74LS148` (inputs *named* `0`–`7` that
-  do not match their pin numbers), reported with both readings, with `#N` as the escape.
+  MANUFACTURE ambiguity. The real ambiguity is a pin NAMED by a number that is another
+  pin's number — `74LS148` (inputs *named* `0`–`7`), the CD4017B/CD4022B/CD4028B's decoded
+  outputs, `sw-slide`'s pin 3 (named `2`) — reported with both readings, with `#N` as the
+  escape.
   - **Punctuation that means something is kept** (`canonical`). An overbar, a leading
     `/`/`~` or a trailing `'` all say "complement / active-low", so `1Q'`, `/1Q`, `~1Q`
     and `1Q̅` are `1Q̄` and never `1Q`; `>`/`<`/`=` name different '85 pins. Stripping it
@@ -180,7 +199,9 @@ anchor and wire.
   `MULTIPLE_DRIVERS`: two `output` pins may share a net only when EVERY one can be
   switched off — a BUS — which `switchableOutputs` PROBES from the evaluator (every enable
   at its OFF level → whatever reads Z) rather than assuming from the enable, since the
-  '595's OE leaves `QH'` driving. `io` pins are left to the engine. Output enables come
+  '595's OE leaves `QH'` driving. `io` pins are left to the engine. The desk review's
+  `BUS_FIGHT` reads the same `switchableOutputs`, so a wired-AND or a tri-state bus the
+  builder verified is never reviewed as a fight (2026-10-14). Output enables come
   from **`outputEnablePins(def)`** (`catalog/index.js`) as `{n, on}` — the declared
   `outputEnable` (active LOW) and `outputEnableHigh` (active HIGH: the CD4094B's, the only
   one), or a memory's own `ceN`/`oeN` read off `logic.memory` — never declared twice —

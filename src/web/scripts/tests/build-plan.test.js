@@ -105,7 +105,9 @@ test("BOM counts every part by catalog identity", () => {
 
   assert.equal(findLine(bom.chips, "74LS00").count, 1);
   assert.equal(findLine(bom.chips, "74LS04").count, 1);
-  assert.equal(findLine(bom.chips, "74LS00").title, "Quad 2-input NAND");
+  // A chip's line leads with its part number: "Quad 2-input NAND" alone is a
+  // 74LS00 and a CD4011B both.
+  assert.equal(findLine(bom.chips, "74LS00").title, "74LS00 — Quad 2-input NAND"); // prettier-ignore
 
   // LEDs split by colour: one red, one green (the injected floating one).
   assert.equal(findLine(bom.discretes, "led:red").title, "LED (red)");
@@ -424,4 +426,107 @@ test("an electronic load is a BOM line and a set-up step, like the other bricks"
   const lines = Object.values(bom).flat().filter((l) => l && typeof l === "object" && "title" in l); // prettier-ignore
   assert.ok(lines.some((l) => /Electronic load \(CR 47/.test(l.title)), JSON.stringify(lines.map((l) => l.title))); // prettier-ignore
   assert.ok(steps.some((s) => s.group === "power" && /Electronic load \(CR 47/.test(s.text))); // prettier-ignore
+});
+
+// ── The 2026-10-14 review ───────────────────────────────────────────────────
+
+/** A plan for a desk built by `build(doc)` on a bare full kit. */
+function planOf(build) {
+  const doc = new DeskDoc(null);
+  doc.addKit("full", 0, 0); // bb1 rail · bb2 pins · bb3 rail
+  build(doc);
+  const json = doc.toJSON();
+  return buildPlan(json, buildNetlist(json));
+}
+const allLines = (bom) => Object.values(bom).flat();
+
+test("a part turned end for end names the hole its pin 1 is really in", () => {
+  const { steps } = planOf((doc) => {
+    doc.addComponent({ kind: "chip", ref: "74LS00", board: "bb2", anchor: "e5", params: { rot: 180 } }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "seg7cc", board: "bb2", anchor: "e40", params: { rot: 180 } }); // prettier-ignore
+  });
+  const text = steps.map((s) => s.text).join("\n");
+  assert.match(
+    text,
+    /74LS00 straddling e5–f11, pin 1 at bb2\.f11 \(flipped 180°\)/,
+  );
+  assert.match(text, /pin 1 at bb2\.i44 \(flipped 180°\)/);
+});
+
+test("every named lead is named in its placement step, a flipped LED's the right way round", () => {
+  const { steps } = planOf((doc) => {
+    doc.addComponent({ kind: "discrete", ref: "led", board: "bb2", anchor: "a10", params: { color: "red", flip: true } }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "speaker", board: "bb2", anchor: "a30" }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "resistor", board: "bb2", anchor: "a50", params: { ohms: 330 } }); // prettier-ignore
+  });
+  const text = steps.map((s) => s.text).join("\n");
+  assert.match(text, /LED \(red\) with leads at K bb2\.a10, A bb2\.a11/);
+  assert.match(text, /Speaker \(8Ω\) with leads at \+ bb2\.a30, - bb2\.a33/);
+  // A resistor's leads have no names to give, and its value says which one.
+  assert.match(text, /Resistor \(330Ω\) with leads at bb2\.a50, bb2\.a53/);
+});
+
+test("the BOM splits what is bought differently: a relay's coil, a speaker's ohms, a can's rate, a supply's limit, a clock's wave", () => {
+  const { bom } = planOf((doc) => {
+    doc.addComponent({ kind: "discrete", ref: "relay", board: "bb2", anchor: "a5" }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "relay", board: "bb2", anchor: "a20", params: { coilVolts: 12 } }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "speaker", board: "bb2", anchor: "a35" }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "speaker", board: "bb2", anchor: "a45", params: { impedance: 32 } }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "osc-half", board: "bb2", anchor: "a55", params: { hz: 1 } }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "osc-half", board: "bb2", anchor: "f55", params: { hz: 1000 } }); // prettier-ignore
+    doc.addPsu(0, 40, { volts: 5 });
+    doc.addPsu(20, 40, { volts: 5, currentLimit: 0.1 });
+    doc.addBrick("clock", 40, 40, { hz: 10 });
+    doc.addBrick("clock", 60, 40, { hz: 10, wave: "pwm", duty: 20 });
+  });
+  const titles = allLines(bom).map((l) => `${l.title} ×${l.count}`);
+  for (const want of [
+    "Relay (SPDT) — 5V ×1",
+    "Relay (SPDT) — 12V ×1",
+    "Speaker — 8Ω ×1",
+    "Speaker — 32Ω ×1",
+    "Oscillator (half can) — 1 Hz ×1",
+    "Oscillator (half can) — 1 kHz ×1",
+    "Power supply (5 V) ×1",
+    "Power supply (5 V, 100 mA) ×1",
+    "Clock source (10 Hz) ×1",
+    "Clock source (10 Hz, PWM 20%) ×1",
+  ]) {
+    assert.ok(titles.includes(want), `${want} in ${JSON.stringify(titles)}`);
+  }
+});
+
+test("a chip's BOM line says its part number: two NANDs of two families are two lines", () => {
+  const { bom } = planOf((doc) => {
+    doc.addComponent({ kind: "chip", ref: "74LS00", board: "bb2", anchor: "e5" }); // prettier-ignore
+    doc.addComponent({ kind: "chip", ref: "CD4011B", board: "bb2", anchor: "e20" }); // prettier-ignore
+  });
+  assert.deepEqual(bom.chips.map((l) => l.title).sort(), [
+    "74LS00 — Quad 2-input NAND",
+    "CD4011B — Quad 2-input NAND",
+  ]);
+});
+
+test("a wire to a planted signal flag is no forgotten connection", () => {
+  const { warnings } = planOf((doc) => {
+    doc.addComponent({ kind: "chip", ref: "74LS00", board: "bb2", anchor: "e5" }); // prettier-ignore
+    const sig = doc.addSignal({ type: "toggle", rest: "low" });
+    doc.plantSignalFlag(sig.id, "bb2.c30");
+    doc.addWire({ from: "bb2.a5", to: "bb2.a30", color: "blue" });
+  });
+  assert.deepEqual(
+    warnings.filter((w) => w.kind === "single-member-net"),
+    [],
+  );
+});
+
+test("a discrete with a package is named by its title, never its catalog id", () => {
+  const { steps } = planOf((doc) => {
+    doc.addComponent({ kind: "discrete", ref: "seg7cc", board: "bb2", anchor: "e10" }); // prettier-ignore
+    doc.addComponent({ kind: "discrete", ref: "sw-dip4", board: "bb2", anchor: "e30" }); // prettier-ignore
+    doc.addWire({ from: "bb2.c10", to: "bb2.c30", color: "blue" });
+  });
+  const detail = steps.flatMap((s) => s.detail ?? []).join("\n");
+  assert.match(detail, /7-segment display \(common cathode\) pin 1 \(e\)/);
+  assert.doesNotMatch(detail, /seg7cc|sw-dip4/);
 });

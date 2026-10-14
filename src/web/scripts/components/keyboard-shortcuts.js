@@ -113,9 +113,13 @@ const shortcutGroups = () => [
       { desc: t("shortcuts.view.fadeWires"), keys: "H" },
       { desc: t("shortcuts.view.palette"), keys: `${MOD}+P` },
       { desc: t("shortcuts.view.analyzer"), keys: "A" },
-      // Pan left the plain drag (that is the rubber band now): Space held, or
-      // the middle button. Catalog text, since "drag" is a word.
-      { desc: t("shortcuts.view.pan"), keys: t("shortcuts.view.panKeys") },
+      // Pan left the plain drag (that is the rubber band now): Space held,
+      // Option/Alt off a lead, or the middle button. Catalog text, since
+      // "drag" is a word.
+      {
+        desc: t("shortcuts.view.pan"),
+        keys: t("shortcuts.view.panKeys", { alt: ALT }),
+      },
       { desc: t("shortcuts.view.fit"), keys: `${MOD}+F` },
       { desc: t("shortcuts.view.zoomOut"), keys: `${SHIFT}+${MOD}+F` },
       {

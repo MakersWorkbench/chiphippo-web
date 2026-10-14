@@ -246,6 +246,53 @@ test("an SR latch from one 74LS00 sets, resets, and holds across settles", () =>
   assert.equal(Q(sim), L, "latch HELD the reset state");
 });
 
+test("a cross-coupled latch with both inputs idle falls one way — from cold, or released together", () => {
+  // Two steady states and, in a simultaneous update, no reason to pick either:
+  // the gates flipped together L/L, H/H… to the cap, and the latch read X with
+  // an oscillation toast from Run until an input was pressed. Silicon falls
+  // one way, so the engine breaks the tie — deterministically, the same way
+  // in both settle modes.
+  const holes = chipHoles("74LS00", "e10");
+  const gnd = mates(holes.get(7));
+  const crossCouple = [
+    wire(`bb1.${mates(holes.get(3))[0]}`, `bb1.${mates(holes.get(5))[0]}`),
+    wire(`bb1.${mates(holes.get(6))[0]}`, `bb1.${mates(holes.get(2))[0]}`),
+  ];
+  const idle = {
+    boards,
+    components: [psu("psu1", 80), chip("c1", "74LS00", "e10")],
+    wires: [...powerWires("psu1", holes), ...crossCouple],
+  };
+  const netlist = buildNetlist(idle);
+  const net = (hole) => netlist.netOfPoint.get(hole);
+  const read = (r) => [r.netLevels.get(net("bb1.e12")), r.netLevels.get(net("bb1.e15"))]; // prettier-ignore
+  const seen = [];
+  for (const mode of ["full", "incremental"]) {
+    const cold = settle({ document: idle, netlist, mode });
+    assert.equal(cold.settled, true, mode);
+    assert.deepEqual(cold.warnings, [], `${mode}: no oscillation`);
+    const [q, qBar] = read(cold);
+    assert.ok([q, qBar].every((v) => v === H || v === L), `${mode}: ${q}/${qBar}`); // prettier-ignore
+    assert.notEqual(q, qBar, "one of its two states");
+    seen.push(`${q}${qBar}`);
+
+    // Both S̄ and R̄ held low (Q = Q̄ = H), then released in one settle.
+    const both = {
+      ...idle,
+      wires: [
+        ...idle.wires,
+        wire(`bb1.${mates(holes.get(1))[0]}`, `bb1.${gnd[1]}`),
+        wire(`bb1.${mates(holes.get(4))[0]}`, `bb1.${gnd[2]}`),
+      ],
+    };
+    const held = settle({ document: both, netlist: buildNetlist(both), mode });
+    const released = settle({ document: idle, netlist, warmStart: held.netLevels, mode }); // prettier-ignore
+    assert.equal(released.settled, true, `${mode}: released`);
+    assert.notEqual(...read(released));
+  }
+  assert.equal(seen[0], seen[1], "the same way in both modes");
+});
+
 // ── Oscillation ──────────────────────────────────────────────────────────────
 
 test("a ring of three inverters never settles → oscillation warning", () => {

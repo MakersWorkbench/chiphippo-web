@@ -266,6 +266,51 @@ test("two outputs on one net are a bus fight whatever they are driving", () => {
   assert.match(fight[0].message, /74LS04/);
 });
 
+test("outputs that can all let go share a net — a wired-AND, a tri-state bus — and are no fight", () => {
+  // The builder's own rule lets them share (spec-lint.js `switchableOutputs`),
+  // so a desk it verified was reviewed as a FAULT. One output that cannot let
+  // go among them still is.
+  for (const [ref, also, fights] of [
+    ["74LS03", "74LS03", 0], // open-collector NANDs, a wired-AND
+    ["74LS244", "74LS244", 0], // two tri-state buffers on a bus
+    ["74LS03", "74LS04", 1], // …but a totem-pole output among them
+  ]) {
+    const doc = powered();
+    const a = seatChip(doc, ref, "e5");
+    wirePower(doc, ref, a.pins);
+    const b = seatChip(doc, also, "e20");
+    wirePower(doc, also, b.pins, 6);
+    const outOf = (r) => partDef(r).pins.find((p) => p.role === "output").n;
+    doc.addWire({
+      from: nodeHole(a.pins.get(outOf(ref))),
+      to: nodeHole(b.pins.get(outOf(also))),
+      color: "blue",
+    });
+    const r = review(doc.toJSON());
+    const fight = r.findings.filter((f) => f.code === "BUS_FIGHT");
+    assert.equal(fight.length, fights, `${ref} + ${also}`);
+  }
+});
+
+test("a DIP-bodied part that is not a chip is named by its title, never its id", () => {
+  // A 7-segment digit has a package, and was named "seg7cc" — an internal id
+  // the user never sees anywhere — where a chip is named by its marking.
+  const doc = powered();
+  const digit = doc.addComponent({ kind: "discrete", ref: "seg7cc", board: "bb2", anchor: "d30", params: { wide: true } }); // prettier-ignore
+  const pins = pinAddresses(doc.toJSON(), digit.id);
+  assert.deepEqual([pins.get(7), pins.get(3)], ["bb2.h33", "bb2.d32"]);
+  // Rows f, g and e are under its body: in from j and a.
+  doc.addWire({ from: "bb2.j33", to: "bb1.+30", color: "red" }); // segment a
+  doc.addWire({ from: "bb2.a32", to: "bb1.-30", color: "black" }); // COM
+  const burn = review(doc.toJSON()).findings.find((f) => f.code === "LED_UNLIMITED"); // prettier-ignore
+  assert.ok(burn, "it burns");
+  assert.match(
+    burn.message,
+    new RegExp(partDef("seg7cc").title.replace(/[()]/g, "\\$&")),
+  );
+  assert.doesNotMatch(burn.message, /seg7cc/);
+});
+
 test("an LED straight across the rails is reported as burning", () => {
   const doc = powered();
   const led = doc.addComponent({

@@ -241,11 +241,12 @@
           {
             "id": "c16",
             "kind": "discrete",
-            "ref": "seg8cc",
+            "ref": "seg7cc",
             "board": "bb2",
-            "anchor": "b40",
+            "anchor": "d40",
             "params": {
-              "color": "red"
+              "color": "red",
+              "wide": true
             }
           },
           {
@@ -253,7 +254,7 @@
             "kind": "discrete",
             "ref": "resistor",
             "board": "bb2",
-            "anchor": "c48",
+            "anchor": "c42",
             "params": {
               "ohms": 330,
               "rot": 90,
@@ -387,44 +388,44 @@
           },
           {
             "id": "w21",
-            "from": "bb2.g29",
-            "to": "bb2.e40",
+            "from": "bb2.h29",
+            "to": "bb2.i43",
             "color": "purple"
           },
           {
             "id": "w22",
-            "from": "bb2.g30",
-            "to": "bb2.e41",
+            "from": "bb2.h30",
+            "to": "bb2.i44",
             "color": "purple"
           },
           {
             "id": "w23",
             "from": "bb2.g31",
-            "to": "bb2.e42",
+            "to": "bb2.c43",
             "color": "purple"
           },
           {
             "id": "w24",
             "from": "bb2.g32",
-            "to": "bb2.e43",
+            "to": "bb2.c41",
             "color": "purple"
           },
           {
             "id": "w25",
             "from": "bb2.g33",
-            "to": "bb2.e44",
+            "to": "bb2.c40",
             "color": "purple"
           },
           {
             "id": "w26",
-            "from": "bb2.g27",
-            "to": "bb2.e45",
+            "from": "bb2.h27",
+            "to": "bb2.i41",
             "color": "purple"
           },
           {
             "id": "w27",
-            "from": "bb2.g28",
-            "to": "bb2.e46",
+            "from": "bb2.h28",
+            "to": "bb2.i40",
             "color": "purple"
           }
         ],

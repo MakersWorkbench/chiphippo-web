@@ -60,7 +60,7 @@ import {
   netSignature,
   validateComputer,
 } from "../../../../scripts/demo-computers.mjs";
-import { CHIP_DEFS } from "../catalog/index.js";
+import { CHIP_DEFS, partDef } from "../catalog/index.js";
 import {
   DOC_VERSION,
   MAX_WIRE_POINTS,
@@ -269,6 +269,29 @@ test("src/web/demos holds exactly one example per benchable chip", () => {
   // example button on a pin-assignments window; make-gate-demos.mjs sweeps the
   // directory, and this is the guard that the sweep ran.
   assert.deepEqual(have.sort(), want.sort());
+});
+
+test("no shipped example places a RETIRED part", () => {
+  // A retired part (the single-row seg8 digits) still loads, but it is off the
+  // tray: an example built from one shows the user a part they cannot place.
+  const docsOf = (payload) =>
+    payload.doc
+      ? [payload.doc]
+      : (payload.desktops ?? payload.tabs ?? []).map((d) => d.doc);
+  for (const file of readdirSync(WEB_DEMO_DIR).filter((f) =>
+    f.endsWith(".json"),
+  )) {
+    // prettier-ignore
+    const payload = JSON.parse(readFileSync(`${WEB_DEMO_DIR}${file}`, "utf8"));
+    for (const doc of docsOf(payload)) {
+      for (const comp of doc.components) {
+        assert.ok(
+          !partDef(comp.ref)?.retired,
+          `${file}: ${comp.ref} is retired`,
+        );
+      }
+    }
+  }
 });
 
 test("the program-only groups have no bench, and only a CPU runs a program", () => {

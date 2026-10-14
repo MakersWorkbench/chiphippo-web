@@ -245,6 +245,10 @@ export class ScopeView {
     window.addEventListener("chiphippo:doc-changed", () => {
       if (this.visible) this.#scheduleRender();
     });
+    // Another document on the desk (a desktop switch, a project): the trace
+    // kept from the last run is the LAST desk's, and its channel ids (sc1,
+    // sc2, …) name this one's channels too — so it would be drawn under them.
+    window.addEventListener("chiphippo:desk-loaded", () => this.#clearTrace());
   }
 
   // ── DOM ────────────────────────────────────────────────────────────────────
@@ -746,6 +750,22 @@ export class ScopeView {
       );
       this.#gutter.append(row);
     });
+    // The lanes scroll both ways, so their horizontal scrollbar takes height
+    // the gutter does not have: without its height again at the foot, the
+    // last row could never scroll up level with the last lane.
+    const bar = this.#lanes.offsetHeight - this.#lanes.clientHeight;
+    if (bar > 0) {
+      this.#gutter.append(
+        el("div", {
+          class: "scope-gutter-foot",
+          style: { height: `${bar}px` },
+        }),
+      );
+    }
+    // Emptied a moment ago, the gutter fell back to its top: put it where the
+    // lanes are, or every render while scrolled down (a tick's, while
+    // running) left the names a scroll away from their traces.
+    this.#gutter.scrollTop = this.#lanes.scrollTop;
   }
 
   #renderLanes(channels) {
@@ -870,7 +890,10 @@ export class ScopeView {
    * (CSS resolves `var(--…)` in a style), or a resolved hex for export.
    * Reused by the export path.
    */
-  #buildLaneNodes(channels, { height, colorOf = (c) => c } = {}) {
+  #buildLaneNodes(
+    channels,
+    { height, colorOf = (c) => c, fontOf = (f) => f } = {},
+  ) {
     const nodes = [];
     const { x0, x1 } = this.#win;
     const conflict = colorOf("var(--color-sim-conflict)");
@@ -902,7 +925,7 @@ export class ScopeView {
       const runs = this.#runsOf(ch);
       const laneNodes =
         ch.kind === "bus"
-          ? this.#busLane(runs, i, { color, colorOf })
+          ? this.#busLane(runs, i, { color, colorOf, fontOf })
           : this.#netLane(runs, i, {
               color,
               floatColor,
@@ -1198,7 +1221,7 @@ export class ScopeView {
   }
 
   /** A bus value-lane: a hex-labelled band with a crossover at each change. */
-  #busLane(runs, laneIndex, { color, colorOf }) {
+  #busLane(runs, laneIndex, { color, colorOf, fontOf = (f) => f }) {
     const top = laneIndex * LANE_H;
     const highY = top + WAVE_PAD;
     const lowY = top + LANE_H - WAVE_PAD;
@@ -1239,7 +1262,8 @@ export class ScopeView {
               "text-anchor": "middle",
               style: {
                 fill: textColor,
-                font: "10px var(--font-mono)",
+                // SVG user units, as the lane geometry is.
+                font: `10px ${fontOf("var(--font-mono)")}`,
                 pointerEvents: "none",
               },
             },
@@ -1646,6 +1670,8 @@ export class ScopeView {
   /** A standalone SVG (concrete colors, a label column) for file export. */
   #buildExportSvg(channels) {
     const resolve = (c) => this.#resolveColor(c);
+    // A file has no stylesheet: a font left as var(--…) is no font at all.
+    const font = (f) => this.#resolveToken(f, "sans-serif");
     const labelW = 150;
     this.#axis = this.#axisOf(channels);
     // The whole trace at the scale on screen — or, where that is wider than
@@ -1694,7 +1720,7 @@ export class ScopeView {
             y: i * LANE_H + LANE_H / 2 + 4,
             style: {
               fill: resolve("var(--color-text)"),
-              font: "12px var(--font-sans)",
+              font: `12px ${font("var(--font-sans)")}`,
             },
           },
           this.#labelOf(ch),
@@ -1710,6 +1736,7 @@ export class ScopeView {
       for (const node of this.#buildLaneNodes(channels, {
         height,
         colorOf: resolve,
+        fontOf: (f) => this.#resolveToken(f, "monospace"),
       })) {
         lanes.append(node);
       }
@@ -1731,11 +1758,17 @@ export class ScopeView {
 
   /** Resolve a `var(--token)` to its computed value; pass other colors through. */
   #resolveColor(color) {
-    if (typeof color !== "string") return "#888888";
-    const m = /^var\((--[\w-]+)\)$/.exec(color.trim());
-    if (!m) return color;
+    return this.#resolveToken(color, "#888888");
+  }
+
+  /** A `var(--token)` as the value it has here (a colour, a font stack), or
+      `fallback` when it has none; any other value as it is. */
+  #resolveToken(value, fallback) {
+    if (typeof value !== "string") return fallback;
+    const m = /^var\((--[\w-]+)\)$/.exec(value.trim());
+    if (!m) return value;
     const v = getComputedStyle(this.#el).getPropertyValue(m[1]).trim();
-    return v || "#888888";
+    return v || fallback;
   }
 
   #download(blob, name) {

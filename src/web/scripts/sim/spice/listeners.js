@@ -265,16 +265,18 @@ export function firstCrossing(diff, target, dir, t, nodeAt, horizon, eps) {
     if (at(t) >= 0) return Number.POSITIVE_INFINITY;
     let end = horizon;
     let fast = Number.POSITIVE_INFINITY;
+    let osc = 0;
     for (const { curve } of coupled) {
       if (!Number.isFinite(horizon)) end = Math.min(end, searchEnd(curve, t));
       fast = Math.min(fast, curve.scale?.fast ?? Number.POSITIVE_INFINITY);
+      osc = Math.max(osc, curve.scale?.osc ?? 0);
     }
     for (const { curve } of moving) {
       if (isCoupled(curve) || Number.isFinite(horizon)) continue;
       end = Math.max(end, t + (curve.rate ? 1 : curve.tau * 50));
     }
     if (!Number.isFinite(end)) end = t + 86400;
-    const crossed = firstRoot((u) => at(u) - eps, t, sampleTimes(t, end, fast)); // prettier-ignore
+    const crossed = firstRoot((u) => at(u) - eps, t, sampleTimes(t, end, fast, osc)); // prettier-ignore
     if (!Number.isFinite(crossed)) return crossed;
     // Where it reaches the target itself (it was found clearing it by eps).
     return firstRoot(at, t, [crossed]);

@@ -449,6 +449,35 @@ test("a supply its own chip's load pulls down stays down: no flicker", () => {
   }
 });
 
+test("a clock brick into a load past its supply's limit droops it once, and stays", () => {
+  // A held-HIGH clock → 100 Ω → red LED on a 10 mA supply: its demand is
+  // booked at the supply's SET, the clock's HIGH included — booked at the
+  // drooped HIGH it read as no overload, and the supply flipped between
+  // 1.73 V and 5 V every tick.
+  const b = bench();
+  b.doc.components[0].params.currentLimit = 0.01;
+  const r = b.seat("r1", "resistor", "a30", { ohms: 100 });
+  const d = b.seat("d1", "led", "a40", { color: "red" });
+  b.link(r.get(2), d.get(1));
+  b.gnd(d.get(2));
+  b.doc.components.push({ id: "clk1", kind: "clock", ref: "clock", x: 40, y: 30, params: { hz: "manual" } }); // prettier-ignore
+  b.doc.wires.push(
+    { id: "wc1", from: "psu1.+", to: "clk1.vcc", color: "red" },
+    { id: "wc2", from: "psu1.-", to: "clk1.gnd", color: "black" },
+    { id: "wc3", from: "clk1.out", to: b.at(r.get(1).replace(/^a/, "b")), color: "red" }, // prettier-ignore
+  );
+  const sim = runner(b.doc, { engine: "spice" });
+  const high = { clockPhase: new Map([["clk1", H]]) };
+  const seen = [];
+  for (let i = 0; i < 5; i++) {
+    const s = sim.run(i * 0.01, new Map(), high).result.supplies.get("psu1");
+    seen.push(s.volts.toFixed(4));
+    assert.equal(s.limited, true, `tick ${i}: over its limit`);
+  }
+  assert.equal(new Set(seen).size, 1, `one answer: ${seen}`);
+  assert.ok(Number(seen[0]) < 2, `drooped: ${seen[0]} V`);
+});
+
 test("a tri-state output switched off is no driver", () => {
   // A 74LS125 with 1G HIGH (1Y off) on the same net as a 74LS04's 1Y, which
   // is driven HIGH into 100 Ω to GND and read by 2A: the brownout is the

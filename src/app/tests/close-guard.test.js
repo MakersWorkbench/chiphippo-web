@@ -170,3 +170,15 @@ test('an install that never quit takes its "go" back', () => {
   g.ask({ quitting: true });
   assert.equal(g.reply(true), "quit", "a plain quit, not a delayed install");
 });
+
+test("a page that goes mid-question takes the quit or install it was for with it", () => {
+  for (const opts of [{ installing: true }, { quitting: true }]) {
+    const g = new CloseGuard();
+    g.rendererReady();
+    g.ask(opts);
+    g.rendererGone(); // a reload while the question was out
+    g.rendererReady(); // the new page is up
+    assert.equal(g.ask(), true, "a plain window close asks again");
+    assert.equal(g.reply(true), "close", JSON.stringify(opts));
+  }
+});

@@ -84,3 +84,17 @@ test("flags are strict-true only (a truthy non-true value is not a store build)"
     assert.equal(sb.distribution(), "direct");
   });
 });
+
+test("the donation link is offered everywhere but the Mac App Store", () => {
+  // Apple's Guideline 3.1.1 bars a link to a purchase mechanism other than
+  // in-app purchase (a tip jar counts); the Microsoft Store permits one.
+  withFlags({ mas: undefined, windowsStore: undefined }, () => {
+    assert.equal(sb.allowsDonations(), true, "direct");
+  });
+  withFlags({ mas: true, windowsStore: undefined }, () => {
+    assert.equal(sb.allowsDonations(), false, "Mac App Store");
+  });
+  withFlags({ mas: undefined, windowsStore: true }, () => {
+    assert.equal(sb.allowsDonations(), true, "Microsoft Store");
+  });
+});

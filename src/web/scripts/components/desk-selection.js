@@ -487,6 +487,18 @@ export class DeskSelection {
     if (kind === "wires" && ids.every((id) => this.isPassengerWire(id, current.boards))) return; // prettier-ignore
     if (kind === "leads" && ids.every((key) => this.#leadCovered(parseLeadKey(key), current))) return; // prettier-ignore
     const next = toggleSelection(current, kind, ids);
+    // A lead its owner now covers leaves BEFORE the count — or a leg picked
+    // and then its part ⌘-clicked left a one-item set that is no single pick
+    // (setMulti would drop the lead, leaving the part alone in a set R and
+    // Properties… cannot reach).
+    const covering = {
+      parts: new Set(next.parts),
+      wires: new Set(next.wires),
+      boards: new Set(next.boards),
+    };
+    next.leads = next.leads.filter(
+      (key) => !this.#leadCovered(parseLeadKey(key), covering),
+    );
     // ONE part or wire collapses to the ordinary single pick (singlePick's own
     // note). A lone BOARD stays in the set: a single pick of a board stands
     // for its whole snapped group, and a strip a band picked out on its own
@@ -522,7 +534,13 @@ export class DeskSelection {
   /** ⌘/Ctrl-click a bus: its MEMBER WIRES go in or out together — a bus is
       metadata over wires and the selection holds no bus of its own. */
   toggleBusSelection(id) {
-    const members = this.#host.doc.getBus(id)?.members ?? [];
+    // Its PASSENGER members (ridden by a selected board) are never in the set,
+    // so leaving them in made the all-or-nothing test always "not selected",
+    // and the bus could never be clicked back out.
+    const boards = this.#selectionSets().boards;
+    const members = (this.#host.doc.getBus(id)?.members ?? []).filter(
+      (w) => !this.isPassengerWire(w, boards),
+    );
     if (members.length) this.#toggle("wires", members);
   }
 

@@ -48,6 +48,7 @@ import { tf } from "../i18n.js";
 import { chipMarking, outputEnables, partDef } from "../catalog/index.js";
 import { floatsUnknown, supplyText } from "../catalog/families.js";
 import { partTitle } from "../catalog/labels.js";
+import { switchableOutputs } from "./spec-lint.js";
 import { partPinAddresses } from "./occupancy.js";
 import { buildPlan } from "./build-plan.js";
 import { tristateEnables } from "./autobuild-verify.js";
@@ -83,15 +84,16 @@ const finding = (code, severity, message, extra = {}) => ({
 });
 
 /**
- * How a part is named in a finding. A packaged part is named by its REF (the
- * number silkscreened on it is what the user is looking at); anything else by
- * its title, since "led" is not what the drawer calls it. Same rule build-plan.js
- * applies to its own warnings, so the two lists read as one.
+ * How a part is named in a finding. A CHIP is named by its marking (the number
+ * silkscreened on it is what the user is looking at); anything else by its
+ * title — a DIP-bodied discrete has a package too, but "seg7cc" or "sw-dip4"
+ * is an id, not what the drawer calls it. Same rule build-plan.js applies to
+ * its own warnings, so the two lists read as one.
  */
 function label(comp) {
   const def = partDef(comp.ref);
   if (!def) return comp.ref;
-  return def.package ? chipMarking(def, comp.ref) : partTitle(def);
+  return def.kind === "chip" ? chipMarking(def, comp.ref) : partTitle(def);
 }
 
 /** "1A (pin 3)" — the silkscreen name first, because that is what is printed. */
@@ -351,7 +353,13 @@ export function reviewDesk(document, netlist) {
   // bus fight that happens to be driving the same level today is invisible until
   // the day it isn't. This is a fact about wiring, so it is checked statically
   // and reported whatever the levels are doing.
-  const drivers = new Map(); // netId → ["74LS00 (c1) 1Y (pin 3)", …]
+  //
+  // …except where every one of them can let go: open-collector outputs make a
+  // wired-AND, and tri-state ones a bus — exactly what the builder's own rule
+  // allows (spec-lint.js `switchableOutputs`), so a desk it verified is never
+  // reviewed as a fight. One output that cannot be switched off among them
+  // still is.
+  const drivers = new Map(); // netId → {names: ["74LS00 (c1) 1Y (pin 3)", …], hard}
   for (const comp of doc.components) {
     const def = partDef(comp.ref);
     if (!def?.pins?.length) continue;
@@ -362,14 +370,14 @@ export function reviewDesk(document, netlist) {
       if (def.pins.find((p) => p.n === pin)?.role !== "output") continue;
       const netId = netlist.netOfPoint.get(address);
       if (netId == null) continue;
-      if (!drivers.has(netId)) drivers.set(netId, []);
-      drivers
-        .get(netId)
-        .push(`${label(comp)} (${comp.id}) ${pinLabel(def, pin)}`);
+      if (!drivers.has(netId)) drivers.set(netId, { names: [], hard: 0 });
+      const on = drivers.get(netId);
+      on.names.push(`${label(comp)} (${comp.id}) ${pinLabel(def, pin)}`);
+      if (!switchableOutputs(def).has(pin)) on.hard += 1;
     }
   }
-  for (const [netId, names] of drivers) {
-    if (names.length < 2) continue;
+  for (const [netId, { names, hard }] of drivers) {
+    if (names.length < 2 || hard === 0) continue;
     findings.push(
       finding(
         "BUS_FIGHT",

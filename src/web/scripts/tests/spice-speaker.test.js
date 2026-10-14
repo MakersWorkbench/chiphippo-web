@@ -38,8 +38,9 @@ import { TONE_MIN_VPP, noteTone, toneOf } from "../sim/spice/measure.js";
 import { speakerTones, toneKey } from "../sim/spice/speakers.js";
 import { SPEAKER_FULL_W, speakerLoudness, speakerParams } from "../catalog/speaker.js"; // prettier-ignore
 import { partDef } from "../catalog/index.js";
-import { astable555, runner } from "./timing-fixtures.js";
+import { astable555, bench, runner } from "./timing-fixtures.js";
 import { MIN_SHOWN_S } from "../sim/timing.js";
+import { driveSpice } from "../bench/drive-spice.js";
 
 /**
  * A 555 astable (RA, RB, C) whose OUT drives a speaker through `series` Ω
@@ -134,6 +135,35 @@ test("its impedance takes its share of the step, and its power from it", () => {
   // resistance aside, and the coupling's sag a little less).
   close(thirtyTwo.vpp / eight.vpp, 32 / 79 / (8 / 55), 0.06, "the divider");
   close(thirtyTwo.watts, (thirtyTwo.vpp / 2) ** 2 / 32, 1e-12, "its power");
+});
+
+test("a smooth drive is heard at its crests, not where its clock's edges fall", () => {
+  // A sine clock through a coupling capacitor into the speaker: what crosses
+  // it is the sine's slope, a quarter period out of step with the edges the
+  // desk settles at — read only there it read nothing at 440 Hz, and a
+  // fraction of its swing at 1 kHz.
+  for (const [hz, farads] of [
+    [440, 1e-6],
+    [1000, 4.7e-6],
+  ]) {
+    const b = bench();
+    b.doc.components.push({ id: "clk1", kind: "clock", ref: "clock", x: 20, y: 30, params: partDef("clock").normalizeParams({ hz, wave: "sine" }) }); // prettier-ignore
+    b.doc.wires.push(
+      { id: "wc1", from: "psu1.+", to: "clk1.vcc", color: "red" },
+      { id: "wc2", from: "psu1.-", to: "clk1.gnd", color: "black" },
+      { id: "wc3", from: "clk1.out", to: b.at("a5"), color: "blue" },
+    );
+    const sp = b.seat("ls1", "speaker", "a20", {});
+    const c = b.seat("c1", "cap-electrolytic", "c5", { farads });
+    b.link(c.get(2), sp.get(1));
+    b.gnd(sp.get(2));
+    const tone = driveSpice(b.doc, { seconds: 0.05, end: true }).result.tones.get("ls1"); // prettier-ignore
+    assert.ok(tone, `${hz} Hz: heard`);
+    close(tone.hz, hz, 1e-6, `${hz} Hz: its pitch`);
+    // A 5 V swing high-passed at 1/(2π·8 Ω·C).
+    const x = 2 * Math.PI * hz * 8 * farads;
+    close(tone.vpp, (5 * x) / Math.hypot(1, x), 0.03, `${hz} Hz: its swing`);
+  }
 });
 
 test("a speaker with no tone across it is silent: an oscillator held in reset, one stopped", () => {

@@ -45,7 +45,7 @@
 // extra columns, which is how anyone would build it on a bench.
 
 import { holesOfNode, nodeOf, parseHole, spec } from "./breadboard.js";
-import { partPinHoles } from "./occupancy.js";
+import { partCoverHoles, partPinHoles } from "./occupancy.js";
 
 const GRID_ROW_RE = /^([a-j])([1-9]\d*)$/;
 
@@ -160,6 +160,12 @@ export function createAllocator(boards) {
         holes.set(pin, hole);
       }
       for (const a of taken) claimed.add(a);
+      // A 600-mil part's body stands over the rows between its two lines of
+      // legs (footprints.js `coveredHoles`): those holes take no lead, so no
+      // wire may be handed one.
+      for (const hole of partCoverHoles(ref, anchor, params)) {
+        if (parseHole(b.type, hole)) claimed.add(`${boardId}.${hole}`);
+      }
       // Own the columns too, so nothing else lands on these nodes.
       for (const hole of holes.values()) {
         const m = GRID_ROW_RE.exec(hole);

@@ -205,9 +205,10 @@ row, the AI verifier, the exports and every non-Spice consumer still read.
   RESET low; a section with nothing on it is "unused" and silent; `width(r, c, volts)`
   and `cxInside` per part), CD4060B (`ripple-oscillator.js`: Fig. 12 RC network →
   2.2·Rx·Cx, or external clock on φI when φO/φ̄O carry no network; no crystal), CD4541B
-  (`programmable-timer.js`, SCHS085E: Fig. 2's network → 2.3·Rtc·Ctc with CTC driving the
-  clock out and RTC its complement, or an external clock on RS counted on its FALLING
-  edges — the clock is RS inverted; a 16-stage count whose stage N, picked by A/B, is
+  (`programmable-timer.js`, SCHS085E: Fig. 2's network → 2.3·Rtc·Ctc with CTC IN PHASE
+  with RS and RTC its complement — the only way round that network oscillates, and the
+  same in both engines — or an external clock on RS counted on its FALLING edges (the
+  counter's clock is RS inverted); a 16-stage count whose stage N, picked by A/B, is
   the OUTPUT through Fig. 1's latch: MODE HIGH recycles, LOW makes one transition after
   2^(N−1) counts and holds it; Q/Q̄ SELECT is an XOR; MASTER RESET HIGH clears and stops
   it; AUTO RESET LOW starts it at Run, HIGH waits for an MR pulse). **The CD4528B has NO
@@ -325,20 +326,27 @@ a red `*` beside it too, which he dropped as redundant (2026-10-04) — don't br
   10 g, the two commons one net (`internalBridges` `[[3, 8]]`), every segment to pin 3.
   `normalizeParams` ALWAYS stores `wide: true`, so every seat is wide (row e → e/i;
   `dipRows` reads the marker only there) — there is no narrow seat for a part that size;
-  `alwaysWide` is the data hook `ai/catalog-brief.js` reads to leave it out of the AI
-  builder until the compiler (every DIP in e/f) seats it wide. Drawn by
+  `alwaysWide` is the data hook the generators read to seat it in rows d/h — the AI
+  compiler (`autobuild.js`, with the allocator keeping its covered rows free of wires) and
+  the demo benches (`demo-bench.mjs` `segmentDisplay`: the 74LS47 and CD4511B examples,
+  2026-10-14). Drawn by
   `buildSevenSegment` (`SEVEN_SEG`: the 12.6 × 19 mm body centred on the legs, the digit
   leaning 8°; `rot` 180 turns it about (2, -3)) and in 3D by `buildSevenSeg`; KiCad
   `7SegmentLED_LTS6760_LTS6780`, Digital's Seven-Seg. **Retired parts**: `retired: true`
   (seg8cc/seg8ca, the single-row digits) keeps a def in the catalog so old desks load
-  and run, and only drops it from the tray (`palette-panel.js` `#render`).
+  and run, and only drops it from the tray (`palette-panel.js` `#render`) and from the AI
+  builder's card (`BUILDABLE_DEFS`); no shipped example may place one (`gate-demos.test.js`).
 - **R on a turned two-lead part tries LENGTHS, not just the two quarters**
   (`rotateComponent`'s rotatable branch, Jason 2026-10-14): CW then CCW at the
   footprint's own span, then the nearest other spans (never under `minSpan`, at most
   three pitches over), the current length last (a rail-reaching bend) — so a diode in
   row c, whose 3-pitch quarters run off the board or into the channel, stands on its
   three-hole minimum rather than not turning. `canPlacePart`'s `minSpan` test has a
-  1e-6 slack (row y's are a 0.01 grid floats do not hold). **bar8 is `reversible`**
+  1e-6 slack (row y's are a 0.01 grid floats do not hold). The swung lead is STORED as
+  the vector to the hole it lands in (`pinVectors` in desk-doc.js) — a turned 2.76 is
+  0.24 short of a column, and kept as swung it was drawn beside the hole it was in. A
+  rigid turn (`def.turns`, the speaker) whose far leg would only come NEAR a hole (from
+  row a, three pitches down is 0.24 off a dovetailed rail's row) skips that quarter. **bar8 is `reversible`**
   (rot 180: block swung below the row — `turnsHalfLap` lists it, `buildBarDisplay`
   turns about (4, 0)); **bar8iso** draws its half lap (bars reversed, a pin-1 dot,
   `rotate(180 3.5 -1.5)`), the burn cue outside the turn in both.

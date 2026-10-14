@@ -312,14 +312,22 @@ export class Desk3DView {
       },
       // A lost context comes back empty-handed: the renderer re-uploads the
       // scene, and the view forgets what it last painted so it paints again.
+      // A restore can also FAIL (the GPU gone for good): then the canvas
+      // would stay blank, so it says so, as a machine without WebGL does.
       onRestored: () => {
         this.#screenKeys = this.#screenKeys.map(() => undefined);
         this.#drawnLive = null;
+        this.#showSupport();
         this.#schedule();
       },
     });
     // Anything built before there was a renderer never reached the GPU.
     this.#stale = true;
+    this.#showSupport();
+  }
+
+  /** The canvas and its hint while there is WebGL; the sentence when not. */
+  #showSupport() {
     const ok = this.#renderer.supported;
     this.#fallback.hidden = ok;
     this.#hint.hidden = !ok;

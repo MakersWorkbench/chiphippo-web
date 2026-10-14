@@ -77,7 +77,7 @@ export class IntegrationTools {
   /**
    * @param {object} host - the controller: `mode` (get/set), `editingLocked`,
    *   `probeArmed`, `doc`, `deskView`, `viewport`, `layer` (IntegrationLayer),
-   *   `ring` (the shared hover ring), `holeAtWorld(w)`, `selectTag(id)`, `selectedTag` (get), `forgetTag()`,
+   *   `ring` (the shared hover ring), `holeAtWorld(w)`, `selectTag(id)`, `recordSelection()`, `selectedTag` (get), `forgetTag()`,
    *   `emitDocChanged(label, opts)`, `hideHover()`, `connections()`,
    *   `openSettings(tab)`, `addNetToAnalyzer(address, opts)`,
    *   `openConnectionWindow(connectionId)`.
@@ -198,7 +198,10 @@ export class IntegrationTools {
     e.stopPropagation();
     h.hideHover();
     const origin = element.tags?.[key] ? { ...element.tags[key] } : null;
-    if (origin) h.selectTag(tagId(elementId, key));
+    if (origin) {
+      h.selectTag(tagId(elementId, key));
+      h.recordSelection?.(); // a click is a selection step
+    }
     const start = h.deskView.worldFromEvent(e);
     const elem = fromCard ? h.viewport : e.currentTarget;
     const d = {

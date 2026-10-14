@@ -26,6 +26,7 @@
  */
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const io = require("./io");
 
@@ -168,6 +169,20 @@ const DEFAULTS = Object.freeze({
   // good with its "Don't show again". Written only by that button.
   capacitorNoteDismissed: false,
 
+  // ── What's-new notices (the banner over the desk) ─────────────────────────
+  // The version this machine FIRST ran, stamped once by main at launch
+  // (`firstRunPatch`): the running version on a fresh install, or "legacy"
+  // when an earlier install left settings or saves behind — some build from
+  // before the stamp existed (≤ 1.4.2). Main-owned: it is what decides who
+  // counts as an upgrader, so the renderer only ever reads it. null until main
+  // has written it, and the banner shows nothing while it is.
+  firstRunVersion: null,
+
+  // The ids of the notices the user has closed with the banner's ✕
+  // (web/scripts/model/notices.js). Closed is closed for good: a later version
+  // that needs to say something again ships a notice with a NEW id.
+  dismissedNotices: Object.freeze([]),
+
   // ── Panels (Build guide / Logic analyzer) ──────────────────────────────────
   // Whether the right-docked build guide is shown.
   guideOpen: false,
@@ -285,6 +300,11 @@ class SettingsStore {
     this._file = path.join(dataDir, "settings.json");
   }
 
+  /** Whether the settings file is on disk at all — an earlier launch's mark. */
+  exists() {
+    return fs.existsSync(this._file);
+  }
+
   _read() {
     const doc = io.readJSON(this._file);
     return doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
@@ -325,7 +345,23 @@ const MAIN_OWNED = Object.freeze([
   "pinoutFloat",
   "connectionWindows",
   "codegenSaves",
+  "firstRunVersion",
 ]);
+
+/**
+ * The `firstRunVersion` stamp a launch should write, or null when there is
+ * nothing to write. Decided ONCE: a stored stamp is never touched again, so a
+ * user stays an upgrader (or not) for every launch after the one that said so.
+ *
+ * @param {object} stored - the settings as stored (not layered on DEFAULTS).
+ * @param {{priorInstall: boolean, version: string}} opts - `priorInstall`:
+ *   an earlier launch left settings or saves behind; `version`: this build's.
+ * @returns {{firstRunVersion: string}|null}
+ */
+function firstRunPatch(stored, { priorInstall, version }) {
+  if (typeof stored?.firstRunVersion === "string") return null;
+  return { firstRunVersion: priorInstall ? "legacy" : version };
+}
 
 /**
  * The part of a `settings:set` patch the renderer may write.
@@ -355,4 +391,10 @@ function rendererPatch(patch, { mayUseDir }) {
   return out;
 }
 
-module.exports = { SettingsStore, DEFAULTS, MAIN_OWNED, rendererPatch };
+module.exports = {
+  SettingsStore,
+  DEFAULTS,
+  MAIN_OWNED,
+  rendererPatch,
+  firstRunPatch,
+};

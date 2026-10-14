@@ -161,10 +161,17 @@ class CloseGuard {
    * reply, and with the latch still set no question would ever be asked again —
    * so the window could not be closed even though there was nobody left to
    * ask. Nor can it be asked afresh until its successor says it is ready.
+   *
+   * The question goes, and what it was FOR goes with it: nothing resumes the
+   * quit or the install once the page that was asked has gone, so left set,
+   * the next plain window close — asked of the page that replaced it — would
+   * answer as a quit, or as Restart-to-update and install.
    */
   rendererGone() {
     this.#pending = false;
     this.#answerable = false;
+    this.#quitting = false;
+    this.#installing = false;
   }
 }
 

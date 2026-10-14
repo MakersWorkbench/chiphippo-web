@@ -27,9 +27,19 @@ import assert from "node:assert/strict";
 
 import {
   parseIntelHex,
+  parseIntelHexWrites,
   emitIntelHex,
   parseHexStrict,
+  looksLikeIntelHex,
+  requireHexData,
 } from "../model/hex-format.js";
+
+/** One record line, its checksum computed. */
+function rec(len, addr, type, data) {
+  const bytes = [len, addr >> 8, addr & 0xff, type, ...data];
+  const sum = (0x100 - (bytes.reduce((a, b) => a + b, 0) & 0xff)) & 0xff;
+  return ":" + [...bytes, sum].map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase(); // prettier-ignore
+}
 
 test("emit produces the canonical record for a known payload", () => {
   // ":10 0000 00 <16 bytes> CC" — the classic first line of a HEX dump.
@@ -144,4 +154,44 @@ test("parseHexStrict reads a whole hex field or nothing", () => {
   for (const junk of ["8OOO", "12z4", "", "  ", "0x", "-1", "1 2"]) {
     assert.equal(parseHexStrict(junk), null, junk);
   }
+});
+
+test("an extended SEGMENT base wraps its offset at 64 KiB; a linear one does not", () => {
+  // Segment 0x1000 (base 0x10000), a record at offset 0xFFFF: the second
+  // byte is (0xFFFF + 1) mod 64K = 0 past the base — 0x10000, not 0x20000.
+  const seg = parseIntelHexWrites([rec(2, 0, 2, [0x10, 0x00]), rec(2, 0xffff, 0, [0xaa, 0xbb]), ":00000001FF"].join("\n")); // prettier-ignore
+  assert.deepEqual(seg.writes, [
+    [0x1ffff, 0xaa],
+    [0x10000, 0xbb],
+  ]);
+  const lin = parseIntelHexWrites([rec(2, 0, 4, [0x00, 0x01]), rec(2, 0xffff, 0, [0xaa, 0xbb]), ":00000001FF"].join("\n")); // prettier-ignore
+  assert.deepEqual(lin.writes, [
+    [0x1ffff, 0xaa],
+    [0x20000, 0xbb],
+  ]);
+});
+
+test("CR-only line endings parse like any other", () => {
+  const text = [rec(2, 0x10, 0, [1, 2]), rec(1, 0x12, 0, [3]), ":00000001FF"].join("\r"); // prettier-ignore
+  assert.deepEqual(parseIntelHexWrites(text).writes, [[0x10, 1], [0x11, 2], [0x12, 3]]); // prettier-ignore
+});
+
+test("a file with no data records is no image", () => {
+  const eofOnly = parseIntelHexWrites(":00000001FF\n");
+  assert.throws(
+    () => requireHexData(eofOnly),
+    (e) => e.code === "HEX_PARSE",
+  );
+  const some = parseIntelHexWrites(`${rec(1, 0, 0, [7])}\n:00000001FF`);
+  assert.equal(requireHexData(some), some);
+});
+
+test("looksLikeIntelHex: a valid first record, under any name — never a binary", () => {
+  const enc = (t) => new TextEncoder().encode(t);
+  assert.equal(looksLikeIntelHex(enc(emitIntelHex([1, 2, 3]))), true);
+  assert.equal(looksLikeIntelHex(enc(`\r\n  ${rec(1, 0, 0, [9])}\r\n`)), true);
+  assert.equal(looksLikeIntelHex(enc(":10000000ZZ")), false, "not hex digits");
+  assert.equal(looksLikeIntelHex(enc(":0100000009F7")), false, "bad checksum");
+  assert.equal(looksLikeIntelHex(Uint8Array.from([0x3a, 0x00, 0xff, 0x12])), false); // prettier-ignore
+  assert.equal(looksLikeIntelHex(new Uint8Array(0)), false);
 });

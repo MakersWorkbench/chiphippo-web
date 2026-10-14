@@ -124,13 +124,13 @@ export function specOfDemo(d) {
   });
 
   if (d.display) {
-    // Pin 9 is the common leg: an anode to VCC (the '47's sinking driver), a
+    // COM is the common leg: an anode to VCC (the '47's sinking driver), a
     // cathode to GND (the 4511's sourcing one).
-    const ref = d.display.ref ?? "seg8ca";
+    const ref = d.display.ref ?? "seg7ca";
     parts.push({ id: "DS1", ref });
     nets.push({
       name: "DS_COM",
-      members: ["DS1.#9", ref === "seg8cc" ? "GND" : "VCC"],
+      members: ["DS1.COM", ref === "seg7cc" ? "GND" : "VCC"],
     });
     d.display.segPins.forEach((p, i) => {
       nets.push({ name: `SEG${i}`, members: [`DS1.${"abcdefg"[i]}`, pin(p)] });

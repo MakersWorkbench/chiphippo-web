@@ -59,14 +59,16 @@ function keyOf(e) {
  * @param {(id: string, on: boolean) => void} opts.press
  */
 export function createSignalKeys({ isRunning, signalsOf, press }) {
-  /** key → the signal id that key is currently holding down. */
+  /** key → {id, code}: the signal that key is holding down, and the PHYSICAL
+      key it went down on (`e.code`), which is what its release is matched by
+      first — see handleKeyUp. */
   const held = new Map();
 
   const release = (key) => {
-    const id = held.get(key);
-    if (id == null) return false;
+    const down = held.get(key);
+    if (down == null) return false;
     held.delete(key);
-    press(id, false);
+    press(down.id, false);
     return true;
   };
 
@@ -82,7 +84,7 @@ export function createSignalKeys({ isRunning, signalsOf, press }) {
       if (held.has(key)) return true;
       const sig = signalForKey(signalsOf(), key);
       if (!sig) return false; // no button there — not ours to swallow
-      held.set(key, sig.id);
+      held.set(key, { id: sig.id, code: e.code || null });
       press(sig.id, true);
       return true;
     },
@@ -95,7 +97,17 @@ export function createSignalKeys({ isRunning, signalsOf, press }) {
      * else still has to come up.
      */
     handleKeyUp(e) {
-      if (!e || !isSignalKey(e.key)) return false;
+      if (!e) return false;
+      // By the physical key first. `e.key` is read with the modifiers held at
+      // RELEASE: hold 1, press Shift, let go of 1, and the keyup says "!" — a
+      // key that never went down — so the signal stayed asserted until a blur
+      // or a Stop. `e.code` names the key whatever is held.
+      if (e.code) {
+        for (const [key, down] of held) {
+          if (down.code === e.code) return release(key);
+        }
+      }
+      if (!isSignalKey(e.key)) return false;
       // Modifiers are NOT checked here either: press ⌘ after the digit and the
       // keyup arrives with metaKey set, which must still release it.
       return release(e.key);

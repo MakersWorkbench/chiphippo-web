@@ -688,6 +688,7 @@ export class DeskController {
       ring: this.#ring,
       holeAtWorld: (w) => this.#holeAtWorld(w),
       selectTag: (id) => this.#sel.selectTag(id),
+      recordSelection: () => this.#recordSelection(),
       forgetTag: () => this.#sel.select(null),
       emitDocChanged: (label, opts) => this.#emitDocChanged(label, opts),
       hideHover: () => this.#hideHover(),
@@ -716,6 +717,7 @@ export class DeskController {
       simOverlay: this.#simOverlay,
       hitTest: (world) => this.#hitTest(world),
       addressWorld: (address) => this.#addressWorld(address),
+      wirePathOf: (wireId) => this.#wireLayer.restingPath(wireId),
       onStateChange: onProbeStateChange,
       onNameNet: (address, name, stale) => this.nameNet(address, name, stale),
       onClearNetNames: (addresses) => this.clearNetNames(addresses),
@@ -1280,11 +1282,14 @@ export class DeskController {
   }
 
   /** A part's params at `seat`: a DIP's with the e/i marker the seat says
-      (footprints.js `withSeat`), any other part's as they are. */
+      (footprints.js `withSeat`), any other part's as they are — through the
+      def's own contract after, as DeskDoc's #seatParams (an `alwaysWide`
+      digit keeps its marker in every seat). */
   #seatedParams(ref, params, seat) {
-    const pkg = partDef(ref)?.package;
-    if (!pkg || !seat?.anchor || seat.wide === undefined) return params;
-    return withSeat(pkg, params, seat.anchor.charAt(0), seat.wide);
+    const def = partDef(ref);
+    if (!def?.package || !seat?.anchor || seat.wide === undefined) return params; // prettier-ignore
+    const seated = withSeat(def.package, params, seat.anchor.charAt(0), seat.wide); // prettier-ignore
+    return def.normalizeParams ? def.normalizeParams(seated) : seated;
   }
 
   /** What a dragged part is DRAWN with: its params at the seat in hand, a
@@ -1338,6 +1343,10 @@ export class DeskController {
       p1: { x: ends.a.x, y: ends.a.y }, // pin 1 at grab time
       orient: { dx: ends.b.x - ends.a.x, dy: ends.b.y - ends.a.y },
       origin: { board: comp.board, anchor: comp.anchor, params: comp.params },
+      // The lead vector at the grab — a drop back where it started with the
+      // same bend (R not pressed) is no move, and records nothing.
+      orient0: { dx: ends.b.x - ends.a.x, dy: ends.b.y - ends.a.y },
+      hasAnchored: this.#hasAnchored(comp.id),
       holes: null, // { boardId, one, two } while both ends land legally
       legal: false,
       active: false,
@@ -1412,6 +1421,7 @@ export class DeskController {
       anchor: comp.anchor, // pin 1's seat, kept while only pin 2 moves
       moving: grabbed, // "a" (pin 1) or "b" (pin 2)
       fixed: ends[grabbed === "a" ? "b" : "a"],
+      from: ends[grabbed], // where the moving lead was — a drop there is no move
       pointerId: e.pointerId,
       startClientX: e.clientX,
       startClientY: e.clientY,
@@ -1557,7 +1567,7 @@ export class DeskController {
       ignoreId: d.id,
       params: { rot: 90, end },
     });
-    return fits ? { boardId, anchor, end } : null;
+    return fits ? { boardId, anchor, end, at: { x: hole.x, y: hole.y } } : null;
   }
 
   /** Live resistor drag: rigid lattice-snapped translation, both ends checked.
@@ -1581,7 +1591,10 @@ export class DeskController {
     // The bend is carried through a rigid translation untouched — rounding it
     // here would quietly re-bend a lead every time the part was dragged.
     const end = { dx: d.orient.dx, dy: d.orient.dy };
-    const params = { rot: 90, end };
+    // EVERY param the part has, in the two-free-ends form: the plan, the batch
+    // check and the commit all read this one object, and a bare `{rot, end}`
+    // reset a resistor's ohms and an LED's colour and polarity on the drop.
+    const params = { ...d.origin.params, rot: 90, end };
     const { point, accepted } = nearestLegalPoint(
       this.#doc.boards,
       null,
@@ -1613,6 +1626,16 @@ export class DeskController {
     view?.setIllegal(!legal);
     if (d.riding) this.#wireLayer.setPartDrag(this.#ridingWirePreview(d));
     if (d.ridingParts) this.#applyLeadRiders(d);
+    // Labels anchored to it ride live, by its middle's travel — the point
+    // #carryAnchoredLabels shifts them by on the drop (an R mid-drag swings
+    // the body round pin 1, so pin 1's own travel would not say where it went).
+    if (d.hasAnchored) {
+      this.#annotationLayer.render({
+        anchorIds: new Set([d.id]),
+        dx: p1.x + d.orient.dx / 2 - (d.p1.x + d.orient0.dx / 2),
+        dy: p1.y + d.orient.dy / 2 - (d.p1.y + d.orient0.dy / 2),
+      });
+    }
   }
 
   /**
@@ -1697,11 +1720,15 @@ export class DeskController {
       desk-doc.js. No-op if it can't fit (nothing free at the rotated
       position — a flip in place never fails). */
   rotateComponent(id) {
+    const before = { ...this.#doc.getComponent(id) };
     try {
       this.#doc.rotateComponent(id);
     } catch {
       return; // nowhere free to rotate into — leave it as-is
     }
+    // A can spins about its middle, a bent TO-92 swaps pins 1 and 3: either
+    // can move the anchor its labels hang from.
+    this.#carryAnchoredLabels(id, before);
     this.#remountPart(id);
     this.#emitDocChanged("rotate part");
   }
@@ -3560,9 +3587,11 @@ export class DeskController {
     // flip); every other part is frozen in place.
     if (this.#editingLocked) {
       // A modifier-press is a SELECT, and selection is refused while running —
-      // it must not fall through and flip a switch instead.
+      // it must not fall through and flip a switch instead. Option/Alt alone
+      // is the pan, which a run does not stop.
       if (toggling || e.altKey) {
         e.stopPropagation();
+        if (e.altKey && !toggling) this.#altPan(e);
         return;
       }
       // While running, only live interactions remain: a slide switch or
@@ -3615,7 +3644,8 @@ export class DeskController {
    *     above, and makes the part drag they begin a BARE one (#ridersOf) —
    *     the parts move and their wiring stays where it is.
    *
-   * Pan is not here at all — it is Space-drag and the middle button (DeskView).
+   * Pan is DeskView's — Space-drag and the middle button — and an Option/Alt
+   * drag that picks no lead (#pinPress) hands it the press.
    *
    * @param {PointerEvent} e
    * @param {{kind: "part"|"board"|"wire"|"bus"|"bus-handle", id: string}|null}
@@ -3742,11 +3772,15 @@ export class DeskController {
    * from its chip, so it is never one). A press on one REPLACES the selection
    * with that lead alone — never additive — and is that lead's drag: let go in
    * place and it is simply picked, travel and it lands in a new hole. A press
-   * on nothing lightable does nothing at all.
+   * on nothing lightable PANS the desk (Jason, 2026-10-14) — its drag does; a
+   * click there does nothing at all.
    */
   #pinPress(e, world) {
     const target = this.#pinTargetAt(world);
-    if (!target) return;
+    if (!target) {
+      this.#altPan(e);
+      return;
+    }
     aimRing(this.#ring, null);
     if (target.kind === "wire-end") {
       this.#sel.selectWireEnd(target.id, target.end);
@@ -3775,6 +3809,13 @@ export class DeskController {
       onEnd: this.#onPartPointerUp,
     });
     this.#refreshPinMode();
+  }
+
+  /** An Option/Alt drag that picked no lead pans the desk (DeskView's own
+      pan, after the click threshold): beside Space-drag and the middle
+      button, the one-handed way. Whether it began one. */
+  #altPan(e) {
+    return this.#deskView.beginPan?.(e) ?? false;
   }
 
   /**
@@ -4301,10 +4342,22 @@ export class DeskController {
         : null;
     d.wireMoves = this.#groupWireMoves(d);
     const shift = this.#groupBoardShift(d);
+    // The strips and the bricks travel TOGETHER: each is judged against the
+    // other's landing, not where it stands now — or a circuit dragged whole
+    // with its PSU beside a board was refused for the PSU landing where the
+    // board used to be.
+    const brickTargets = new Map(
+      d.targets
+        .filter((t) => t.form === "brick")
+        .map((t) => [t.id, { x: t.x, y: t.y }]),
+    );
     const boardsOk =
       d.boardIds.length === 0 ||
       (shift != null &&
-        this.#doc.canMoveBoardsBy(d.boardIds, shift.dx, shift.dy));
+        this.#doc.canMoveBoardsBy(d.boardIds, shift.dx, shift.dy, {
+          brickTargets,
+        }));
+    d.boardShift = shift ? { ids: new Set(d.boardIds), ...shift } : null;
     d.legal =
       Boolean(delta) &&
       resolved &&
@@ -4312,10 +4365,11 @@ export class DeskController {
       (d.plan?.resolved ?? true) &&
       d.wireMoves != null &&
       boardsOk &&
-      d.checkBatch(this.#clusterPlacements(d), [
-        ...(d.plan?.moves ?? []),
-        ...d.wireMoves,
-      ]);
+      d.checkBatch(
+        this.#clusterPlacements(d),
+        [...(d.plan?.moves ?? []), ...d.wireMoves],
+        d.boardShift,
+      );
   }
 
   /** The strips' share of the delta — whole pitches across, the 0.01 grid
@@ -4337,11 +4391,21 @@ export class DeskController {
       lands on nothing. */
   #groupWireMoves(d) {
     const { dx, dy } = d.delta;
-    const at = (p) =>
-      connectionPointAt(this.#doc.boards, this.#doc.components, {
-        x: p.x + dx,
-        y: p.y + dy,
-      })?.address ?? null;
+    // An end landing ON something that is itself moving — a moving strip's
+    // hole, a moving brick's terminal — is refused, as a member landing on a
+    // moving strip is: that point is about to leave, and the wire would ride
+    // it a second delta away from where it was dropped.
+    const moving = new Set([...d.boardIds, ...d.members.map((m) => m.id)]);
+    const at = (p) => {
+      const address =
+        connectionPointAt(this.#doc.boards, this.#doc.components, {
+          x: p.x + dx,
+          y: p.y + dy,
+        })?.address ?? null;
+      return address && !moving.has(parseAddress(address)?.boardId)
+        ? address
+        : null;
+    };
     const moves = [];
     for (const w of d.wires) {
       const from = w.keepFrom ? w.from : at(w.fromWorld);
@@ -4625,6 +4689,38 @@ export class DeskController {
     return { dx: seatW.x - originW.x, dy: seatW.y - originW.y };
   }
 
+  /** After a part was reshaped from `before` (the component as it was): carry
+      the labels anchored to it by the travel of its pins' middle — what a
+      chip drag and a group drag already did by the anchor (a rigid move, so
+      the same delta), and a lead, leg, two-lead body or turn left behind. The
+      middle, not pin 1: a lead dragged alone moves the body half as far, and
+      a can spun about its centre or a bent TO-92 turned end for end moves
+      pin 1 without moving the part at all. */
+  #carryAnchoredLabels(id, before) {
+    const now = this.#doc.getComponent(id);
+    if (!now || !this.#hasAnchored(id)) return;
+    const from = this.#pinsMiddle(before);
+    const to = this.#pinsMiddle(now);
+    const shift =
+      from && to
+        ? { dx: to.x - from.x, dy: to.y - from.y }
+        : this.#anchorDelta(before, now);
+    if (shift && (shift.dx || shift.dy)) {
+      this.#shiftAnchoredAnnotations(id, shift.dx, shift.dy);
+    }
+  }
+
+  /** The mean of a seated part's pin positions, or null. */
+  #pinsMiddle(comp) {
+    const pins = comp?.ref ? partPinsWorld(this.#doc.boards, comp) : null;
+    if (!pins?.length) return null;
+    const sum = pins.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), {
+      x: 0,
+      y: 0,
+    });
+    return { x: sum.x / pins.length, y: sum.y / pins.length };
+  }
+
   #onPartPointerUp = (e) => {
     const d = this.#mode;
     if (!PART_DRAG_KINDS.has(d?.kind) || e.pointerId !== d.pointerId) {
@@ -4655,14 +4751,19 @@ export class DeskController {
       if (!d.active) return; // plain click — the press already selected it
       // The drop is the seat the last move SHOWED, ringed — never re-resolved
       // at the release point (see the wire end's #onEndpointUp). No ring, or
-      // a red one, left d.legal false, and the lead springs back.
-      if (!cancelled && d.legal && d.target) {
+      // a red one, left d.legal false, and the lead springs back. A lead put
+      // back in its own hole is no move: nothing written, no undo step.
+      const moved =
+        d.target &&
+        Math.hypot(d.target.at.x - d.from.x, d.target.at.y - d.from.y) > 1e-6;
+      if (!cancelled && d.legal && moved) {
         this.#doc.movePartEnds(
           d.id,
           d.target.boardId,
           d.target.anchor,
           d.target.end,
         );
+        this.#carryAnchoredLabels(d.id, { ref: d.ref, ...d.origin });
         this.#emitDocChanged("move part");
       }
       // Redraw from the document — an illegal drop wrote nothing, so the lead
@@ -4677,8 +4778,15 @@ export class DeskController {
       if (!d.active) return; // plain click — the press already picked the leg
       // The drop is the seat the last move SHOWED, ringed — never re-resolved
       // at the release point, as for every single-point drag.
-      if (!cancelled && d.legal && d.seat) {
+      const was = this.#doc.getComponent(d.id);
+      const moved =
+        d.seat &&
+        (d.seat.board !== was?.board ||
+          d.seat.anchor !== was?.anchor ||
+          JSON.stringify(d.seat.params) !== JSON.stringify(was?.params));
+      if (!cancelled && d.legal && moved) {
         this.#doc.moveClusterWithWires([d.seat], { moves: [] });
+        this.#carryAnchoredLabels(d.id, was);
         this.#emitDocChanged("move part");
       }
       this.#remountPart(d.id);
@@ -4693,7 +4801,13 @@ export class DeskController {
       // drag the drop is the seat the last move SHOWED (the part drawn in it),
       // never re-resolved at the release point — a release out of every
       // hole's reach would throw back a seat the screen had promised.
-      if (!cancelled && d.legal && d.holes) {
+      const moved =
+        d.holes &&
+        (d.holes.boardId !== d.origin.board ||
+          d.holes.anchor !== d.origin.anchor ||
+          d.orient.dx !== d.orient0.dx ||
+          d.orient.dy !== d.orient0.dy);
+      if (!cancelled && d.legal && moved) {
         // A part carrying wiring commits it AND everything riding it as ONE
         // mutation (the same transaction a footprint part's does); one with
         // nothing attached takes the two-ends path.
@@ -4704,7 +4818,7 @@ export class DeskController {
                 id: d.id,
                 board: d.holes.boardId,
                 anchor: d.holes.anchor,
-                params: { rot: 90, end: d.holes.end },
+                params: { ...d.origin.params, rot: 90, end: d.holes.end },
               },
               ...d.plan.parts,
             ],
@@ -4718,7 +4832,10 @@ export class DeskController {
             d.holes.end,
           );
         }
+        this.#carryAnchoredLabels(d.id, { ref: d.ref, ...d.origin });
         this.#emitDocChanged("move part");
+      } else if (d.hasAnchored) {
+        this.#annotationLayer.render(); // the labels snap back with it
       }
       // Commit or not, redraw from the document — an illegal drop leaves the
       // document untouched, so this snaps the resistor back to its origin.
@@ -4760,6 +4877,9 @@ export class DeskController {
     }
 
     if (!d.active) {
+      // An ABORTED press (Escape, a lost capture, a blur, a scene rebuild, Run
+      // starting under it) is no click: nothing flips.
+      if (cancelled) return;
       // Plain click: a slide switch, toggle button, or DIP switch bank
       // position flips (always interactive).
       const comp = this.#doc.getComponent(d.id);
@@ -4891,16 +5011,17 @@ export class DeskController {
     // drawn; a commit re-renders through #emitDocChanged).
     this.#wireLayer.setPartDrag(null);
 
-    if (!d.active) {
-      // A click — a drag that didn't travel — puts the selection down on what
-      // was pressed: the one object, everything else cancelled.
-      this.#restoreGroupViews(d);
-      this.#collapseTo(d);
-      return;
-    }
     // A drag that spans Run (editing locked mid-gesture) reverts, never
     // commits — the teardown above already ran, so this only skips the mutation.
     const cancelled = e.type === "pointercancel" || this.#editingLocked;
+    if (!d.active) {
+      // A click — a drag that didn't travel — puts the selection down on what
+      // was pressed: the one object, everything else cancelled. An ABORTED
+      // press is no click, and leaves the selection as it was.
+      this.#restoreGroupViews(d);
+      if (!cancelled) this.#collapseTo(d);
+      return;
+    }
     // The drop is what the last move SHOWED, when that was legal — reused,
     // never recomputed. Only with nothing legal showing does the release point
     // get a say, through the same resolver.
@@ -4936,6 +5057,7 @@ export class DeskController {
         this.#doc.moveClusterWithWires(placements, {
           moves,
           points: [...(d.plan?.points ?? []), ...this.#groupWirePoints(d)],
+          boardShift: d.boardShift,
         });
       }
       if (d.boardIds.length > 0) {
@@ -5134,6 +5256,10 @@ export class DeskController {
     }
     this.#hideHover();
     this.selectAnnotation(id);
+    // A click is a selection step like any other (CLAUDE.md → "Selection"):
+    // unrecorded, the history's selection went stale and the next click on
+    // the part selected before compared equal to it and was skipped.
+    this.#recordSelection();
     const ann = this.#doc.getAnnotation(id);
     if (!ann) return;
     const box = e.currentTarget;
@@ -5265,6 +5391,7 @@ export class DeskController {
     e.stopPropagation();
     this.#hideHover();
     this.selectSignal(id);
+    this.#recordSelection(); // a click is a selection step
     const start = this.#deskView.worldFromEvent(e);
     const elem = fromRail ? this.#viewport : e.currentTarget;
     this.#mode = {
@@ -5842,6 +5969,15 @@ export class DeskController {
           this.#toggleClickPart(under.id, switchIndexFromEvent(under));
         }
       }
+      // Option/Alt alone pans — a run stops editing, not looking around.
+      if (
+        e.altKey &&
+        !isToggleSelectEvent(e, IS_MAC) &&
+        !this.#probe.armed &&
+        this.#hitFromTarget(e.target) !== undefined
+      ) {
+        this.#altPan(e);
+      }
       return;
     }
     if (this.#probe.armed) return; // the click pins a net (#onViewportClick)
@@ -6216,7 +6352,8 @@ export class DeskController {
       !sel?.single &&
       !sel?.parts?.length &&
       !sel?.wires?.length &&
-      !sel?.boards?.length;
+      !sel?.boards?.length &&
+      !sel?.leads?.length;
     if (empty(now) && empty(was)) return;
     if (JSON.stringify(now) === JSON.stringify(was)) return;
     const dropped = this.#history.recordSelection(now, Date.now());
@@ -6360,6 +6497,11 @@ export class DeskController {
     }
     inDocumentOrder(boards.map((b) => this.#views.get(b.id)?.element));
     inDocumentOrder(components.map((c) => this.#partViews.get(c.id)?.element));
+    // forgetAll dropped the selection WITHOUT un-highlighting (its views were
+    // meant to go) — but an unchanged view is kept now, so its lit state has
+    // to be put out here or it stays lit beside the selection restored next.
+    for (const view of this.#views.values()) view.setSelected?.(false);
+    for (const view of this.#partViews.values()) view.setSelected?.(false);
     this.#wireLayer.render();
     this.#sel.refreshBoardOutline();
   }

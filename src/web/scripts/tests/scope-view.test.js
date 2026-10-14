@@ -135,6 +135,89 @@ test("a fresh Run resets the recorded trace", () => {
   );
 });
 
+test("another desk on the desk drops the trace the last one's run left", () => {
+  resetDom();
+  const { view } = makeView();
+  view.setVisible(true);
+  view.setAxisMode("transitions");
+  view.addNetChannel("bb1.f12");
+  window.dispatchEvent(simEvent("running", "bb1.f12", "net1", "H"));
+  window.dispatchEvent(simEvent("running", "bb1.f12", "net1", "L"));
+  window.dispatchEvent(simEvent("stopped", "bb1.f12", "net1", null));
+  view.setVisible(true);
+  const width = () =>
+    view.element.querySelector(".scope-svg").getAttribute("width");
+  assert.equal(width(), "20", "kept after Stop");
+  // A desktop switch: the next desk's sc1 is another channel altogether.
+  window.dispatchEvent(new window.CustomEvent("chiphippo:desk-loaded"));
+  view.setVisible(true);
+  assert.notEqual(width(), "20", "the old trace is gone");
+  assert.equal(
+    view.element.querySelectorAll(".scope-svg path[d*='L']").length,
+    0,
+    "nothing drawn from it",
+  );
+});
+
+test("the exported SVG stands alone: no var(--…) left in it, fonts included", async () => {
+  resetDom();
+  const { doc, view } = makeView();
+  view.setVisible(true);
+  view.addNetChannel("bb1.f12");
+  doc.addBoard("pins-full", 0, 0);
+  const D = doc.addWire({ from: "bb1.a1", to: "bb1.a9" });
+  doc.addBus("D[0]", [D.id]);
+  doc.addScopeChannel("bus", doc.buses[0].id);
+  for (const lvl of ["L", "H", "H", "L"]) {
+    window.dispatchEvent(simEvent("running", "bb1.f12", "net1", lvl));
+  }
+  window.dispatchEvent(simEvent("stopped", "bb1.f12", "net1", null));
+  let blob = null;
+  const { createObjectURL, revokeObjectURL } = globalThis.URL;
+  globalThis.URL.createObjectURL = (b) => ((blob = b), "blob:timing");
+  globalThis.URL.revokeObjectURL = () => {};
+  globalThis.XMLSerializer ??= window.XMLSerializer;
+  try {
+    [...view.element.querySelectorAll(".scope-btn")]
+      .find((b) => b.textContent === "SVG")
+      .click();
+  } finally {
+    globalThis.URL.createObjectURL = createObjectURL;
+    globalThis.URL.revokeObjectURL = revokeObjectURL;
+  }
+  assert.ok(blob, "a file was offered");
+  const xml = await blob.text();
+  assert.match(xml, /<text/);
+  assert.doesNotMatch(xml, /var\(--/);
+});
+
+test("a render keeps the gutter scrolled with the lanes, and room under it for their scrollbar", () => {
+  resetDom();
+  const { doc, view } = makeView();
+  for (let i = 1; i <= 6; i++) doc.addScopeChannel("net", `bb1.a${i}`);
+  const lanes = view.element.querySelector(".scope-lanes");
+  const gutter = view.element.querySelector(".scope-gutter");
+  // jsdom lays nothing out: a lanes viewport scrolled down two rows, with a
+  // 12 px horizontal scrollbar.
+  Object.defineProperty(lanes, "scrollTop", { value: 92, configurable: true });
+  Object.defineProperty(lanes, "offsetHeight", { value: 112, configurable: true }); // prettier-ignore
+  Object.defineProperty(lanes, "clientHeight", { value: 100, configurable: true }); // prettier-ignore
+  let gutterTop = 0;
+  Object.defineProperty(gutter, "scrollTop", {
+    get: () => gutterTop,
+    set: (v) => {
+      gutterTop = v;
+    },
+    configurable: true,
+  });
+  view.setVisible(true);
+  assert.equal(gutterTop, 92, "level with the lanes after the rebuild");
+  assert.equal(
+    gutter.querySelector(".scope-gutter-foot")?.style.height,
+    "12px",
+  );
+});
+
 // ── Reordering by dragging a gutter row ─────────────────────────────────────
 // jsdom lays nothing out, so the gutter's top is 0 and a client Y IS a distance
 // down the channel list: row n spans [46n, 46n + 46).

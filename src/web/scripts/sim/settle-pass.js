@@ -177,8 +177,21 @@ const controlKey = (c, pin) => c.pinNet.get(pin) ?? `${c.comp.id}#${pin}`;
  * closed at once (two channels no select value joins, joined through COM).
  * The pass keeps the levels all readings agree on; with no unknown control
  * the one reading IS `definite`.
+ *
+ * `drivers` (this pass's, `driversFor`) lets the logic engine read a
+ * SELF-FED transistor (`selfFedControls`) — one whose base or gate its own
+ * channel would join to that channel; with `read` (Spice Lite, which reads
+ * such a control off its solve) it is never needed. The controls it set are
+ * returned as `forced` (controlKey → level), for the settle to publish its
+ * channels by.
  */
-export function channelGroups(ctx, levels, state = new Map(), read = null) {
+export function channelGroups(
+  ctx,
+  levels,
+  state = new Map(),
+  read = null,
+  drivers = null,
+) {
   const parts = ctx.chips.filter(
     (c) => c.analogSwitch && c.status === CHIP_STATUS.OK,
   );
@@ -204,6 +217,7 @@ export function channelGroups(ctx, levels, state = new Map(), read = null) {
           b,
           limited: c.limitsChannel,
           transistor: c.transistor,
+          comp: c.comp.id,
         };
         if (ch.on === H) {
           on.push(pair);
@@ -225,29 +239,176 @@ export function channelGroups(ctx, levels, state = new Map(), read = null) {
       pairs.filter((p) => !p.limited),
     ),
   });
-  const unknown = new Set();
-  const base = pairsFor(null, unknown);
+  let unknown = new Set();
+  let base = pairsFor(null, unknown);
+  const forced =
+    !read && drivers ? selfFedControls(ctx, levels, drivers, base) : null;
+  if (forced) {
+    unknown = new Set();
+    base = pairsFor(forced, unknown);
+  }
   if (!base.on.length && !base.maybe.length) return null;
   const definite = reading(base.on);
-  if (!base.maybe.length) return { definite, readings: [definite] };
+  if (!base.maybe.length) return { definite, readings: [definite], forced };
   const keys = [...unknown];
   if (keys.length > MAX_UNKNOWN_CONTROLS) {
     return {
       definite,
       readings: [definite, reading([...base.on, ...base.maybe])],
+      forced,
     };
   }
   const readings = [];
   for (let bits = 0; bits < 2 ** keys.length; bits++) {
-    const overrides = new Map(
-      keys.map((key, i) => [key, (bits >> i) & 1 ? H : L]),
-    );
+    const overrides = new Map(forced ?? []);
+    keys.forEach((key, i) => overrides.set(key, (bits >> i) & 1 ? H : L));
     // A channel still answering X with every unknown control set has a
     // reason of its own; it is closed, the conservative reading.
     const { on, maybe } = pairsFor(overrides, null);
     readings.push(reading([...on, ...maybe]));
   }
-  return { definite, readings };
+  return { definite, readings, forced };
+}
+
+/** Each context's discrete transistors that could feed themselves
+    (`selfFedCandidates`). */
+const SELF_FED = new WeakMap();
+
+/**
+ * The discrete transistors whose base or gate their OWN channel could join to
+ * that channel — tied straight to its collector (diode-connected, a mirror's
+ * reference) or reaching it through other channels (a Darlington's second
+ * transistor, its base on the first one's emitter and the two collectors
+ * tied): `[{id, key, control, a, b}]`, `key` its control's controlKey. Every
+ * other channel counts, on or off; a rail joins nothing (`groupsOf`).
+ */
+function selfFedCandidates(ctx) {
+  let found = SELF_FED.get(ctx);
+  if (found) return found;
+  found = [];
+  const isSupply = (id) =>
+    ctx.supplyPlusVolts.has(id) || ctx.supplyMinus.has(id);
+  const channels = [];
+  for (const c of ctx.chips) {
+    if (!c.analogSwitch) continue;
+    for (const ch of c.def.logic.channels) {
+      channels.push({ id: c.comp.id, a: c.pinNet.get(ch.a), b: c.pinNet.get(ch.b) }); // prettier-ignore
+    }
+  }
+  for (const c of ctx.chips) {
+    if (!c.def.transistor) continue;
+    const [ch] = c.def.logic.channels;
+    const pin = ch.inputs[0];
+    const control = c.pinNet.get(pin);
+    const a = c.pinNet.get(ch.a);
+    const b = c.pinNet.get(ch.b);
+    if (!control || !a || !b || isSupply(control)) continue;
+    const uf = new UnionFind();
+    uf.add(control);
+    for (const o of channels) {
+      if (o.id === c.comp.id || !o.a || !o.b) continue;
+      if (isSupply(o.a) || isSupply(o.b)) continue;
+      uf.union(o.a, o.b);
+    }
+    const reaches = (end) =>
+      end === control || (!isSupply(end) && uf.find(end) === uf.find(control)); // prettier-ignore
+    if (reaches(a) || reaches(b)) {
+      found.push({ id: c.comp.id, key: controlKey(c, pin), control, a, b });
+    }
+  }
+  SELF_FED.set(ctx, found);
+  return found;
+}
+
+/** Each context's `selfFedNets`. */
+const SELF_FED_NETS = new WeakMap();
+
+/**
+ * Every net a self-fed transistor's reading (`selfFedControls`) can hear:
+ * its control and whatever any channel could join to it, and what a resistor
+ * or a diode feeds into those. The incremental settle reads the channels again
+ * when one of these moves — its level or its drivers — since such a control
+ * can turn with no change on its own net (it sits LOW while its transistor
+ * conducts, whatever pulls it up).
+ */
+export function selfFedNets(ctx) {
+  let nets = SELF_FED_NETS.get(ctx);
+  if (nets) return nets;
+  nets = new Set();
+  const candidates = selfFedCandidates(ctx);
+  if (candidates.length) {
+    const isSupply = (id) =>
+      ctx.supplyPlusVolts.has(id) || ctx.supplyMinus.has(id);
+    const uf = new UnionFind();
+    for (const c of ctx.chips) {
+      if (!c.analogSwitch) continue;
+      for (const ch of c.def.logic.channels) {
+        const [a, b] = [c.pinNet.get(ch.a), c.pinNet.get(ch.b)];
+        if (a && b && !isSupply(a) && !isSupply(b)) uf.union(a, b);
+      }
+    }
+    const roots = new Set(candidates.map((t) => uf.find(t.control)));
+    for (const id of ctx.netIds) {
+      if (!isSupply(id) && roots.has(uf.find(id))) nets.add(id);
+    }
+    for (const r of ctx.resistors) {
+      if (nets.has(r.netA) && r.netB) nets.add(r.netB);
+      else if (nets.has(r.netB) && r.netA) nets.add(r.netA);
+    }
+    for (const d of ctx.diodes) if (nets.has(d.cathode)) nets.add(d.anode);
+  }
+  SELF_FED_NETS.set(ctx, nets);
+  return nets;
+}
+
+/**
+ * The logic engine's reading of a SELF-FED transistor's control: its control
+ * net as it resolves WITHOUT the transistor's own channel. Read at its net's
+ * level, it has no answer at all as a switch: on, its channel joins its base
+ * to its emitter's LOW and turns it off; off, the base is pulled HIGH again
+ * and turns it on — every pass to the iteration cap, X and an oscillation
+ * (a diode-connected transistor, a Darlington of two discretes). On the bench
+ * it conducts, its base a junction drop above its emitter: what pulls the
+ * base up with the transistor out of the way is what turns it on. Resolved
+ * from this pass's drivers across the other channels' joins (`base`, the
+ * pairs read off `levels`), the resistors' pulls taken from `levels`. Only
+ * where its own channel WOULD join the base to itself — anywhere else its
+ * control reads as every other does. Returns controlKey → level, or null.
+ */
+function selfFedControls(ctx, levels, drivers, base) {
+  const candidates = selfFedCandidates(ctx);
+  if (!candidates.length) return null;
+  const all = [...base.on, ...base.maybe];
+  const pulls = new Map();
+  const addPull = (net, level) => {
+    if (!net || (level !== H && level !== L)) return;
+    if (!pulls.has(net)) pulls.set(net, []);
+    pulls.get(net).push(level);
+  };
+  for (const r of ctx.resistors) {
+    addPull(r.netA, levels.get(r.netB));
+    addPull(r.netB, levels.get(r.netA));
+  }
+  for (const d of ctx.diodes) {
+    if (feedsCathode(ctx, d) && levels.get(d.anode) === H) addPull(d.cathode, H); // prettier-ignore
+  }
+  const pullsOf = (net) => pulls.get(net) ?? [];
+  let forced = null;
+  for (const t of candidates) {
+    const others = all.filter((p) => p.comp !== t.id);
+    const groups = groupsOf(ctx, others);
+    const members = groups?.byNet.get(t.control)?.members;
+    const fed =
+      t.control === t.a ||
+      t.control === t.b ||
+      Boolean(members?.includes(t.a) || members?.includes(t.b));
+    if (!fed) continue;
+    const { level } = resolveIn(ctx, drivers, groups, t.control, pullsOf);
+    if (level !== H && level !== L) continue;
+    forced ??= new Map();
+    forced.set(t.key, level);
+  }
+  return forced;
 }
 
 /**

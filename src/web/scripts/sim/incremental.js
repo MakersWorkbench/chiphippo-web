@@ -98,6 +98,7 @@ import {
   mapsEqual,
   resolveAll,
   resolveReadings,
+  selfFedNets,
 } from "./settle-pass.js";
 import { mergeScopes } from "./settle-index.js";
 import {
@@ -534,14 +535,21 @@ export function solveIncremental(
     const dirty = new Set(); // components to re-resolve
     // …or when Spice Lite says a switch reads its control anew on a net
     // whose level did not move (a voltage crossed its threshold: `again`).
+    // …or, under the logic engine, when anything a self-fed transistor's
+    // reading hears moved — its level or its drivers (settle-pass.js
+    // `selfFedNets`).
+    const fed = hooks?.input ? null : selfFedNets(ctx);
     const controlMoved =
       !everything &&
       !first &&
       ([...delta].some((id) => ix.controlNets.has(id)) ||
         (again != null &&
-          ctx.chips.some((c) => c.analogSwitch && again.has(c.comp.id))));
+          ctx.chips.some((c) => c.analogSwitch && again.has(c.comp.id))) ||
+        (fed?.size > 0 &&
+          ([...delta].some((id) => fed.has(id)) ||
+            [...touched].some((id) => fed.has(id)))));
     if (ix.hasChannels && (everything || first || controlMoved)) {
-      work.channels = channelGroups(ctx, levels, state, hooks?.input);
+      work.channels = channelGroups(ctx, levels, state, hooks?.input, work.drivers); // prettier-ignore
       for (const k of ix.channelComps) {
         const sig = joinsOf(ix.comps[k], work.channels);
         if (sig !== work.sig[k]) dirty.add(k);
@@ -750,6 +758,7 @@ export function solveIncremental(
     settled,
     warnings,
     carry: { work, final: levels, pending: marked, stale: staleOut ?? [] },
+    forced: work.channels?.forced ?? null,
   };
   if (lastStrong !== FROM_CACHE) {
     result.strong = lastStrong;

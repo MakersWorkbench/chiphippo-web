@@ -150,9 +150,13 @@ function step(state, ins, prev, env) {
   if (!a?.mode) {
     return { mode: "idle", stages: allStages(L), phi: L, wake: null };
   }
+  // A RESET that floated may have cleared the count or not: it stays unknown
+  // until a clean RESET HIGH, as a CD4040's does, however RESET is tied
+  // after it (the "unknown" mode, and `unknown` in the other two).
   if (reset === X) {
     return { mode: "unknown", stages: allStages(X), phi: X, wake: null };
   }
+  const doubted = state?.mode === "unknown" || state?.unknown === true;
 
   if (a.mode === "oscillator") {
     // RESET HIGH clears the stages and stops the oscillator; the sheet does not
@@ -170,6 +174,10 @@ function step(state, ins, prev, env) {
           : rebaseCount(state.period, a.period, state.t0, now);
     }
     const { phi, stages, wake } = oscillatorAt(a.period, t0, now);
+    // In doubt, the oscillator runs but the count it adds to is unknown.
+    if (doubted) {
+      return { mode: "osc", t0, period: a.period, unknown: true, stages: allStages(X), phi, wake }; // prettier-ignore
+    }
     return { mode: "osc", t0, period: a.period, stages, phi, wake };
   }
 
@@ -177,14 +185,17 @@ function step(state, ins, prev, env) {
   const phiI = ins.get(PIN.PHI_I);
   const was = prev ? prev.get(PIN.PHI_I) : phiI;
   let count = state?.mode === "ext" ? state.count : 0;
-  let unknown = state?.mode === "ext" ? state.unknown : false;
+  let unknown = doubted;
   if (reset === H) {
     count = 0;
     unknown = false;
   } else if (was === H && phiI === L) {
     count = (count + 1) % MODULO;
-  } else if (was !== phiI && (was === X || phiI === X)) {
-    unknown = true; // a count that might have happened
+  } else if (prev && (was === X || phiI === X)) {
+    // A count that might have happened — an X on φI now or on the sample
+    // before, as the CD4040's clock reads (sim/sequential.js `edgeOf`): a
+    // floating φI picks up whatever is near it, stuck or not.
+    unknown = true;
   }
   return {
     mode: "ext",
@@ -237,8 +248,8 @@ function siliconStep(state, ins, prev, env) {
     count = (((base + n) % MODULO) + MODULO) % MODULO;
   } else if (was === H && phiI === L) {
     count = (count + 1) % MODULO;
-  } else if (was !== phiI && (was === X || phiI === X)) {
-    unknown = true;
+  } else if (prev && (was === X || phiI === X)) {
+    unknown = true; // a maybe-edge, as the digital part's (see `step`)
   }
   const period = fast?.period ?? null;
   const fastId = base == null ? null : fast.id;

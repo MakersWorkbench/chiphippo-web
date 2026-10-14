@@ -296,7 +296,10 @@ export class DeskPlacement {
     // boards, everything seated on them, and all the wiring between them
     // travel together — including to another desktop. Boards first, because a
     // design that also caught loose parts is still a design.
-    if (this.#host.selection.boards.size > 0) {
+    // A single BOARD pick (a click on a strip) stands for its whole snapped
+    // group, as the multi set's boards do — `selectedBoards` folds it in.
+    const boardIds = [...this.#host.selection.selectedBoards()];
+    if (boardIds.length > 0) {
       const clip = captureDesign(
         {
           boards: this.#host.doc.boards,
@@ -306,10 +309,7 @@ export class DeskPlacement {
           netNames: this.#host.doc.netNames,
           annotations: this.#host.doc.annotations,
         },
-        {
-          boardIds: [...this.#host.selection.boards],
-          componentIds: [...this.#host.selection.parts],
-        },
+        { boardIds, componentIds: [...this.#host.selection.parts] },
       );
       if (!clip) return false;
       this.#designBuffer = clip;
@@ -889,7 +889,7 @@ export class DeskPlacement {
       m.kind === "place-chip"
         ? chipBox(partDef(m.ref).package)
         : discreteBox(m.ref, m.params?.rot, m.params);
-    const seat = this.#host.partSeatAt(w, m.ref, 0, m.params);
+    const seat = this.#host.partSeatAt(w, m.ref, null, m.params);
     m.ghost.hidden = false;
     // A 600-mil chip's ghost takes the wide seat nearest the cursor; the e/i
     // one is the seat that has to say so in the params it lands with.

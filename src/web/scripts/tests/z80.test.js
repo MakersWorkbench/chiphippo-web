@@ -697,10 +697,17 @@ test("a fetch asserts /M1, then hands the bus to a refresh in T3/T4", () => {
   assert.equal(out.get(PIN.MREQ), H, "/MREQ waits for T1's falling edge");
   assert.equal(out.get(PIN.RFSH), H, "no refresh yet");
 
-  // T1 low: /MREQ and /RD assert.
+  // T1 low: /MREQ and /RD assert — on T1's falling edge, which the state
+  // records (the half is the state's, never read off the live pin).
+  s = u.step(s, ins({ clk: L }), ins({ clk: H }));
   out = u.outputs(s, ins({ clk: L }));
   assert.equal(out.get(PIN.MREQ), L);
   assert.equal(out.get(PIN.RD), L);
+  assert.equal(
+    u.outputs(s, ins({ clk: H })).get(PIN.MREQ),
+    L,
+    "a new clock level alone does not redraw the half",
+  );
 
   // Advance to T3: the byte is latched, /M1 releases, and the REFRESH address
   // takes the bus with /RFSH asserted.
@@ -773,9 +780,11 @@ test("/WAIT low at the sampling edge stretches the cycle", () => {
   assert.equal(s.t, held, "the T-state did NOT advance — a wait state");
 });
 
-test("/BUSRQ floats the address bus, the data bus AND the control lines", () => {
+test("/BUSRQ floats the buses and the tristate controls at the END of an M-cycle", () => {
   // The reason a CPU can never declare an `outputEnable`: this is a hand-over,
-  // not an enable, and it takes every driven pin with it.
+  // not an enable. UM0080: the request is "always recognized at the end of
+  // the current machine cycle", and /MREQ /IORQ /RD /WR float with the buses;
+  // /M1 and /RFSH are not tristate outputs, so they sit inactive.
   const u = Z80();
   let s = u.step(
     u.state0(),
@@ -783,42 +792,145 @@ test("/BUSRQ floats the address bus, the data bus AND the control lines", () => 
     ins({ clk: L, RESET: L }),
   );
   s = u.step(s, ins({ clk: H }), ins({ clk: L }));
-  assert.equal(
-    s.t,
-    1,
-    "at an M-cycle boundary, where a bus request is honoured",
-  );
-  s = u.step(s, ins({ clk: H, BUSRQ: L }), ins({ clk: L }));
-  assert.equal(s.mk, "BUSACK");
+  assert.deepEqual([s.mk, s.t], ["M1", 1], "the first fetch's T1");
+  // Requested mid-cycle: the fetch runs on to its last T untouched.
+  let clk = H;
+  let prev = ins({ clk: H, BUSRQ: L });
+  const half = () => {
+    clk = clk === H ? L : H;
+    const now = ins({ clk, byte: 0x00, BUSRQ: L });
+    s = u.step(s, now, prev);
+    prev = now;
+  };
+  const seen = [];
+  for (let i = 0; i < 6; i++) {
+    half();
+    if (clk === H) seen.push(`${s.mk}${s.t}`);
+  }
+  assert.deepEqual(seen, ["M12", "M13", "M14"], "T2…T4 ran; no T1 after");
+  half();
+  half();
+  assert.equal(s.mk, "BUSACK", "granted on the edge that would begin T1");
 
-  const out = u.outputs(s, ins({ clk: H, BUSRQ: L }));
+  const out = u.outputs(s, ins({ clk, BUSRQ: L }));
   assert.equal(addrOf(out), null, "address bus floating");
   assert.equal(out.get(DATA[0]), Z, "data bus floating");
-  for (const p of [PIN.MREQ, PIN.IORQ, PIN.RD, PIN.WR, PIN.RFSH]) {
+  for (const p of [PIN.MREQ, PIN.IORQ, PIN.RD, PIN.WR]) {
     assert.equal(out.get(p), Z, `control line ${p} floating`);
+  }
+  for (const p of [PIN.M1, PIN.RFSH]) {
+    assert.equal(out.get(p), H, `control line ${p} inactive, not floating`);
   }
   assert.equal(
     out.get(PIN.BUSACK),
     L,
     "/BUSACK asserted — and it never floats",
   );
+
+  // Released: the held fetch begins at its T1 — the next opcode, at PC 1.
+  const now = ins({ clk: L });
+  s = u.step(s, now, prev);
+  s = u.step(s, ins({ clk: H }), now);
+  assert.deepEqual([s.mk, s.t, s.addr], ["M1", 1, 1]);
 });
 
-test("a chip held in /RESET drives nothing at all", () => {
+test("a chip held in /RESET floats its buses and holds every control line inactive", () => {
+  // UM0080: "the address and data bus enter a high-impedance state, and all
+  // control output signals enter an inactive state" — HIGH, so CMOS glue
+  // reads a clean level at power-up rather than an unknown.
   const u = Z80();
-  const s = u.step(
+  for (const s of [
     u.state0(),
-    ins({ clk: H, RESET: L }),
-    ins({ clk: L, RESET: L }),
-  );
-  const out = u.outputs(s, ins({ clk: H, RESET: L }));
-  assert.equal(addrOf(out), null, "address bus floating");
-  assert.equal(out.get(PIN.MREQ), Z);
-  assert.equal(
-    out.get(PIN.HALT),
-    H,
-    "/HALT is not a bus line — it still drives",
-  );
+    u.step(u.state0(), ins({ clk: H, RESET: L }), ins({ clk: L, RESET: L })),
+  ]) {
+    const out = u.outputs(s, ins({ clk: H, RESET: L }));
+    assert.equal(addrOf(out), null, "address bus floating");
+    assert.equal(out.get(DATA[0]), Z, "data bus floating");
+    for (const p of [PIN.M1, PIN.MREQ, PIN.IORQ, PIN.RD, PIN.WR, PIN.RFSH]) {
+      assert.equal(out.get(p), H, `control line ${p} inactive`);
+    }
+    assert.equal(
+      out.get(PIN.HALT),
+      H,
+      "/HALT is not a bus line — it still drives",
+    );
+  }
+});
+
+test("the strobes change only on their own edges — no pulse where a T-state begins", () => {
+  // The engine draws the NEW clock level with the OLD state before `step`
+  // runs. A half read off the live pin drew T(n)'s first half again at the
+  // edge beginning T(n+1): /RD pulsed twice a fetch, /MREQ five times, and a
+  // latch clocked by /WR caught a floated bus. Count every rising edge of each
+  // strobe over LD A,$5A; OUT ($00),A; LD ($0600),A; HALT.
+  const u = Z80();
+  const mem = new Uint8Array(0x10000);
+  mem.set([0x3e, 0x5a, 0xd3, 0x00, 0x32, 0x00, 0x06, 0x76]);
+  const lines = ["M1", "MREQ", "IORQ", "RD", "WR", "RFSH"];
+  const rises = Object.fromEntries(lines.map((k) => [k, 0]));
+  let last = null;
+  const look = (out) => {
+    for (const k of lines) {
+      if (last?.[k] === L && out.get(PIN[k]) === H) rises[k]++;
+    }
+    last = Object.fromEntries(lines.map((k) => [k, out.get(PIN[k])]));
+  };
+  const answer = (out) =>
+    out.get(PIN.RD) === L && out.get(PIN.MREQ) === L ? mem[addrOf(out)] : 0xff;
+  let s = u.state0();
+  let clk = L;
+  let prev = ins({ clk, RESET: L });
+  for (let i = 0; i < 80; i++) {
+    clk = clk === L ? H : L;
+    const reset = i < 2 ? { RESET: L } : {};
+    const pre = u.outputs(s, ins({ clk, ...reset })); // the pre-settle
+    look(pre);
+    const now = ins({ clk, byte: answer(pre), ...reset });
+    s = u.step(s, now, prev);
+    prev = now;
+    look(u.outputs(s, now));
+  }
+  assert.ok(s.halted, "it ran the program");
+  // Five fetches (three instructions, HALT, one halted NOP), four reads, one
+  // memory write, one I/O write; each fetch's /MREQ pulses twice (the read and
+  // the refresh), and the fifth fetch's /RFSH has not risen yet.
+  assert.deepEqual(rises, { M1: 5, MREQ: 15, IORQ: 1, RD: 9, WR: 2, RFSH: 4 });
+});
+
+test("an OUT's /IORQ and /WR run T2↑ to T3↓, and the byte is on the bus at the /WR rise", () => {
+  // UM0080 Figure 7: "the WR line is used as a clock to the I/O port", so it
+  // must rise while the data is still driven — at T3↓, half a T before the
+  // bus changes. It used to rise at the next T1↑, as the data bus floated.
+  const u = Z80();
+  const prog = [0x3e, 0x5a, 0xd3, 0x07, 0x76]; // LD A,$5A; OUT ($07),A; HALT
+  let s = u.state0();
+  let clk = L;
+  let prev = ins({ clk, RESET: L });
+  const trace = [];
+  for (let i = 0; i < 60; i++) {
+    clk = clk === L ? H : L;
+    const reset = i < 2 ? { RESET: L } : {};
+    const pre = u.outputs(s, ins({ clk, ...reset }));
+    const byte = pre.get(PIN.RD) === L ? (prog[addrOf(pre)] ?? 0) : 0xff;
+    const now = ins({ clk, byte, ...reset });
+    s = u.step(s, now, prev);
+    prev = now;
+    if (s.mk === "OUT") {
+      const out = u.outputs(s, now);
+      const d = DATA.reduce((n, p, k) => n | ((out.get(p) === H ? 1 : 0) << k), 0); // prettier-ignore
+      trace.push(`T${s.t}${clk === H ? "↑" : "↓"} iorq=${out.get(PIN.IORQ) === L ? 0 : 1} wr=${out.get(PIN.WR) === L ? 0 : 1} d=${d.toString(16)}`); // prettier-ignore
+    }
+  }
+  assert.deepEqual(trace, [
+    "T1↑ iorq=1 wr=1 d=5a",
+    "T1↓ iorq=1 wr=1 d=5a",
+    "T2↑ iorq=0 wr=0 d=5a",
+    "T2↓ iorq=0 wr=0 d=5a",
+    "T3↑ iorq=0 wr=0 d=5a", // TW, the automatic wait
+    "T3↓ iorq=0 wr=0 d=5a",
+    "T4↑ iorq=0 wr=0 d=5a", // the datasheet's T3
+    "T4↓ iorq=1 wr=1 d=5a", // released, the byte still up
+  ]);
 });
 
 test("outputs() drives every output pin, which the catalog guard requires", () => {

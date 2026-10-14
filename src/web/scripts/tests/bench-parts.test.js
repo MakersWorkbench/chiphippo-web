@@ -391,6 +391,25 @@ test("relay, Spice Lite: it pulls in once its coil's current builds, and lets go
   assert.ok(voltsAt(sim, b, k.get(5)) > 4.9, "let go");
 });
 
+test("a relay whose coil is shorted out asks to be ticked when it lets go", () => {
+  // Both coil legs on +: no branch any more, its current dying round its own
+  // winding with no curve for a crossing to be timed on — so it held its
+  // contacts until something else ticked the desk.
+  const { b, k } = relay();
+  const sim = runner(b.doc, { engine: "spice" });
+  const on = new Map([["drv", L]]);
+  runTo(sim, sim.run(0, on).result.wakeAt, 0.01, on);
+  sim.run(0.01, on);
+  assert.ok(voltsAt(sim, b, k.get(4)) > 4.9, "pulled in");
+  const off = new Map([["drv", H]]);
+  const r = sim.run(0.02, off).result;
+  assert.ok(voltsAt(sim, b, k.get(4)) > 4.9, "still in");
+  // L/R = 2 ms, from about its rating down to its drop-out current.
+  assert.ok(r.wakeAt > 0.022 && r.wakeAt < 0.03, `drop-out wake ${r.wakeAt}`);
+  sim.run(r.wakeAt, off);
+  assert.ok(voltsAt(sim, b, k.get(5)) > 4.9, "let go, then");
+});
+
 test("a relay's coil is an inductor of its rating", () => {
   const def = partDef("relay");
   assert.deepEqual(coilOf(def, {}), { a: 1, b: 2, henries: 0.14, ohms: 70 });

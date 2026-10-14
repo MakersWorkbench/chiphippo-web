@@ -12,6 +12,7 @@ are noted alongside the shortcut.
 |---|---|
 | `Space` (tap) | Run / Stop the simulation (not while typing, or while a placement/wire/bus tool is armed) — it acts as the key comes up |
 | `Space` (hold) + drag | Pan the desk, from anywhere — over a board or a part too |
+| `Option` (hold) + drag | Pan the desk, from anywhere that isn't a lead (a wire end or a movable leg — those it picks up instead) |
 | `Cmd+R` | Run / Stop the simulation |
 | `1`–`9`, `0` | Press signal buttons 1–10, top to bottom (`0` is the tenth) — **only while the circuit runs**, and several at once (see [External signals](power-and-clocks.md#external-signals)) |
 | `Tab` | Switch between the Breadboard and Schematic views (not while typing); from the [3D view](3d-view.md), to the Schematic |
@@ -37,7 +38,7 @@ Components](components.md#moving-several-parts-at-once) covers moving one.
 | `Shift`-drag a part or selection | Move it **bare** — the selected parts move, every wire and leg plugged into them stays in its hole |
 | `Option`-click / -drag a lead | Pick just that lead (never added to the selection) / move it to another hole, the other end staying put |
 | `Option+Cmd`-click a lead | Add that lead to the selection, or take it back out (`Alt+Ctrl`-click on Windows/Linux); drag the selection and every picked lead moves with it |
-| `Space`-drag, middle-drag | Pan the desk |
+| `Space`-drag, `Option`-drag, middle-drag | Pan the desk |
 ## Tools
 
 | Shortcut | Action |

@@ -598,8 +598,13 @@ function drawPart(part, ctx) {
           anode,
         );
       });
+      // A seg7's two commons (pins 3 and 8) are one inside the part, and an
+      // export reads the WIRING alone — so the common is whichever of them
+      // is wired; pin 3's open net would leave a digit grounded through pin 8
+      // dark.
+      const commons = part.ports.filter((p) => !order.includes(p.name));
       place(
-        part.ports.find((p) => !order.includes(p.name)),
+        commons.find((p) => p.net) ?? commons[0],
         4 * SIZE,
         7 * SIZE,
         "bottom",

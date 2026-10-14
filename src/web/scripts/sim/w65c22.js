@@ -34,22 +34,28 @@
 //
 // Bus timing follows the PIA/LCD model: the VIA is SELECTED while CS1 is high
 // and CS2B low; a READ (RWB high) drives D0–D7 with the addressed register while
-// PHI2 is high; a transfer COMMITS on PHI2's FALLING edge. The timers decrement
-// once per PHI2 cycle, sampled on PHI2's RISING edge — so a value loaded on a
-// falling edge first decrements on the next rising edge, matching the datasheet's
-// "counts down on the next PHI2 following the load."
+// PHI2 is high; a transfer COMMITS on PHI2's FALLING edge. The timers step once
+// per PHI2 cycle, on PHI2's RISING edge, through the counts Figures 2-3 and 2-4
+// draw: a load holds N for its first cycle ("counts down on the next PHI2
+// following the load"), then N-1 … 0, then $FFFF — where the flag sets, N+1.5
+// cycles after the write — and T1 then takes its latch again, so a free-running
+// T1 times out every N+2 cycles. T2 (one-shot only) runs on from $FFFF.
 //
 // ── Zero-delay abstraction & scope ───────────────────────────────────────────
 // This is a LOGIC-LEVEL, timerless model (the engine has no wall clock — the
 // SimController's interval merely produces PHI2 edges). Consequences, all
 // faithful to how the rest of the sim works:
 //   • Timer periods are measured in PHI2 cycles the user clocks in, not seconds.
-//   • The SHIFT REGISTER is fully modeled for the EXTERNAL-clock modes (CB1 in),
-//     where each CB1 edge shifts one bit — the natural breadboard use. The
-//     internal-clock modes (PHI2- and T2-paced) shift one bit per PHI2 cycle and
-//     drive CB1 as a toggling output clock; the exact CB1 waveform and the
-//     T2-rate pacing are APPROXIMATED at PHI2 rate (documented, not datasheet-
-//     exact). 8-bit transfers and IFR2 still behave correctly.
+//   • The SHIFT REGISTER is fully modeled for the EXTERNAL-clock modes (CB1 in):
+//     shift-in (011) takes a bit on each CB1 rise; shift-out (111) puts the next
+//     bit on CB2 at each CB1 FALL, so it is steady at the receiver's rise
+//     (Figure 2-12), and counts the rise. The internal-clock modes put eight
+//     shift pulses on CB1 a byte, as the sheet says — CB1 low one PHI2 cycle,
+//     high the next (Figures 2-7 and 2-11): a shift-out mode's bit goes onto
+//     CB2 as CB1 falls, a shift-in mode's is taken as it rises. The T2-paced
+//     modes (001/100/101) run at that same PHI2 rate rather than N+2 cycles a
+//     half pulse — an APPROXIMATION of the pacing only; the eight pulses, the
+//     bits and IFR2 are as the sheet draws them.
 //   • IRQB is OPEN-DRAIN active-low (the W65C22N model): LOW when an enabled flag
 //     is set, else high-impedance (Z) so it wire-ORs onto the processor IRQ.
 //
@@ -195,18 +201,28 @@ export function w65c22Unit(pins) {
   };
 
   // ── Timer / shift helpers (mutate `next`, read `state`) ──────────────────────
+  // T1's counts (Figures 2-3, 2-4): N held the cycle after a load, N-1 … 0,
+  // then $FFFF — where it times out — and then the latch again, in either mode
+  // (one-shot only flags once). So the first timeout is N+1.5 cycles after the
+  // T1C-H write and a free-running one repeats every N+2, not N+1.
   const decrementT1 = (next, state) => {
     const freerun = b(state.acr, 6) === 1;
     const pb7en = b(state.acr, 7) === 1;
-    if (next.t1c === 0) {
+    if (state.t1Hold) {
+      next.t1Hold = false; // the cycle after a load counts nothing
+    } else if (state.t1Reload) {
+      next.t1Reload = false;
+      next.t1c = state.t1l; // the cycle after $FFFF takes the latch
+    } else if (state.t1c === 0) {
       if (state.t1Armed) {
         next.ifr |= 1 << F_T1;
         if (pb7en) next.pb7 = freerun ? (state.pb7 === H ? L : H) : H;
         if (!freerun) next.t1Armed = false; // one-shot fires once
       }
-      next.t1c = freerun ? state.t1l : 0xffff;
+      next.t1c = 0xffff;
+      next.t1Reload = true;
     } else {
-      next.t1c = (next.t1c - 1) & 0xffff;
+      next.t1c = (state.t1c - 1) & 0xffff;
     }
   };
 
@@ -250,6 +266,9 @@ export function w65c22Unit(pins) {
         t2ll: 0,
         t1Armed: false,
         t2Armed: false,
+        t1Hold: false,
+        t1Reload: false,
+        t2Hold: false,
         sr: 0,
         srCount: 0,
         srActive: false,
@@ -286,8 +305,15 @@ export function w65c22Unit(pins) {
       }
       // ── CB1: either the SR external shift clock, or the CB1 interrupt ───────
       if (usingCb1Clock) {
+        // Shift-out (111) changes CB2 on CB1's FALL, so the bit is steady at
+        // the rise a receiver latches on (Figure 2-12); shift-in (011) takes
+        // CB2 at the rise. Either way the rise is the pulse counted.
+        const out = srShiftOut(state);
+        if (out && prev && fell(was(cb1), ins.get(cb1))) {
+          shiftOnce(next, state, 0);
+        }
         if (prev && rose(was(cb1), ins.get(cb1))) {
-          shiftOnce(next, state, bit(ins.get(cb2)));
+          if (!out) shiftOnce(next, state, bit(ins.get(cb2)));
           next.srCount = state.srCount + 1;
           if (next.srCount >= 8) {
             next.ifr |= 1 << F_SR;
@@ -319,13 +345,20 @@ export function w65c22Unit(pins) {
       // ── PHI2 rising edge: advance the timers + internal shift clock ─────────
       if (prev && rose(was(phi2), ins.get(phi2))) {
         decrementT1(next, state);
-        if (b(state.acr, 5) === 0) decrementT2(next, state); // timed mode
-        // Internal (PHI2/T2-paced) shifting — one bit per cycle, CB1 toggling.
+        // T2 holds its load's first cycle too (Figure 2-3); in pulse-counting
+        // mode the hold simply lapses.
+        next.t2Hold = false;
+        if (b(state.acr, 5) === 0 && !state.t2Hold) decrementT2(next, state);
+        // Internal (PHI2/T2-paced) shifting — one CB1 pulse a bit, low for a
+        // PHI2 cycle and high for the next: eight pulses a byte.
         if (srEnabled(state) && !srExternal(state)) {
           const run = srFreeRun(state) || (state.srActive && state.srCount < 8);
-          if (run) {
-            shiftOnce(next, state, bit(ins.get(cb2)));
-            next.srClk = state.srClk === H ? L : H;
+          if (run && state.srClk === H) {
+            next.srClk = L; // CB1 falls: a shift-out mode's next bit goes out
+            if (srShiftOut(state)) shiftOnce(next, state, 0);
+          } else if (run) {
+            next.srClk = H; // CB1 rises: the bit is taken
+            if (!srShiftOut(state)) shiftOnce(next, state, bit(ins.get(cb2)));
             if (!srFreeRun(state)) {
               next.srCount = state.srCount + 1;
               if (next.srCount >= 8) {
@@ -397,9 +430,12 @@ export function w65c22Unit(pins) {
             case 0x5: // T1C-H: load high latch, transfer latch→counter, start
               next.t1l = (state.t1l & 0x00ff) | (data << 8);
               next.t1c = next.t1l;
+              next.t1Hold = true;
+              next.t1Reload = false;
               next.ifr &= ~(1 << F_T1);
               next.t1Armed = true;
-              if (b(state.acr, 7) && b(state.acr, 6) === 0) next.pb7 = L; // 1-shot
+              // PB7 goes low on the load in EITHER mode (Figures 2-3, 2-4).
+              if (b(state.acr, 7)) next.pb7 = L;
               break;
             case 0x7: // T1L-H: load high latch only (no transfer)
               next.t1l = (state.t1l & 0x00ff) | (data << 8);
@@ -410,6 +446,7 @@ export function w65c22Unit(pins) {
               break;
             case 0x9: // T2C-H: load high, transfer low latch, start
               next.t2c = (data << 8) | state.t2ll;
+              next.t2Hold = true;
               next.ifr &= ~(1 << F_T2);
               next.t2Armed = true;
               break;

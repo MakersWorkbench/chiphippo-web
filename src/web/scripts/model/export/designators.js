@@ -60,7 +60,7 @@ export function designatorPrefix(comp) {
   if (comp.kind === "load") return "J";
   if (ref.startsWith("sw-")) return "SW";
   if (ref.startsWith("osc-")) return "X";
-  if (/^(seg8|bar8|lcd)/.test(ref)) return "DS";
+  if (/^(seg7|seg8|bar8|lcd)/.test(ref)) return "DS";
   return "U";
 }
 

@@ -314,12 +314,38 @@ test("part drag: a chip re-seats to the anchor under the pointer, once", () => {
 
   let changes = 0;
   window.addEventListener("chiphippo:doc-changed", () => changes++);
-  // Grab at column 8 (offset −3 from the e5 anchor) so it is a true drag, not
-  // the recentre-on-grab special case; release five columns right.
+  // Grab at column 8 (offset −3 from the e5 anchor); release five columns right.
   drag(partEl(surface, chip.id), world, { x: 8, y: 6.5 }, { x: 13, y: 6.5 });
 
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
   assert.equal(changes, 1);
+});
+
+test("part drag: held at pin 1's own column, the chip moves by the pointer's travel — no jump", () => {
+  // A grab offset of 0 is a drag like any other; read as the placement
+  // ghost's "centre on the cursor", it threw the chip three columns left.
+  for (const multi of [false, true]) {
+    resetDom();
+    const doc = new DeskDoc(null);
+    const world = { x: 0, y: 0 };
+    const { surface, controller } = makeDesk(doc, world);
+    controller.addBoardAt("pins-full", 0, 0);
+    const chip = controller.addComponentAt("74LS00", "bb1", "e10");
+    const btn = controller.addComponentAt("sw-push", "bb1", "a30");
+    if (multi) selectMany(controller, [chip.id, btn.id]);
+    drag(partEl(surface, chip.id), world, { x: 10, y: ROW.e }, { x: 15, y: ROW.e }); // prettier-ignore
+    assert.equal(doc.getComponent(chip.id).anchor, "e15", `multi ${multi}`);
+    if (multi) assert.equal(doc.getComponent(btn.id).anchor, "a35");
+  }
+  // …and a two-lead part held at its first lead's column likewise.
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const btn = controller.addComponentAt("sw-push", "bb1", "a30");
+  drag(partEl(surface, btn.id), world, { x: 30, y: ROW.a }, { x: 33, y: ROW.a }); // prettier-ignore
+  assert.equal(doc.getComponent(btn.id).anchor, "a33");
 });
 
 test("part drag: a narrow-seated 600-mil chip re-seats at its true width, carrying a rider out from under its body", () => {

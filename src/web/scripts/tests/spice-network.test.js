@@ -1117,3 +1117,34 @@ test("a gate biased by its own feedback resistor is said to be in its linear reg
   for (const p of [3, 5, 9, 11, 13]) t.gnd(v.get(p));
   assert.ok(!both(t.doc).s.warnings.some((w) => w.type === "linear-bias"));
 });
+
+test("a balance's stability: the determinant's sign, and the mode it runs away along", async () => {
+  const { determinantSign, runawayMode } =
+    await import("../sim/spice/network.js");
+  // Two nets, each held to ground (stable): det(J) has the sign (−1)² = +.
+  assert.equal(determinantSign([Float64Array.of(-2, 0.5), Float64Array.of(0.5, -1)]), 1); // prettier-ignore
+  // A cross-coupled pair whose loop gain beats its losses: one eigenvalue
+  // positive, so the sign turns — and the mode is the pair moving apart.
+  const j = [Float64Array.of(-1, -3), Float64Array.of(-3, -1)];
+  assert.equal(determinantSign(j.map((row) => Float64Array.from(row))), -1);
+  const mode = runawayMode(j, 16);
+  assert.ok(Math.abs(Math.abs(mode[0]) - 1) < 1e-9 && Math.abs(mode[0] + mode[1]) < 1e-6, String(mode)); // prettier-ignore
+  assert.equal(determinantSign([Float64Array.of(0, 0), Float64Array.of(0, 1)]), 0); // prettier-ignore
+});
+
+test("a balance the plates would fall off moves onto one that holds, the same way every time", async () => {
+  const { fallOffBalance } = await import("../sim/spice/network.js");
+  // Two coordinates, each pulled home and each pushed the other's way round
+  // three times as hard: 0 is a balance, but a knife-edge.
+  const residual = (x) => [-x[0] - 3 * Math.tanh(x[1]), -x[1] - 3 * Math.tanh(x[0])]; // prettier-ignore
+  const fell = fallOffBalance(residual, new Float64Array(2));
+  assert.ok(fell, "it falls");
+  // x = 3·tanh x at 2.9852; the first coordinate goes down.
+  close(fell[0], -2.9852, 1e-3, "first");
+  close(fell[1], 2.9852, 1e-3, "second");
+  assert.ok(Math.max(...residual(fell).map(Math.abs)) < 1e-9);
+  // Where it stands already holds: nothing to do.
+  assert.equal(fallOffBalance(residual, fell), null);
+  // A balance with no gain to fall by: nothing either.
+  assert.equal(fallOffBalance((x) => [-x[0] + 0.5 * x[1], -x[1]], new Float64Array(2)), null); // prettier-ignore
+});

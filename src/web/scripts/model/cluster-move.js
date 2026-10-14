@@ -192,7 +192,7 @@ export function clusterDelta(boards, grab, world, members) {
     boards,
     grab.ref,
     world,
-    grab.grabOffsetCols ?? 0,
+    grab.grabOffsetCols ?? 0, // a drag's offset — never the ghost's null
     grab.params,
     { chipRow: chipRowOf(grab) },
   );

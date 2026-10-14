@@ -43,7 +43,13 @@ paths:
   tick), warning when a chip flagged `programmed` finds its file missing (the
   delete-then-undo data-loss case). A ROM is programmed only by the in-app **external
   programmer** (a menu action: pick a `.bin`/`.hex`, copy it to the file's start with a
-  size warning).
+  size warning; `mem-store.js` `readImage` reads only a regular file, and no more
+  than `MAX_BYTES` of it — a size from `stat` is no cap for `/dev/zero` or a FIFO).
+  An image is Intel HEX by its name (`.hex`/`.ihx`/`.ihex`) OR by what it holds
+  (`hex-format.js` `looksLikeIntelHex`: a first record that parses whole), so SDCC's
+  `.ihx` picked through "All files" is decoded, not programmed as its ASCII; one with no
+  data records is refused (`requireHexData`), never flagged programmed with nothing in
+  it (2026-10-14).
 - **All file I/O is in main**, over the GUID-keyed, parity-guarded `mem:*` IPC
   (`create`/`load`/`program`/`write`/`delete`/`path`/`pick-image`/`export`) — main alone
   maps a GUID → path and rejects a hostile one. `app/store/mem-store.js` is
@@ -211,14 +217,25 @@ Code: `app/store/project-store.js` + `project-images.js` + `project-migrate.js` 
     quiet for a background stash), and a startup note names where it is — as FACTS
     `{key, path}` (`workspace.slotAside`/`slotLeft`), worded by the renderer's `#warn`
     under `workspace.slotUnreadTitle`, apart from a project's own string warnings. A DAMAGED slot (bad JSON)
-    reads as null and is quarantined by `io.readJSON`, as before.
+    reads as null and is quarantined by `io.readJSON`, as before. **A boot that THROWS
+    anywhere is treated the same way** (`bootKeepingSlot`, 2026-10-14): the renderer
+    answers a failed `project:boot` with `project:new`, which takes the slot over, so
+    `project:boot` never throws — the slot is kept as an unread one is and a new project
+    comes back; every bookmark `hold` on the boot/open road is a `safeCall` (a failed one
+    is the next ⌘S's to report, not the boot's). A most-recent project that EXISTS but the
+    sandbox refuses (store builds only; a Save-As bookmark stale with the launch) is not
+    skipped in silence: the boot opens the next one and hands over `{deniedRecent: path}`,
+    which `#warn` answers with Open Recent's re-grant offer.
   - **A restore is not a question.** `recoveryBoot` restores the stash outright and the
     renderer says so (`workspace.recovered*` — main hands over the FACTS
     `{name, path, homeless}`, since `m()` is for text MAIN renders). Restored work
     arrives UNSAVED (`#saved`/`#stashed` left null) so ⌘Z and close-without-saving both
     still work; a launch modal would ask for an irreversible-looking decision about a
     reversible thing with the destructive button one mis-click away. A recovery whose own
-    file has gone restores as UNTITLED, so Save As re-homes it.
+    file has gone restores as UNTITLED, so Save As re-homes it — and its slot is
+    UNSTAMPED at boot (`unstampRecovery`), since it is now the untitled project's own
+    file: left stamped, a quit that discarded it before the first tick kept the crash
+    flag, and every launch after restored it again.
   - Guards: `#busy` (a leave/quit question is out, or a swap is mid-flight — a stash then
     would preserve the very work being discarded), `#inFlight` (a tick SKIPS, a manual ⌘S
     QUEUES, since `#askUnsaved` reads a `false` as a cancel), `#autoStopped` (a STATE,
@@ -237,6 +254,21 @@ Code: `app/store/project-store.js` + `project-images.js` + `project-migrate.js` 
   dialog's question and only its question (`properties: ["showOverwriteConfirmation"]` is
   how the Linux panel is told to ask); `choosePath` returns a path or null, so declining
   a replace reads back as a cancel.
+  - **The working slot is never a save target, however it is spelt**
+    (`ProjectStore.isSlotPath`, 2026-10-14): `default.chiphippo` and v3's
+    `default.project.chiphippo` in the saves folder, in any case (macOS and Windows
+    volumes ignore it) or by file identity (a symlinked folder). A Save As to
+    `Default.chiphippo` used to write the slot, judge it "a different file" by string,
+    and delete it; one to `default.project.chiphippo` was swallowed as v3's slot at the
+    next launch. `chooseSavePath` suggests `Default 2.chiphippo` for a project NAMED for
+    the slot (`besideSlot`) and, picked anyway, says why (`dialog.reserved.*`, a native
+    message box) and offers the panel again; `project:save` refuses one as INVALID_ARG,
+    `project:recovery:write` likewise, and `read`/`adoptProject` treat any spelling as
+    the slot (no location; never dropped as "the slot just left").
+  - **Export Desktop never writes the open project's own file** (`saveClash`): the
+    renderer passes it as `openProject` (a fact to steer clear of, compared and never
+    opened), and the panel is offered again with `dialog.reserved.open` — exported over,
+    the file held one desktop while the window still read it saved.
 - **ROM bytes travel in the file, content-addressed** (`project-images.js`). `write`
   COLLECTS every chip flagged `programmed`, HASHES its bytes and records chip → blob
   (noise does not need to travel); `read` HYDRATES them back before the renderer sees the
@@ -332,7 +364,10 @@ Code: `app/store/project-store.js` + `project-images.js` + `project-migrate.js` 
   - **Restart-to-update is a close-guard question too** (`ask({installing})` → reply
     `"install"`): electron-updater's `quitAndInstall` spawns the installer BEFORE it quits
     on Windows and Linux, so leaning on the ordinary before-quit question made "Cancel"
-    too late to stop the update. Main calls `quitAndInstall` only after a yes.
+    too late to stop the update. Main calls `quitAndInstall` only after a yes. A page
+    that goes while the question is out (`rendererGone` — a reload) takes the quit or
+    install it was FOR with it (2026-10-14): left set, the next plain window close,
+    asked of the page that replaced it, answered as an install.
 - **Export / Import replaced a desktop's Save As / Open.** A `.desktop.chiphippo` is a
   SNAPSHOT (the document plus its ROM bytes, no link retained), so it can never dangle.
   Import is always an ADDITION (no file operation can replace the desk on screen) and
@@ -366,7 +401,10 @@ Code: `app/store/project-store.js` + `project-images.js` + `project-migrate.js` 
   desktop and stays) — returning its warnings for `bootProject` to carry out on the meta.
   A slot that already exists is never overwritten: the v3 file is kept as `.v3-backup`.
 - **The design clip** (`model/design-clip.js`, pure) is `paste-cluster.js` one level up:
-  it carries the BOARDS too (plus everything seated on them, selected desk bricks, every
+  it carries the BOARDS too (plus everything seated on them — save a part with a lead
+  reaching OFF them, a bend into an uncopied rail or one floating, which stays behind by
+  the wire rule, since pasted its lead would land in mid-air (a refused paste after a
+  green ghost) or in a stranger's hole — selected desk bricks, every
   wire with BOTH ends inside, and the buses / net names / anchored labels riding them),
   so a sub-assembly brings its own holes and its wiring survives the trip. Legality is
   per-board only and the drop is **all-or-nothing** — half a design would silently cut

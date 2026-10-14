@@ -105,6 +105,11 @@
       "message": "Confirma el acceso a este proyecto",
       "button": "Conceder acceso"
     },
+    "reserved": {
+      "message": "Elige otro nombre",
+      "slot": "En «{file}» Chip Hippo guarda el trabajo que aún no se ha guardado, así que no se puede guardar nada más con ese nombre.",
+      "open": "«{file}» es el proyecto que tienes abierto. Un escritorio exportado encima sustituiría el proyecto entero."
+    },
     "exportKicad": {
       "title": "Exportar a KiCad",
       "message": "Elige la carpeta del proyecto de KiCad: una nueva o la que se usó en una exportación anterior.",
@@ -1083,6 +1088,7 @@
     "buildCrashed": "La construcción ha fallado de forma inesperada: {message}",
     "compilerFault": "El circuito se describió correctamente pero no se pudo construir. Es un fallo del compilador de Chip Hippo, no del diseño.",
     "gaveUp": "Se abandonó tras {total} intentos de corrección. Lo que sigue mal:",
+    "declined": "Según el modelo, esto no se puede construir con las piezas del catálogo:",
     "retrying": "Ese diseño no ha pasado — se pide una corrección (intento {n} de {total}):",
     "untitledCircuit": "Circuito",
     "summary": "{title} — {parts} componentes, {wires} cables, {strips} tiras de placa.",
@@ -1498,6 +1504,7 @@
     "description": "Diseña y simula circuitos lógicos en placas de pruebas virtuales sin soldadura — coloca chips, cables, interruptores, LED y alimentación, y observa cómo la electricidad se estabiliza por cada red.",
     "byline": "Creado por Jason, programado por Claude",
     "support": "Soporte:",
+    "donate": "Apoyar a Chip Hippo…",
     "versionInfo": "Información de la versión",
     "version": "Versión",
     "platform": "Plataforma",
@@ -1606,7 +1613,7 @@
       "analyzer": "Mostrar u ocultar el analizador lógico",
       "fit": "Ajustar a la pantalla",
       "pan": "Desplazar el escritorio",
-      "panKeys": "Espacio+arrastrar o botón central",
+      "panKeys": "Espacio+arrastrar, {alt}+arrastrar o botón central",
       "zoomOut": "Alejar todo lo posible (encontrar un componente perdido)",
       "zoom": "Acercar / alejar / restablecer",
       "fontSize": "Tamaño de fuente del editor: aumentar / reducir / restablecer",
@@ -2534,6 +2541,17 @@
     "more": {
       "one": "+{count} más",
       "other": "+{count} más"
+    }
+  },
+  "notice": {
+    "dragModel": {
+      "title": "Arrastrar ha cambiado",
+      "band": "Arrastra sobre la mesa de trabajo para seleccionar todo lo que quede dentro del recuadro.",
+      "pickLead": "{alt}+arrastrar mueve un solo extremo de cable o una pata por sí solo.",
+      "toggle": "{mod}+clic añade un elemento a la selección o lo quita.",
+      "carry": "Arrastra una pieza y su cableado la acompaña.",
+      "bare": "{shift}+arrastrar mueve las piezas y deja sus cables donde están.",
+      "pan": "Desplaza la mesa con Espacio+arrastrar, {alt}+arrastrar fuera de una pata o con el botón central del ratón."
     }
   }
 }

@@ -143,6 +143,9 @@ Serial I/O is the one panel that is NOT live-apply (see "Arduino serial integrat
   button, and a status line fed by the `chiphippo:updater-*` broadcasts — whose listeners
   belong to the dialog's OPEN lifetime, so `buildAboutPanel` hands back a `dispose` that
   `onClose` runs.
+- **`firstRunVersion`** (MAIN-owned, stamped once at launch) and **`dismissedNotices`**
+  (ids the user closed) — the what's-new banner's two keys, no dialog row; see
+  ui-chrome.md → "What's-new banner".
 - Window bounds and the desk camera (incl. zoom) are already persisted in `settings.json`
   (`windowBounds` via `window-state.js`; `viewport` via the renderer's debounced save).
 - **Every explanatory note is behind an (i), not printed under its row** (`rowWithNote()` +

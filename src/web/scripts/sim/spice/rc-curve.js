@@ -152,20 +152,34 @@ export function heading(curve, t = curve.t0) {
 /** How many points `sampleTimes` takes across a span, at the least. */
 const SAMPLES = 96;
 
+/** How many periods of a ringing curve `sampleTimes` steps through an eighth
+    of a period at a time: past them a Q-of-50 ring has died to a twentieth. */
+const RING_PERIODS = 50;
+
 /**
  * The times a search for a coupled curve's first crossing after `t` looks
  * at, up to `end`: a cubic grid (dense near `t`, where a sum of exponentials
  * still moves fastest) and a geometric one from its fastest time constant,
- * so a mode a thousand times faster than the span is not stepped over.
+ * so a mode a thousand times faster than the span is not stepped over —
+ * and, where it rings (`osc`, its fastest oscillation, radians a second),
+ * every eighth of a period for its first periods: a grid a radian or two
+ * apart stepped over a threshold cleared only near a peak (a Schmitt input
+ * on an LC ring, a relay on a ringing coil).
  * @param {number} t
  * @param {number} end
  * @param {number} fast - the fastest time constant, seconds
+ * @param {number} [osc] - the fastest oscillation, radians a second
  */
-export function sampleTimes(t, end, fast) {
+export function sampleTimes(t, end, fast, osc = 0) {
   const out = [];
   for (let i = 1; i <= SAMPLES; i++) out.push(t + (end - t) * (i / SAMPLES) ** 3); // prettier-ignore
   if (fast > 0 && Number.isFinite(fast)) {
     for (let h = fast / 8; t + h < end; h *= 2) out.push(t + h);
+  }
+  if (osc > 0 && Number.isFinite(osc)) {
+    const h = Math.PI / (4 * osc);
+    const stop = Math.min(end, t + RING_PERIODS * 8 * h);
+    for (let u = t + h; u < stop; u += h) out.push(u);
   }
   return out.sort((a, b) => a - b);
 }
@@ -181,33 +195,58 @@ export function searchEnd(curve, t) {
 
 /**
  * The first time after `t` the function `f` (negative now) reaches zero
- * going up, sampled at `times` and bisected — or Infinity.
+ * going up, sampled at `times` and bisected — or Infinity. Where the samples
+ * rise and fall again short of zero, the peak between them (the parabola
+ * through the three) is looked at too: a ring that clears a threshold only
+ * near its crest clears it between two samples.
  * @param {(u: number) => number} f
  * @param {number} t
  * @param {number[]} times
  */
 export function firstRoot(f, t, times) {
+  const bisect = (lo, hi) => {
+    for (
+      let k = 0;
+      k < 200 && hi - lo > 1e-15 * Math.max(1, Math.abs(hi));
+      k++
+    ) {
+      const mid = (lo + hi) / 2;
+      if (f(mid) >= 0) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  };
   let prev = t;
+  let back = null; // the sample before `prev`, [u, f(u)]
+  let fPrev = null;
   for (const u of times) {
     if (!(u > prev)) continue;
-    if (f(u) >= 0) {
-      let lo = prev;
-      let hi = u;
-      for (
-        let k = 0;
-        k < 200 && hi - lo > 1e-15 * Math.max(1, Math.abs(hi));
-        k++
-      ) {
-        // prettier-ignore
-        const mid = (lo + hi) / 2;
-        if (f(mid) >= 0) hi = mid;
-        else lo = mid;
-      }
-      return hi;
+    const fu = f(u);
+    if (fu >= 0) return bisect(prev, u);
+    if (back && fPrev > back[1] && fPrev >= fu) {
+      const peak = crest(back[0], back[1], prev, fPrev, u, fu);
+      if (peak != null && f(peak) >= 0) return bisect(back[0], peak);
     }
+    back = fPrev == null ? null : [prev, fPrev];
     prev = u;
+    fPrev = fu;
   }
   return Number.POSITIVE_INFINITY;
+}
+
+/** Where the parabola through three samples, the middle one highest, peaks
+    — strictly between the outer two — or null. Stated about the middle
+    sample: the times are seconds from Run, their gaps microseconds. */
+function crest(u0, f0, u1, f1, u2, f2) {
+  const d0 = u0 - u1;
+  const d2 = u2 - u1;
+  const s0 = (f0 - f1) / d0;
+  const s2 = (f2 - f1) / d2;
+  const a = (s0 - s2) / (d0 - d2);
+  if (!(a < 0)) return null;
+  const b = s0 - a * d0;
+  const at = u1 - b / (2 * a);
+  return at > u0 && at < u2 ? at : null;
 }
 
 /** How long from `t` a coupled curve takes to reach `v` (either way), or
@@ -217,7 +256,7 @@ function coupledCrossing(curve, t, v) {
   if (now === v) return 0;
   const dir = v > now ? 1 : -1;
   const end = searchEnd(curve, t);
-  const when = firstRoot((u) => (valueAt(curve, u) - v) * dir, t, sampleTimes(t, end, curve.scale?.fast)); // prettier-ignore
+  const when = firstRoot((u) => (valueAt(curve, u) - v) * dir, t, sampleTimes(t, end, curve.scale?.fast, curve.scale?.osc)); // prettier-ignore
   return when - t;
 }
 

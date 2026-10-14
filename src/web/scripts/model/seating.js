@@ -156,9 +156,12 @@ export const ROW_BAND = 0.8;
 /**
  * The seat a part would take under a world point, or null.
  *
- * `grabOffsetCols` is 0 for a ghost (the footprint centres on the cursor) and
- * otherwise the column offset captured when a drag began, so a dragged part
- * keeps the grab point under the finger instead of jumping to its centre.
+ * `grabOffsetCols` is null for a ghost (the footprint centres on the cursor)
+ * and otherwise the column offset captured when a drag began, so a dragged
+ * part keeps the grab point under the finger instead of jumping to its centre.
+ * A drag held at pin 1's own column has an offset of 0 — a number like any
+ * other, which is why the ghost is null and not 0: read as the ghost, that
+ * grab threw a chip half its length left on the first move.
  *
  * A board whose box contains the point but which cannot host the part does NOT
  * end the search — flush strips share an inclusive seam, so both neighbours
@@ -167,7 +170,7 @@ export const ROW_BAND = 0.8;
  * @param {Array<{id:string,type:string,x:number,y:number,rot?:number}>} boards
  * @param {string} ref
  * @param {{x:number,y:number}} world
- * @param {number} [grabOffsetCols]
+ * @param {number|null} [grabOffsetCols]
  * @param {{rot?:number}|null} [params] - a `def.can` part's current
  *   quarter-turn, and a linear part's size where it has one (an inductor's
  *   holes between its leads — catalog/index.js `footprintOffsets`).
@@ -184,7 +187,7 @@ export function partSeatAt(
   boards,
   ref,
   world,
-  grabOffsetCols = 0,
+  grabOffsetCols = null,
   params = null,
   { chipRow = null, grabDy = 0 } = {},
 ) {
@@ -253,7 +256,7 @@ function chipSeat(
   if (!seat?.rows || !seatsFrom(board.type, seat.rows, local.y)) return null;
   const cursorCol = columnAt(board.type, local.x);
   const col =
-    grabOffsetCols === 0
+    grabOffsetCols == null
       ? cursorCol - (halfPins - 1) / 2 // ghost: chip centred on the cursor
       : cursorCol + grabOffsetCols; // drag: keep the grab point
   const anchor = clampColumn(board.type, col, halfPins - 1);
@@ -272,7 +275,7 @@ function discreteSeat(board, def, local, grabOffsetCols, params) {
   if (!row) return null; // rails / trench / margins
   const cursorCol = columnAt(board.type, local.x);
   const col =
-    grabOffsetCols === 0 ? cursorCol - span / 2 : cursorCol + grabOffsetCols;
+    grabOffsetCols == null ? cursorCol - span / 2 : cursorCol + grabOffsetCols;
   const anchor = clampColumn(board.type, col, span);
   return anchor == null ? null : { board: board.id, anchor: `${row}${anchor}` };
 }
@@ -313,7 +316,7 @@ function rigidSeat(board, diag, local, grabOffsetCols) {
   // `cursorCol - span / 2`. Dragging keeps the grabbed point under the
   // finger instead (grabOffsetCols is already anchor-relative).
   const target =
-    grabOffsetCols === 0
+    grabOffsetCols == null
       ? { x: local.x - diag.dx / 2, y: local.y - diag.dy / 2 }
       : local;
 
@@ -328,7 +331,7 @@ function rigidSeat(board, diag, local, grabOffsetCols) {
   const lo = Math.min(0, diag.dx);
   const span = Math.abs(diag.dx);
   const leftCol =
-    (grabOffsetCols === 0 ? cursorCol : cursorCol + grabOffsetCols) + lo;
+    (grabOffsetCols == null ? cursorCol : cursorCol + grabOffsetCols) + lo;
   const clampedLeft = clampColumn(board.type, leftCol, span);
   return clampedLeft == null
     ? null

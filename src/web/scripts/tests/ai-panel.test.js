@@ -265,6 +265,26 @@ test("AiPanel: a reply that will not parse is reported, not placed", async () =>
   assert.match(rows(container, "fail").join(" "), /NOT_JSON/);
 });
 
+test("AiPanel: a reply that DECLINES is shown as the answer, with no repair round", async () => {
+  // The prompt tells the model to return no parts, and why in `title`, rather
+  // than substitute a part that does not exist. Built, that read as NO_PARTS
+  // and two paid repair rounds pushing it to substitute after all.
+  resetDom();
+  const no = JSON.stringify({ title: "Cannot build: it needs a 555", parts: [], nets: [], tests: [] }); // prettier-ignore
+  const sent = stubBridge([no, no, no]);
+  const { container, designs } = mount();
+
+  ask(container, "a 555 blinker");
+  for (let i = 0; i < 6; i++) await settleUi();
+
+  assert.equal(sent.length, 1, "nothing sent back");
+  assert.equal(designs.length, 0);
+  const said = rows(container, "fail").join(" ");
+  assert.match(said, /can't be built/);
+  assert.match(said, /needs a 555/);
+  assert.doesNotMatch(said, /NO_PARTS/);
+});
+
 test("AiPanel: it refuses to build while the simulation is running", async () => {
   resetDom();
   const sent = stubBridge([JSON.stringify(COUNTER_SPEC)]);

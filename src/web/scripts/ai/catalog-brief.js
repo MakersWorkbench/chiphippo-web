@@ -68,7 +68,11 @@ import { MIN_TESTS } from "./generate.js";
  * still sees every part — a hand-built desk can hold anything the palette
  * has.
  */
-const hasKnob = (d) => (d.properties ?? []).some((f) => f.type === "range");
+// The clock brick's one range, its PWM duty, shapes the wave it puts out, not
+// what it connects: a spec plants it at its default square, and the rules'
+// `edges` test needs one on the card.
+const hasKnob = (d) =>
+  d.kind !== "clock" && (d.properties ?? []).some((f) => f.type === "range");
 const isBenchPart = (d) =>
   d.kind === "load" ||
   d.speaker === true ||
@@ -84,10 +88,11 @@ export const BUILDABLE_DEFS = Object.freeze(
       !isTimed(d) &&
       !hasKnob(d) &&
       !isBenchPart(d) &&
-      // The 7-segment display always takes a WIDE seat across the channel,
-      // which the compiler — every DIP in rows e/f — does not lay out yet;
-      // the builder keeps the retired single-row digits until it does.
-      d.alwaysWide !== true,
+      // A RETIRED part (the single-row seg8 digits) still loads and still
+      // compiles, but it is off the tray, so the builder must not reach for
+      // it either: the 7-segment digit it gave way to stands across the
+      // channel wide, and the compiler seats it so.
+      d.retired !== true,
   ),
 );
 
@@ -228,7 +233,8 @@ Every logic chip in the catalog belongs to ONE family, named in its bracket:
   them, plants the PSU, and bridges the rails. Listing them is an error, not a
   courtesy. A \`clock\` brick's \`vcc\` and \`gnd\` terminals are wired to
   the rails for you too: list only its \`out\`.
-* Every net needs at least two members.
+* Every net needs at least two members (a \`VCC\` or \`GND\` net name counts
+  as one), and its own name — only \`VCC\` and \`GND\` may name more than one.
 * A pin belongs to at most one net.
 * Two outputs must not share a net — that is a bus fight, and the engine
   reports it as a conflict. The exceptions: a BUS of tri-state outputs
@@ -278,7 +284,7 @@ Every logic chip in the catalog belongs to ONE family, named in its bracket:
   a \`set\` bit string means.
 * A bare \`led\` or \`resistor\` is fine — wire its two pins like any other.
   For eight lamps or eight inputs, the DIP-bodied displays (\`bar8\`,
-  \`seg8cc\`) and switch banks (\`sw-dip8\`) are tidier.
+  \`seg7cc\`) and switch banks (\`sw-dip8\`) are tidier.
 * A memory chip arrives EMPTY: a netlist cannot carry its contents. A RAM is
   written by the circuit; a ROM, EPROM or EEPROM must be programmed by the user
   afterwards, so say so in \`notes\` if the design needs one.

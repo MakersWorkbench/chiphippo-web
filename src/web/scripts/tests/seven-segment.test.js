@@ -106,6 +106,18 @@ test("it straddles the channel WIDE: five legs in row d, five in row h, its body
   assert.equal(lowAt.get(10), "bb1.i30");
 });
 
+test("a drag keeps it wide: the next seat in row e is still e/i, never e/f", () => {
+  const { doc, controller } = desk();
+  const comp = controller.addComponentAt("seg7cc", "bb1", "d10");
+  // Re-seated through the drag's own path (the seat a drag in row d hands
+  // back says it is not the e/i one)…
+  doc.moveComponent(comp.id, "bb1", "d20", { wide: false });
+  assert.equal(doc.getComponent(comp.id).params.wide, true);
+  // …so a move into row e still stands it across the channel at its width.
+  doc.moveComponent(comp.id, "bb1", "e30");
+  assert.equal(pinMap(doc, doc.getComponent(comp.id)).get(10), "bb1.i30");
+});
+
 test("its two commons are one net, so either may be wired", () => {
   const { doc, controller } = desk();
   controller.addComponentAt("seg7cc", "bb1", "d10");
@@ -177,7 +189,7 @@ test("R turns the placement ghost a half lap too, and it lands turned", () => {
   assert.equal(doc.components.length, 0);
 });
 
-test("the RETIRED single-row digits still load and run; the AI builder keeps them for now", () => {
+test("the RETIRED single-row digits still load and run; the AI builder offers the new digit instead", () => {
   const raw = {
     boards: [{ id: "bb1", type: "pins-full", x: 0, y: 0 }],
     components: [
@@ -190,8 +202,8 @@ test("the RETIRED single-row digits still load and run; the AI builder keeps the
   assert.equal(partDef("seg8cc").retired, true);
   assert.equal(partDef("seg7cc").retired, undefined);
   const buildable = new Set(BUILDABLE_DEFS.map((d) => d.id));
-  assert.ok(buildable.has("seg8cc"));
-  assert.ok(!buildable.has("seg7cc"), "not until the compiler seats it wide");
+  assert.ok(!buildable.has("seg8cc"), "off the tray, off the card");
+  assert.ok(buildable.has("seg7cc") && buildable.has("seg7ca"));
 });
 
 test("the 3D view models it, turned or not", () => {

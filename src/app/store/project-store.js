@@ -378,10 +378,7 @@ class ProjectStore {
     // what "no location" means. A loose design is not a project file at all,
     // so it has no location either: Save As is what gives the project a home,
     // and nothing can overwrite the design that was imported.
-    meta.location =
-      !wasProject || resolved === path.resolve(this.defaultProjectPath)
-        ? null
-        : resolved;
+    meta.location = !wasProject || this.isSlotPath(resolved) ? null : resolved;
     if (warnings.length) meta.warnings = warnings;
     return meta;
   }
@@ -479,6 +476,26 @@ class ProjectStore {
         ? raw.recoveryFor
         : null;
     return { recoveryFor, name: typeof raw.name === "string" ? raw.name : "" };
+  }
+
+  /**
+   * Make a stamped slot an ORDINARY one — the untitled project's home — by
+   * dropping its `recoveryFor`, its bytes otherwise left exactly as they are
+   * (no hydrate, no collect). For a recovery restored HOMELESS: the project it
+   * stood for has gone, so it is untitled now, and an untitled project's slot
+   * is its file, which a clean quit keeps. Left stamped, a quit that discarded
+   * it before the first autosave kept it as a crash flag, and every launch
+   * after restored it again. False when there was no stamp (or the slot is
+   * held) — nothing changed.
+   */
+  unstampRecovery() {
+    if (this._slotHeld) return false;
+    const raw = io.readJSON(this.defaultProjectPath);
+    if (!raw || typeof raw !== "object" || !("recoveryFor" in raw))
+      return false;
+    const { recoveryFor: _stamp, ...rest } = raw;
+    io.writeJSON(this.defaultProjectPath, rest);
+    return true;
   }
 
   /**
@@ -661,10 +678,52 @@ class ProjectStore {
   }
 
   _isSlot(filePath) {
-    return (
-      typeof filePath === "string" &&
-      path.resolve(filePath) === path.resolve(this.defaultProjectPath)
+    return this.isSlotPath(filePath);
+  }
+
+  /**
+   * Does `filePath` name the working slot — v4's or v3's — however it is
+   * spelt? The slot is the app's own file, never a place to save a project or
+   * export a desktop to, and a plain string compare was how it became one: on
+   * a case-insensitive volume a Save As to `Default.chiphippo` WROTE the slot,
+   * was judged "a different file", and then deleted it as the slot it had
+   * left; `default.project.chiphippo` was swallowed as v3's slot at the next
+   * launch. So: the same path in any case (the slot may not exist yet, so
+   * there may be no file to compare), or the same file by identity.
+   */
+  isSlotPath(filePath) {
+    if (typeof filePath !== "string" || !filePath) return false;
+    const resolved = path.resolve(filePath);
+    return [this.defaultProjectPath, this.legacyDefaultProjectPath].some(
+      (slot) =>
+        resolved.toLowerCase() === path.resolve(slot).toLowerCase() ||
+        sameFile(resolved, slot),
     );
+  }
+
+  /**
+   * Why a Save As / Export target may not be written, or null when it may:
+   * `"slot"` for the working slot (`isSlotPath`), `"open"` for `openProject`
+   * — the open project's own file, which a desktop exported over it would
+   * reduce to that one desktop while the window still showed it saved.
+   */
+  saveClash(filePath, openProject = null) {
+    if (this.isSlotPath(filePath)) return "slot";
+    if (typeof openProject !== "string" || !openProject) return null;
+    const chosen = path.resolve(filePath);
+    const open = path.resolve(openProject);
+    return chosen === open || sameFile(chosen, open) ? "open" : null;
+  }
+
+  /**
+   * A suggested path that is never the working slot: a project NAMED
+   * "Default" (or "default.project", v3's slot) is offered
+   * `Default 2.chiphippo` beside it rather than the app's own file.
+   */
+  besideSlot(filePath) {
+    if (!this.isSlotPath(filePath)) return filePath;
+    const stem = nameFromFile(filePath);
+    return path.join(path.dirname(filePath), `${stem} 2${PROJECT_EXT}`);
   }
 
   /**
@@ -770,6 +829,23 @@ function projectOf(snapshot) {
 function existsSafe(filePath) {
   try {
     return fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Do two paths name ONE file — by identity, not spelling? A case-insensitive
+ * volume (the default on macOS and Windows) opens `Default.chiphippo` as
+ * `default.chiphippo`, and a symlinked folder is another spelling still. False
+ * when either is missing (or unreadable): only a file can be the same file.
+ */
+function sameFile(a, b) {
+  try {
+    const x = fs.statSync(a);
+    const y = fs.statSync(b);
+    // A zero inode is "unknown" on some volumes, not a shared one.
+    return x.ino !== 0 && x.dev === y.dev && x.ino === y.ino;
   } catch {
     return false;
   }

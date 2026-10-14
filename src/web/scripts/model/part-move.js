@@ -446,7 +446,12 @@ export function ridePointShift(boards, wire, next, bothEndsRide) {
     const b = worldOfAddress(boards, next[end]);
     return a && b ? { dx: b.x - a.x, dy: b.y - a.y } : null;
   });
-  const [a, b] = shifts;
+  // Compared and stated on the 0.01 grid every coordinate here lives on: the
+  // rows are measured, so the same carry read off two ends can differ in the
+  // last bit (21.02 against 21.020000000000003 between two kits' rows), and an
+  // exact test left a carried wire's bends behind.
+  const q = (n) => Math.round(n * 100) / 100 || 0;
+  const [a, b] = shifts.map((v) => v && { dx: q(v.dx), dy: q(v.dy) });
   if (!a || !b || a.dx !== b.dx || a.dy !== b.dy) return null;
   return a.dx === 0 && a.dy === 0 ? null : a;
 }

@@ -140,6 +140,10 @@ test("designators follow schematic convention, numbered in document order", () =
     ["J1", "U1", "R1", "U2", "D1", "SW1", "DS1", "RN1", "X1", "J2"],
   );
   assert.equal(designatorPrefix({ kind: "discrete", ref: "lcd16x2" }), "DS");
+  // The 7-segment digits that replaced seg8 are displays too.
+  for (const ref of ["seg7cc", "seg7ca"]) {
+    assert.equal(designatorPrefix({ kind: "discrete", ref }), "DS", ref);
+  }
 });
 
 test("a part the user named like a designator keeps it; the rest number around it", () => {
@@ -240,4 +244,64 @@ test("a file base is safe on every platform and never empty", () => {
   assert.equal(safeFileBase("-x"), "x");
   assert.equal(safeFileBase(""), "chiphippo");
   assert.equal(safeFileBase("x".repeat(90)).length, 60);
+});
+
+// ── The 2026-10-14 review ────────────────────────────────────────────────────
+
+/** A full kit (bb1 pins, bb2 + rail, bb3 − rail) with a 5 V supply, plus
+    whatever `more` adds — a plain document. */
+function kitDoc({ boards = [], components = [], wires = [] } = {}) {
+  let n = 0;
+  const wire = ([from, to]) => ({ id: `w${++n}`, from, to, color: "black" });
+  return {
+    boards: [
+      { id: "bb1", type: "pins-full", x: 0, y: 3.5 },
+      { id: "bb2", type: "rail-full", x: 0, y: 0 },
+      { id: "bb3", type: "rail-full", x: 0, y: 17.52 },
+      ...boards,
+    ],
+    components: [
+      { id: "psu1", kind: "psu", ref: "psu", x: 100, y: 0, params: { volts: 5 } }, // prettier-ignore
+      ...components,
+    ],
+    wires: [["psu1.+", "bb2.+1"], ["psu1.-", "bb3.-1"], ...wires].map(wire),
+  };
+}
+
+test("a signal carried on a turned rail is a signal, not a supply", () => {
+  // A 74LS04 at e10: 1Y (pin 2) out onto a turned rail's + line, back into 2A
+  // (pin 3) — the rail as a signal bus.
+  const doc = kitDoc({
+    boards: [{ id: "bb4", type: "rail-full", x: 80, y: 0, rot: 90 }],
+    components: [{ id: "c1", kind: "chip", ref: "74LS04", board: "bb1", anchor: "e10" }], // prettier-ignore
+    wires: [["bb1.j10", "bb2.+2"], ["bb1.a16", "bb3.-2"], ["bb1.a11", "bb4.+3"], ["bb4.+20", "bb1.a12"]], // prettier-ignore
+  });
+  const model = exportNetlist(doc);
+  const [chip] = partByRef(model, "74LS04");
+  const y = netOf(model, chip, "2");
+  assert.equal(y.polarity, null);
+  assert.equal(netOf(model, chip, "3").id, y.id, "2A is on it");
+  assert.match(y.name, /^N\d+$/);
+  assert.equal(netOf(model, chip, "14").polarity, "VCC", "the real rail is");
+});
+
+test("a regulator's rail is named for its own volts; an unknown one is VCC", () => {
+  // A 7812 at a20 (IN a20 · GND a21 · OUT a22) and an LM317 at a40 (ADJ ·
+  // OUT · IN), each output wired to a chip's VCC (pin 14, row j).
+  const doc = kitDoc({
+    components: [
+      { id: "c1", kind: "discrete", ref: "LM7812", board: "bb1", anchor: "a20" }, // prettier-ignore
+      { id: "c2", kind: "discrete", ref: "LM317", board: "bb1", anchor: "a40" }, // prettier-ignore
+      { id: "c3", kind: "chip", ref: "74LS00", board: "bb1", anchor: "e50" },
+      { id: "c4", kind: "chip", ref: "74LS04", board: "bb1", anchor: "e30" },
+    ],
+    wires: [["bb1.b20", "bb2.+5"], ["bb1.b21", "bb3.-5"], ["bb1.b22", "bb1.j50"], ["bb1.b41", "bb1.j30"]], // prettier-ignore
+  });
+  const model = exportNetlist(doc);
+  const [chip] = partByRef(model, "74LS00");
+  const [reg] = partByRef(model, "LM7812");
+  const [adj] = partByRef(model, "LM317");
+  assert.equal(netOf(model, reg, "1").name, "+5V");
+  assert.equal(netOf(model, chip, "14").name, "+12V");
+  assert.equal(netOf(model, adj, "2").name, "VCC");
 });

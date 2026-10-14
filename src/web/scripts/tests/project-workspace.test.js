@@ -745,6 +745,18 @@ test("renaming a desktop or the project is an unsaved change", async () => {
   assert.equal(h.workspace.projectName, "6502 SBC");
 });
 
+test("a project's and a desktop's Name box holds no more than the name keeps", async () => {
+  // Both are cut to 64 characters wherever they are normalized (here and in
+  // main), so the box stops there too rather than showing what is dropped.
+  const h = await harness();
+  h.workspace.editProjectProperties();
+  assert.equal(document.querySelector(".properties-text-input").maxLength, 64);
+  closePopup();
+  h.workspace.editTabProperties("t1");
+  assert.equal(document.querySelector(".properties-text-input").maxLength, 64);
+  closePopup();
+});
+
 test("moving between desktops is not a change, and neither is panning", async () => {
   const h = await harness();
   await twoDesktops(h);
@@ -2369,6 +2381,26 @@ test("a recent project the sandbox denies offers to re-grant, not to forget", as
   assert.equal(h.workspace.projectLocation, "/home/locked.chiphippo");
   // The entry is kept throughout — it was never the thing that was wrong.
   assert.equal(h.recentList().includes("/home/locked.chiphippo"), true);
+});
+
+test("a most-recent project the sandbox refused at BOOT is offered for re-grant", async () => {
+  // main.js `isDeniedRecent`: the boot opened something else, and says which
+  // project it could not — as a fact, answered with the same offer Open
+  // Recent makes, not by silently opening an older project.
+  while (PopupManager.isOpen()) PopupManager.close();
+  const fake = fakeBridge();
+  const boot = fake.bridge.project.boot;
+  fake.bridge.project.boot = async () => ({
+    ...(await boot()),
+    warnings: [{ deniedRecent: "/home/locked.chiphippo" }],
+  });
+  const h = await harness({ fake });
+  seedDenied(h, "/home/locked.chiphippo");
+  assert.match(dialogTitle(), /confirm access/i);
+  h.control.regrantPick = "/home/locked.chiphippo";
+  clickButton("Confirm Access…");
+  await settle();
+  assert.equal(h.workspace.projectName, "Locked");
 });
 
 test("declining the re-grant leaves the recent entry exactly where it was", async () => {

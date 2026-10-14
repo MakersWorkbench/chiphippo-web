@@ -121,3 +121,42 @@ test("NetlistCache tracks a held button's transient pressed state", () => {
   );
   assert.notEqual(cache.netOf("bb1.b10"), cache.netOf("bb1.b12"));
 });
+
+test("the highlight traces a wire where it is DRAWN: a routed wire's bends, a bus member's leads", async () => {
+  resetDom();
+  const { WireLayer } = await import("../components/wire-layer.js");
+  const doc = new DeskDoc(null);
+  doc.addBoard("pins-full", 0, 0);
+  const routed = doc.addWire({ from: "bb1.a1", to: "bb1.a20", color: "red" });
+  doc.setWireRoute(routed.id, [{ x: 10, y: 30 }]);
+  const plain = doc.addWire({ from: "bb1.b1", to: "bb1.b20", color: "red" });
+  const m1 = doc.addWire({ from: "bb1.c1", to: "bb1.c40", color: "red" });
+  const m2 = doc.addWire({ from: "bb1.c2", to: "bb1.c41", color: "red" });
+  doc.addBus("D", [m1.id, m2.id]);
+  const layer = document.createElement("div");
+  document.body.append(layer);
+  const wires = new WireLayer(layer, doc, {});
+  wires.render();
+  // The path each draws in the layer is the one the highlight is handed.
+  const drawn = (id) =>
+    layer.querySelector(`[data-wire-id="${id}"] path`).getAttribute("d");
+  assert.equal(wires.restingPath(routed.id), drawn(routed.id));
+  assert.match(wires.restingPath(routed.id), /L/, "straight runs, not a sag");
+  assert.equal(wires.restingPath(plain.id), drawn(plain.id));
+  assert.equal(wires.restingPath(m2.id), drawn(m2.id), "a member's two leads");
+  assert.equal(wires.restingPath("w999"), null);
+
+  const highlight = new NetHighlight(layer);
+  highlight.show(
+    { holes: [], terminals: [], pins: [], wires: [routed.id] },
+    {
+      positionOf: () => null,
+      wireEndpointsOf: () => ({ a: { x: 0, y: 0 }, b: { x: 10, y: 0 } }),
+      wirePathOf: (id) => wires.restingPath(id),
+    },
+  );
+  assert.equal(
+    layer.querySelector(".net-highlight-wire").getAttribute("d"),
+    drawn(routed.id),
+  );
+});

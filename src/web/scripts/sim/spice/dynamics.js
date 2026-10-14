@@ -456,7 +456,10 @@ function phi(x) {
  * `{curves, scale}`: each node's curve (spice/rc-curve.js reads it — a
  * `modal` sum of exponentials, or a `system` read through e^A), and the
  * system's time scales (`fast`, `slow` seconds; slow Infinity where a mode
- * ramps or never settles), which a crossing search samples by.
+ * ramps or never settles), which a crossing search samples by — and `grow`,
+ * the e-folding time of its fastest GROWING mode (Infinity where none grows:
+ * a piece that linearizes a device to a negative slope can have one, and
+ * read far along it a curve runs off to Infinity).
  * @param {{c: Float64Array[], y: Float64Array[], i0: Float64Array,
  *   v0: Float64Array, t0: number}} sys
  */
@@ -580,15 +583,18 @@ export function rcSystem({ c, y, i0, v0, t0, nc = v0.length }) {
     }
     let fast = 0;
     let slowRate = Number.POSITIVE_INFINITY;
+    let growRate = 0;
     for (const x of mu) {
       fast = Math.max(fast, Math.abs(x));
       slowRate = Math.min(slowRate, x < 0 ? -x : 0);
+      growRate = Math.max(growRate, x);
     }
     return {
       curves,
       scale: {
         fast: fast > 0 ? 1 / fast : Number.POSITIVE_INFINITY,
         slow: slowRate > 0 ? 1 / slowRate : Number.POSITIVE_INFINITY,
+        grow: growRate > 0 ? 1 / growRate : Number.POSITIVE_INFINITY,
       },
     };
   }
@@ -749,10 +755,12 @@ function complexModal(a, b, mx, m, x0, t0) {
   }
   let fast = 0;
   let slowRate = Number.POSITIVE_INFINITY;
+  let growRate = 0;
   let osc = 0;
   for (const [re, im] of lam) {
     fast = Math.max(fast, Math.hypot(re, im));
     slowRate = Math.min(slowRate, re < 0 ? -re : 0);
+    growRate = Math.max(growRate, re);
     osc = Math.max(osc, Math.abs(im));
   }
   return {
@@ -760,6 +768,7 @@ function complexModal(a, b, mx, m, x0, t0) {
     scale: {
       fast: fast > 0 ? 1 / fast : Number.POSITIVE_INFINITY,
       slow: slowRate > 0 ? 1 / slowRate : Number.POSITIVE_INFINITY,
+      grow: growRate > 0 ? 1 / growRate : Number.POSITIVE_INFINITY,
       osc,
     },
   };

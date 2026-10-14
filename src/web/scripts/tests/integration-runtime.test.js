@@ -172,6 +172,17 @@ test("an Output on AUTO with no connection never sends", () => {
   assert.equal(rt.boundary(els, board({ "bb1.a1": "H" })).sends.length, 0);
 });
 
+test("an Output on AUTO with no pin planted sends nothing — not even the first boundary's zeros", () => {
+  // It rides the run only because its connection's layout counts it; it
+  // reaches no net, and the sketch's handler ran on zeros for nothing.
+  const rt = new IntegrationRuntime();
+  const idle = output({ id: "out2", triggerEdge: "auto", tags: { T: tag("bb1.a9") } }); // prettier-ignore
+  const els = [output(), idle];
+  rt.begin(els);
+  assert.deepEqual(rt.boundary(els, board({})).sends, []);
+  assert.deepEqual(rt.boundary(els, board({ "bb1.a1": "H" })).sends, []);
+});
+
 test("several Outputs index by connection and kind", () => {
   const rt = new IntegrationRuntime();
   const els = [

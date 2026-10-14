@@ -77,9 +77,11 @@ export function safeNetName(name) {
   return low ? `n${text}` : text;
 }
 
-/** The label a PSU's rail goes by: `+5V`, `+3V`, `+12V`. */
+/** The label a supply rail goes by: `+5V`, `+3V`, `+12V` — or plain `VCC`
+    when nothing on it says its volts (an LM317's output, a rail no supply
+    is wired to yet): naming it after a voltage nobody set would be a guess. */
 function railName(volts) {
-  return `+${Number.isFinite(volts) ? volts : 5}V`;
+  return Number.isFinite(volts) ? `+${volts}V` : "VCC";
 }
 
 /**
@@ -245,12 +247,19 @@ function nameNets(doc, netlist, parts, nets) {
     return name;
   };
 
-  // The PSU volts on each supply net, for `+5V`.
+  // The volts on each supply net, for `+5V`: a PSU's, and a fixed
+  // regulator's output (a 7812's rail is `+12V`, never the bench supply's).
   const voltsOn = new Map();
   for (const part of parts) {
     if (part.def.kind !== "psu") continue;
     const plus = part.ports.find((p) => p.terminal === "+");
     if (plus?.net) voltsOn.set(plus.net, part.comp.params?.volts);
+  }
+  for (const part of parts) {
+    const reg = part.def.regulator;
+    if (!reg || reg.adjustable) continue;
+    const out = part.ports.find((p) => p.pin === reg.pins.out);
+    if (out?.net && !voltsOn.has(out.net)) voltsOn.set(out.net, reg.volts);
   }
 
   // A bus member's net, named for its bit.

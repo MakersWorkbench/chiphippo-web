@@ -47,7 +47,12 @@ paths:
   hit stroke (`pointer-events: stroke`, `wire-layer.js`, listeners on the `g.wire`
   group), each rotatable discrete's `.part-span-hit`, each push button's
   `.part-button-cap`, and each signal flag's `<polygon>` (eight arbitrary rotated
-  pentagons is exactly the case that argument was written for).
+  pentagons is exactly the case that argument was written for). A discrete whose
+  drawing carries a `.part-display-hit` gives the rest of its box back to the holes
+  under it: `DiscreteView` sets **`part-discrete--body-hit`** on every SVG it builds that
+  has one, and app.css turns that (and `part-discrete--span`) to `pointer-events: none` —
+  no hand-kept list of refs (one fell behind the 7-segments, the regulators and the
+  relay, 2026-10-14).
 - **Wires draw above parts, so while RUNNING a press goes THROUGH them**: a plain press
   on a wire or bus band with a click-toggling part beneath it flips that part
   (`DeskController#togglePartUnder`, `document.elementsFromPoint`) and the click that
@@ -71,6 +76,10 @@ paths:
   the run. So Run/Stop by key now fires on the RELEASE. Both 2D views take the hold
   (`spacePan` in `bindShortcuts`); the viewport's own chrome (zoom cluster, rails) keeps
   its clicks. Wheel and two-finger scroll still pan; the padlock still locks the wheel.
+  The pan runs on `beginPointerGesture` like every desk drag, so a release off the
+  viewport or a window that loses focus mid-pan still ends it. An Option/Alt drag that
+  picks no lead pans too (`DeskView.beginPan`, see "Selection" → Option/Alt), with the
+  grabbing cursor over pin mode's default one.
 - Pan/zoom must **never** rebuild or re-lay-out surface children (transform only); wires
   re-render only on doc changes or live drags (positions passed as overrides).
 - An `<svg>` with width/height 0 renders NOTHING per spec — zero-size anchors need a
@@ -167,7 +176,11 @@ for the viewport's own chrome, which is left alone).
     (`{kind: "lead", id, end: "a"|"b"}` / `{kind: "wire-end", id, end}`, ringed in the
     selection colour by DeskSelection's `hole-ring--selected` HoleRings, re-aimed after every
     edit) and is that lead's drag — the existing resistor-end / wire-end gestures. A press on
-    nothing lightable does nothing; labels, flags and tags let an Alt press through.
+    nothing lightable PANS the desk (Jason, 2026-10-14: `#altPan` hands the press to
+    `DeskView.beginPan` — a drag past the threshold pans, a click does nothing, the
+    selection is untouched; running too, where the parts and the viewport hand it over
+    before refusing the selection; not with ⌘/Ctrl, whose miss stays a no-op); labels,
+    flags and tags let an Alt press through (to that pan).
     Delete on a picked lead removes what it belongs to.
   - **Option/Alt + ⌘/Ctrl-click ADDS a lead to the set** (Jason, 2026-10-14) — the one
     combination, `isLeadToggleEvent`; a solo Option/Alt press still REPLACES the set. The
@@ -328,7 +341,20 @@ never silently broken. One lead alone is an Option/Alt press (see "Selection").
   the node its pin lands in and every other rider there travels with it, while a lead
   that stays put leaves its own node untouched. A transitive closure would pick up the
   whole circuit from one nudge. A bend the body cannot physically make is the BATCH's
-  refusal (`canPlacePart`'s `minSpan`), not the plan's.
+  refusal (`canPlacePart`'s `minSpan`), not the plan's. A lead that ALREADY floats (its
+  rail moved or deleted from under it) is no refusal: `prepareClusterMove` hands
+  `canPlacePart` the pins floating now (`floating`), and such a lead stays where it is,
+  still in mid-air — a state the part was in, not one the move puts it into (2026-10-14;
+  before, a resistor with one floating lead pinned every chip it touched in place).
+- **A drag keeps the grab point under the finger, at ANY grab column** — `partSeatAt`'s
+  `grabOffsetCols` is `null` for the placement ghost (centre on the cursor) and a NUMBER
+  for a drag, 0 included. Overloaded as 0 = ghost, a chip held at its pin 1's own column
+  jumped half its length left on the first move (2026-10-14).
+- **Labels anchored to a part ride its PINS' MIDDLE** (`#carryAnchoredLabels`): the
+  anchor's travel for a rigid move (a chip, a group — the same delta), half a lead's
+  travel when one lead is dragged alone, nothing when a can spins about its centre or a
+  bent TO-92 turns end for end (pin 1 moves; the part does not). The two-lead body drag
+  previews the labels by the same middle, so preview and drop agree.
 - **A rider crosses the trench with its pin, keeping the arrangement** (`holeAcross` +
   `rowsBetween`): the rider's OWN row is tried first and, only if that no longer reaches
   the pin's node, the row the PIN's own row delta puts it in — so a wire two holes from a

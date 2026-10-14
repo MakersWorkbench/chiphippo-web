@@ -432,6 +432,15 @@ export function buildOccupancy(doc) {
       }
     }
   }
+  // PSU terminals are connection POINTS like holes: free until a wire lands.
+  for (const wire of doc.wires ?? []) {
+    if (!wire || typeof wire !== "object") continue;
+    for (const end of ["from", "to"]) {
+      if (typeof wire[end] !== "string") continue;
+      map.set(wire[end], { kind: "wire", wireId: wire.id, end });
+    }
+  }
+  // Pins last, so they win — the loader's PINS-first, spelled backwards.
   for (const comp of doc.components ?? []) {
     if (!comp || (comp.kind !== "chip" && comp.kind !== "discrete")) continue;
     const pins = partPinAddresses(doc, comp);
@@ -440,14 +449,6 @@ export function buildOccupancy(doc) {
       // A floating lead occupies nothing.
       if (address == null) continue;
       map.set(address, { kind: "pin", componentId: comp.id, pin });
-    }
-  }
-  // PSU terminals are connection POINTS like holes: free until a wire lands.
-  for (const wire of doc.wires ?? []) {
-    if (!wire || typeof wire !== "object") continue;
-    for (const end of ["from", "to"]) {
-      if (typeof wire[end] !== "string") continue;
-      map.set(wire[end], { kind: "wire", wireId: wire.id, end });
     }
   }
   return map;
@@ -598,6 +599,16 @@ export function worldOfAddress(boards, address) {
   return pos ? { x: board.x + pos.x, y: board.y + pos.y } : null;
 }
 
+/** Where pin `i` of a seated part's lead stands on the desk — its hole, or
+    for a bent lead the anchor plus its bend, whether or not a hole is there. */
+function leadWorld(boards, comp, i) {
+  const pin = partPinHoles(comp.ref, comp.anchor, comp.params)?.[i];
+  const anchor = worldOfAddress(boards, formatAddress(comp.board, comp.anchor));
+  if (!pin || !anchor) return null;
+  if (pin.offset) return { x: anchor.x + pin.offset.dx, y: anchor.y + pin.offset.dy }; // prettier-ignore
+  return worldOfAddress(boards, formatAddress(comp.board, pin.hole));
+}
+
 /**
  * May a board part (chip or discrete) seat here? True when the board exists,
  * the anchor fits the footprint (chips row e, or d at a 600-mil part's true
@@ -610,7 +621,10 @@ export function worldOfAddress(boards, address) {
  * Note a rotated part's free lead may legally land on a DIFFERENT board (a
  * power rail alongside the pin-board); it must still land in a real hole.
  * Floating is a state a part falls into when a strip is moved or deleted out
- * from under it — never one you can deliberately place into.
+ * from under it — never one you can deliberately place into. `floating` names
+ * the pins that float ALREADY: a part carried by its other lead (riding a
+ * moved chip) keeps such a lead where it is, still in mid-air, and the move
+ * is not to be refused for a state the part was in before it.
  *
  * `occupancy` is a prebuilt `buildOccupancy(doc)` map for a caller checking MANY
  * placements against ONE document — this function otherwise rebuilds the whole
@@ -620,7 +634,7 @@ export function worldOfAddress(boards, address) {
  *
  * @param {{ boards: Array, components: Array }} doc
  * @param {{ ref: string, board: string, anchor: string, ignoreId?: string|null,
- *   occupancy?: Map<string, object>|null }} opts
+ *   occupancy?: Map<string, object>|null, floating?: Set<number>|null }} opts
  */
 export function canPlacePart(
   doc,
@@ -631,6 +645,7 @@ export function canPlacePart(
     params = null,
     ignoreId = null,
     occupancy = null,
+    floating = null,
   },
 ) {
   const boards = doc.boards ?? [];
@@ -638,22 +653,31 @@ export function canPlacePart(
   const def = partDef(ref);
   const pins = partPinAddresses(doc, { ref, board: boardId, anchor, params });
   if (!pins) return false;
-  if (pins.some((p) => p.address == null)) return false; // a lead in mid-air
+  // A lead in mid-air — unless it was there already (`floating`).
+  if (pins.some((p) => p.address == null && !floating?.has(p.pin))) {
+    return false;
+  }
+  const seated = pins.filter((p) => p.address != null);
   // A rotated part's two ends — a bent TO-92's three legs — must be DISTINCT
   // holes (a wire could join a node's own holes; a device with two leads in
   // one hole is nonsense).
   if (
     (params?.rot === 90 || Array.isArray(params?.legs)) &&
-    new Set(pins.map((p) => p.address)).size !== pins.length
+    new Set(seated.map((p) => p.address)).size !== seated.length
   ) {
     return false;
   }
   // Two-terminal parts with a declared minimum lead span (a resistor's body
   // needs room) must keep their ends that far apart — any angle, any distance
-  // beyond it, so a lead can reach the far rail.
+  // beyond it, so a lead can reach the far rail. A floating end is where its
+  // bend puts it.
   if (def?.minSpan && pins.length === 2) {
-    const pa = worldOfAddress(boards, pins[0].address);
-    const pb = worldOfAddress(boards, pins[1].address);
+    const at = (p, i) =>
+      p.address != null
+        ? worldOfAddress(boards, p.address)
+        : leadWorld(boards, { ref, board: boardId, anchor, params }, i);
+    const pa = at(pins[0], 0);
+    const pb = at(pins[1], 1);
     if (!pa || !pb) return false;
     // With a hair to spare: row y's live on a 0.01 grid, which binary floats
     // do not (3.51 − 1.51 is 1.9999999999999998), so a diode laid exactly its
@@ -667,7 +691,7 @@ export function canPlacePart(
     anchor,
     params,
   });
-  for (const address of [...pins.map((p) => p.address), ...covered]) {
+  for (const address of [...seated.map((p) => p.address), ...covered]) {
     const occupant = index.get(address);
     if (occupant && occupant.componentId !== ignoreId) return false;
   }

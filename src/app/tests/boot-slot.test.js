@@ -29,7 +29,7 @@ const path = require("node:path");
 
 const { ProjectStore } = require("../store/project-store");
 const { DeskStore } = require("../store/desk-store");
-const { keepUnreadSlot } = require("../boot-slot");
+const { keepUnreadSlot, bootKeepingSlot } = require("../boot-slot");
 
 /** A store whose working slot holds a recovery copy nobody can read. */
 function unreadable(fn) {
@@ -105,3 +105,40 @@ test(
     });
   },
 );
+
+test("a boot that THROWS part-way answers with a new project — and the slot it held is kept", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "chiphippo-boot-"));
+  const store = new ProjectStore(dir, new DeskStore());
+  try {
+    // A recovery in the slot, and a boot that read it and then failed (a
+    // bookmark write, say): the renderer's fallback would have taken the slot.
+    const meta = store.newProject();
+    meta.tabs[0].name = "Unsaved work";
+    store.write(store.defaultProjectPath, meta, { recoveryFor: "/x/Work.chiphippo" }); // prettier-ignore
+    const booted = bootKeepingSlot(store, () => {
+      throw new Error("bookmarks.json: EIO");
+    });
+    assert.equal(booted.tabs[0].name, "Desktop 1", "a new project");
+    assert.equal(booted.warnings?.[0]?.key, "workspace.slotAside", "and said where the old one went"); // prettier-ignore
+    const kept = JSON.parse(fs.readFileSync(booted.warnings[0].path, "utf8"));
+    assert.equal(kept.tabs[0].name, "Unsaved work", "kept whole");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a boot that throws with no slot is just a new project, with nothing to say", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "chiphippo-boot-"));
+  const store = new ProjectStore(dir, new DeskStore());
+  try {
+    const booted = bootKeepingSlot(store, () => {
+      throw new Error("boom");
+    });
+    assert.equal(booted.tabs.length, 1);
+    assert.equal(booted.warnings, undefined);
+    // …and an ordinary boot passes straight through.
+    assert.equal(bootKeepingSlot(store, () => ({ name: "X" })).name, "X");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

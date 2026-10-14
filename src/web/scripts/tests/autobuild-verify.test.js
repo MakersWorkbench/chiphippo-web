@@ -942,3 +942,76 @@ test("a 74LS output into a CD4000 input without a pull-up is a repair fault", ()
   assert.match(f.message, /"MID" carries a 74LS output into a CD4000 input/);
   assert.equal(f.kind, "repair");
 });
+
+test("two displays, each with its own GND net, verify — the compiler's names never collide", () => {
+  // The prompt's name form lets each digit's common sit in a `GND` net of its
+  // own; the resistor each common gets was named `GND_LIMITED` both times, and
+  // L4 read the two as one net shorted across a column-half — an abort.
+  const spec = {
+    title: "two digits",
+    parts: [
+      { id: "SW", ref: "sw-dip2" },
+      { id: "D1", ref: "seg8cc" },
+      { id: "D2", ref: "seg8cc" },
+    ],
+    nets: [
+      { name: "VCC", members: ["SW.1A", "SW.2A", "VCC"] },
+      { name: "S1", members: ["SW.1B", "D1.a"] },
+      { name: "S2", members: ["SW.2B", "D2.a"] },
+      { name: "GND", members: ["D1.K", "GND"] },
+      { name: "GND", members: ["D2.K", "GND"] },
+    ],
+    tests: [
+      { name: "one", set: { SW: "10" }, expect: { D1: "10000000", D2: "00000000" } }, // prettier-ignore
+      { name: "two", set: { SW: "01" }, expect: { D1: "00000000", D2: "10000000" } }, // prettier-ignore
+    ],
+  };
+  const out = compile(spec);
+  const limited = out.nets.filter((n) => n.name.startsWith("GND_LIMITED"));
+  assert.equal(limited.length, 2);
+  assert.equal(new Set(limited.map((n) => n.name)).size, 2, "named apart");
+  const v = verifyBuild(out, spec);
+  assert.deepEqual(v.faults, []);
+  assert.equal(v.ok, true);
+});
+
+test("the 7-segment digit is seated WIDE, across the channel, and verifies", () => {
+  // Always 0.6 in: seated in e/f as every other DIP, its params put it in
+  // e/i and the loader dropped the wires the allocator had laid on its body.
+  for (const [ref, rail] of [
+    ["seg7cc", "GND"],
+    ["seg7ca", "VCC"],
+  ]) {
+    const on = rail === "GND" ? "VCC" : "GND";
+    const spec = {
+      title: "one digit",
+      parts: [
+        { id: "SW", ref: "sw-dip2" },
+        { id: "D", ref },
+      ],
+      nets: [
+        { name: "SRC", members: ["SW.1A", "SW.2A", on] },
+        { name: "A", members: ["SW.1B", "D.a"] },
+        { name: "B", members: ["SW.2B", "D.b"] },
+        { name: rail, members: ["D.COM"] },
+      ],
+      tests: [
+        { name: "a", set: { SW: "10" }, expect: { "D.a": on === "VCC" ? "H" : "L" } }, // prettier-ignore
+        { name: "b", set: { SW: "01" }, expect: { "D.b": on === "VCC" ? "H" : "L" } }, // prettier-ignore
+      ],
+    };
+    const out = compile(spec);
+    const digit = out.document.components.find((c) => c.ref === ref);
+    assert.equal(digit.anchor.charAt(0), "d", `${ref} legs in rows d and h`);
+    assert.equal(digit.params.wide, true);
+    const v = verifyBuild(out, spec);
+    assert.deepEqual(v.faults, [], ref);
+    assert.equal(v.ok, true, ref);
+    const doc = normalizeDocument(out.document);
+    assert.equal(
+      doc.wires.length,
+      out.document.wires.length,
+      "every wire kept",
+    );
+  }
+});

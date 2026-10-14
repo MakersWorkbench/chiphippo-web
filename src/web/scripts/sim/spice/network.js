@@ -127,7 +127,13 @@ const DEVICE_DV = 1e-6;
 /** Whether a branch is a DEVICE: more than two terminals, or a current that
     is not a function of the voltage across one pair. */
 export function isDevice(br) {
-  return br.kind === "q" || br.kind === "m" || br.kind === "s" || br.kind === "t" || ANALOG_KINDS.has(br.kind); // prettier-ignore
+  return (
+    br.kind === "q" ||
+    br.kind === "m" ||
+    br.kind === "s" ||
+    br.kind === "t" ||
+    ANALOG_KINDS.has(br.kind)
+  );
 }
 
 /** Every node a device's current depends on. */
@@ -163,7 +169,8 @@ function stageAt(br, vAt) {
     at its answer (a chord, for a curve that only flattens). */
 function offStageSlope(br, vAt, v) {
   const st = stageAt(br, vAt);
-  const on = st.channel || (st.sources ? v < st.volts : br.both || v > st.volts); // prettier-ignore
+  const on =
+    st.channel || (st.sources ? v < st.volts : br.both || v > st.volts);
   return on ? -1 / st.ohms : 0;
 }
 
@@ -301,7 +308,10 @@ function bodyPiece(br, va, vb) {
   if (br.kind === "q") return "";
   if (br.array) return "";
   const forward = br.p ? vb - va : va - vb;
-  return (forward > BODY_DIODE.kneeV ? "d" : "") + (-forward > br.model.vbrV ? "v" : ""); // prettier-ignore
+  return (
+    (forward > BODY_DIODE.kneeV ? "d" : "") +
+    (-forward > br.model.vbrV ? "v" : "")
+  );
 }
 
 /** A MOSFET's channel conductance, siemens, for its ends at `va`/`vb` and
@@ -317,7 +327,11 @@ export function mosfetConductance(br, va, vb, vg) {
 export function deviceConducts(br, vAt) {
   if (br.kind === "q") {
     const s = br.pnp ? -1 : 1;
-    const { tf, over } = bjtCurrents(br.model, s * (vAt(br.b) - vAt(br.e)), s * (vAt(br.c) - vAt(br.e))); // prettier-ignore
+    const { tf, over } = bjtCurrents(
+      br.model,
+      s * (vAt(br.b) - vAt(br.e)),
+      s * (vAt(br.c) - vAt(br.e)),
+    );
     return tf > CONDUCTS_A || over > 0;
   }
   if (br.kind === "s") return offStageCurrent(br, vAt, vAt(br.out)) !== 0;
@@ -327,7 +341,9 @@ export function deviceConducts(br, vAt) {
   const va = vAt(br.a);
   const vb = vAt(br.b);
   if (br.array || !br.model) return mosfetConductance(br, va, vb, vAt(br.g)) > 0; // prettier-ignore
-  const vgs = br.p ? Math.max(va, vb) - vAt(br.g) : vAt(br.g) - Math.min(va, vb); // prettier-ignore
+  const vgs = br.p
+    ? Math.max(va, vb) - vAt(br.g)
+    : vAt(br.g) - Math.min(va, vb);
   return vgs > br.model.vtoV || bodyAmps(br, va, vb) !== 0;
 }
 
@@ -377,7 +393,11 @@ export function junctionPiece(br, vd) {
  * @returns {string}
  */
 export function pieces({ drivers, branches, fixed, volts }) {
-  return piecesBy(drivers, branches, (node) => fixed.get(node) ?? volts.get(node) ?? 0); // prettier-ignore
+  return piecesBy(
+    drivers,
+    branches,
+    (node) => fixed.get(node) ?? volts.get(node) ?? 0,
+  );
 }
 
 /**
@@ -406,7 +426,9 @@ export function piecesBy(drivers, branches, vAt) {
     } else if (br.kind === "m") {
       const va = vAt(br.a);
       const vb = vAt(br.b);
-      const over = br.p ? Math.max(va, vb) - vAt(br.g) : vAt(br.g) - Math.min(va, vb); // prettier-ignore
+      const over = br.p
+        ? Math.max(va, vb) - vAt(br.g)
+        : vAt(br.g) - Math.min(va, vb);
       if (br.array || !br.model) {
         const on = (over - MOSFET.vthV) / MOSFET.fullOnV;
         const g = mosfetConductance(br, va, vb, vAt(br.g));
@@ -602,7 +624,123 @@ export function newtonSolve({
       newton();
     }
   }
+  if (size(f) <= tolerance && gainDevices(touching) >= 2 && unstable()) {
+    fallOff();
+  }
   return size(f) <= tolerance;
+
+  /** The Jacobian where the nets stand, each device read upward. */
+  function jacobianHere() {
+    const jacobian = nodes.map(() => new Float64Array(nodes.length));
+    nodes.forEach((node, k) => slopes(node, jacobian[k], 1));
+    return jacobian;
+  }
+
+  /**
+   * Is the balance the nets stand at one they would fall OFF — the knife-edge
+   * of a bistable pair (two transistors cross-coupled), every one of them
+   * half on? Newton finds a balance, not a stable one, and from a symmetric
+   * guess it lands on exactly that edge: both collectors at a volt, both
+   * outputs read LOW, a flip-flop that never flips. With a capacitance on
+   * every net the balance is stable only where every eigenvalue of the
+   * Jacobian has a negative real part, so then the sign of its determinant
+   * is (−1)ⁿ; a sign the other way is an odd number of runaway modes.
+   */
+  function unstable() {
+    const sign = determinantSign(jacobianHere());
+    return sign !== 0 && sign !== (nodes.length % 2 ? -1 : 1);
+  }
+
+  /**
+   * Off the knife-edge into a balance that holds, the way the circuit itself
+   * falls. With a unit capacitance on every net its dynamics run along the
+   * edge's RUNAWAY mode (`runawayMode`): a nudge that way (`TIP_V`, signed so
+   * the first net goes down — or, if that leaves it standing, up; the first
+   * net as the logic engine's tie-break counts them, so a cold flip-flop comes
+   * up the same way in both engines, sim/engine.js `solve`), then
+   * backward-Euler steps of those dynamics (a conductance `g` from each net to
+   * where it was) — kept short while they run away along the mode, lengthened
+   * once clear of the edge — and Newton's steps from where they come to rest.
+   * Kept only where that lands on a balance that holds; else the nets go back
+   * to the edge. Every step is fixed, so it always falls the same way.
+   */
+  function fallOff() {
+    const edge = nodes.map((node) => volts.get(node));
+    // The first steps short beside the fastest mode there is (no eigenvalue
+    // exceeds the Jacobian's largest row sum): a step as long as the runaway
+    // mode is fast turns it round, and the circuit falls the wrong way.
+    let g0 = GMIN_S;
+    for (const row of jacobianHere()) {
+      let sum = 0;
+      for (const x of row) sum += Math.abs(x);
+      g0 = Math.max(g0, 4 * sum);
+    }
+    const mode = runawayMode(jacobianHere(), g0);
+    const lead = mode?.findIndex((x) => Math.abs(x) > 1e-9) ?? -1;
+    if (lead < 0) return;
+    for (const sign of [1, -1]) {
+      // Signed so the first net it moves goes down (then up).
+      const dir = mode.map((x) => (mode[lead] > 0 ? -x : x) * sign);
+      const along = () =>
+        nodes.reduce(
+          (sum, node, i) => sum + (volts.get(node) - edge[i]) * dir[i],
+          0,
+        );
+      nodes.forEach((node, i) => volts.set(node, edge[i] + TIP_V * dir[i]));
+      let g = g0;
+      let gone = along();
+      for (let step = 0; step < FALL_STEPS && g < 1 / GMIN_S; step++) {
+        const before = nodes.map((node) => volts.get(node));
+        if (!stepBack(before, g)) break;
+        let moved = 0;
+        let away = 0;
+        nodes.forEach((node, i) => {
+          moved = Math.max(moved, Math.abs(volts.get(node) - before[i]));
+          away = Math.max(away, Math.abs(volts.get(node) - edge[i]));
+        });
+        const now = along();
+        // Near the edge a step must carry it further along the mode — a
+        // step as long as the mode is fast turns it back — so one that does
+        // not is taken again shorter; clear of the edge every mode left
+        // decays, and longer steps get there sooner.
+        if (now <= 0 || (away <= CLEAR_V && now <= gone)) {
+          nodes.forEach((node, i) => volts.set(node, before[i]));
+          g *= 4;
+          continue;
+        }
+        gone = now;
+        g = Math.max(away > CLEAR_V ? g / 2 : g / 1.5, GMIN_S);
+        if (away > CLEAR_V && moved < REST_V) break;
+      }
+      f = residual();
+      newton();
+      if (size(f) <= tolerance && !unstable()) return;
+      nodes.forEach((node, i) => volts.set(node, edge[i]));
+    }
+    f = residual();
+  }
+
+  /** One backward-Euler step from `before` with a conductance `g` from each
+      net to where it was: whether it balanced. */
+  function stepBack(before, g) {
+    for (let k = 0; k < MAX_NEWTON; k++) {
+      const step = nodes.map(
+        (node, i) => into(node, volts.get(node)) + g * (before[i] - volts.get(node)), // prettier-ignore
+      );
+      if (size(step) <= tolerance) return true;
+      const jacobian = jacobianHere();
+      for (let i = 0; i < nodes.length; i++) jacobian[i][i] -= g;
+      const dv = gaussSolve(
+        jacobian,
+        step.map((x) => -x),
+      );
+      if (!dv) return false;
+      const big = size(dv);
+      const t = big > LIMIT_V ? LIMIT_V / big : 1;
+      nodes.forEach((node, i) => volts.set(node, volts.get(node) + t * dv[i]));
+    }
+    return true;
+  }
 
   /** Newton's steps from where the nets stand, until they balance. */
   function newton() {
@@ -706,10 +844,225 @@ export function newtonSolve({
       const each = dv.map((x) => Math.max(-LIMIT_V, Math.min(LIMIT_V, x)));
       const tried = along(each, 1);
       if (tried.gained) move = tried;
-      else nodes.forEach((node, i) => volts.set(node, from[i] + move.t * dv[i])); // prettier-ignore
+      else
+        nodes.forEach((node, i) => volts.set(node, from[i] + move.t * dv[i]));
     }
     return move;
   }
+}
+
+/** How far `fallOff` nudges a balance off its knife-edge, volts. */
+const TIP_V = 0.01;
+
+/** How far from the edge a falling network counts as clear of it, volts. */
+const CLEAR_V = 0.5;
+
+/** A falling network whose step moves no net more than this is at rest,
+    volts. */
+const REST_V = 1e-6;
+
+/** The most backward-Euler steps `fallOff` takes one way. */
+const FALL_STEPS = 400;
+
+/** How many transistors a network holds — the parts with GAIN, two of which
+    can make a pair with two balances and a knife-edge between them. */
+function gainDevices(touching) {
+  const seen = new Set();
+  for (const list of touching.values()) {
+    for (const br of list) if (br.kind === "q" || br.kind === "m") seen.add(br);
+  }
+  return seen.size;
+}
+
+/**
+ * A balance of `residual` (x → the current INTO each coordinate, amps, which
+ * falls as it rises — `newtonSolve`'s convention) moved OFF a knife-edge onto
+ * one that holds, or null where `x0` already holds (or nothing better is
+ * found). The same fall as `newtonSolve`'s `fallOff`, for a system the solve
+ * cannot see whole: slopes read `dx` apart, a nudge down the runaway mode the
+ * first coordinate's way (then up), backward-Euler steps of a unit
+ * capacitance on each coordinate, then Newton's from where they rest. A
+ * flasher's two capacitors, each holding its charge, are a flip-flop between
+ * their plate pairs — powered up even, it stood on that edge for 0.2 s.
+ * @param {(x: Float64Array) => number[]} residual
+ * @param {Float64Array} x0 - a balance (`residual` ≈ 0 there)
+ * @param {{dx?: number, tolerance?: number}} [opts]
+ * @returns {Float64Array|null}
+ */
+export function fallOffBalance(
+  residual,
+  x0,
+  { dx = 1e-6, tolerance = 1e-9 } = {},
+) {
+  const n = x0.length;
+  const size = (f) => f.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+  /** `fx`'s slopes at `x` (where it is `f`), each read `dx` up. */
+  const jacobianOf = (fx, x, f) => {
+    const j = Array.from({ length: n }, () => new Float64Array(n));
+    for (let c = 0; c < n; c++) {
+      const y = Float64Array.from(x);
+      y[c] += dx;
+      const fy = fx(y);
+      for (let r = 0; r < n; r++) j[r][c] = (fy[r] - f[r]) / dx;
+    }
+    return j;
+  };
+  const holds = (x, f) => {
+    const sign = determinantSign(jacobianOf(residual, x, f));
+    return sign === 0 || sign === (n % 2 ? -1 : 1);
+  };
+  const f0 = residual(x0);
+  if (holds(x0, f0)) return null;
+  const j0 = jacobianOf(residual, x0, f0);
+  let g0 = 0;
+  for (const row of j0) {
+    let sum = 0;
+    for (const x of row) sum += Math.abs(x);
+    g0 = Math.max(g0, 4 * sum);
+  }
+  if (!(g0 > 0)) return null;
+  const mode = runawayMode(
+    j0.map((row) => Float64Array.from(row)),
+    g0,
+  );
+  const lead = mode?.findIndex((x) => Math.abs(x) > 1e-9) ?? -1;
+  if (lead < 0) return null;
+  // Newton's steps on `fx(x) = 0` from `x`, each halved until it gains.
+  const settle = (fx, x) => {
+    let f = fx(x);
+    for (let k = 0; k < MAX_NEWTON && size(f) > tolerance; k++) {
+      const step = gaussSolve(
+        jacobianOf(fx, x, f),
+        f.map((v) => -v),
+      );
+      if (!step) break;
+      const big = size(step);
+      let t = big > LIMIT_V ? LIMIT_V / big : 1;
+      let next = null;
+      let y = null;
+      for (let h = 0; h < BACKTRACKS; h++) {
+        y = x.map((v, i) => v + t * step[i]);
+        next = fx(y);
+        if (size(next) < size(f)) break;
+        t /= 2;
+      }
+      if (!(size(next) < size(f))) break;
+      x = y;
+      f = next;
+    }
+    return { x, f };
+  };
+  for (const sign of [1, -1]) {
+    const dir = mode.map((v) => (mode[lead] > 0 ? -v : v) * sign);
+    const along = (x) => x.reduce((sum, v, i) => sum + (v - x0[i]) * dir[i], 0);
+    let x = x0.map((v, i) => v + TIP_V * dir[i]);
+    let g = g0;
+    let gone = along(x);
+    for (let step = 0; step < FALL_STEPS && g < 1 / GMIN_S; step++) {
+      const before = x;
+      const back = settle(
+        (y) => residual(y).map((v, i) => v + g * (before[i] - y[i])),
+        before,
+      );
+      const now = along(back.x);
+      let away = 0;
+      let moved = 0;
+      back.x.forEach((v, i) => {
+        away = Math.max(away, Math.abs(v - x0[i]));
+        moved = Math.max(moved, Math.abs(v - before[i]));
+      });
+      if (now <= 0 || (away <= CLEAR_V && now <= gone)) {
+        g *= 4;
+        continue;
+      }
+      x = back.x;
+      gone = now;
+      g = Math.max(away > CLEAR_V ? g / 2 : g / 1.5, GMIN_S);
+      if (away > CLEAR_V && moved < REST_V) break;
+    }
+    const end = settle(residual, x);
+    if (size(end.f) <= tolerance && holds(end.x, end.f))
+      return Float64Array.from(end.x);
+  }
+  return null;
+}
+
+/**
+ * The direction a balance runs away in — the eigenvector of the Jacobian `j`
+ * whose eigenvalue is positive, scaled to a largest component of 1 — or
+ * null. Read off backward Euler's own step, `g(gI − J)⁻¹` (`g` beyond every
+ * eigenvalue): it grows that mode (by 1/(1 − λ/g) > 1) and shrinks every
+ * other, so the step taken over and over — squared, 2⁴⁰ steps in forty
+ * products — leaves that mode alone in every column.
+ */
+export function runawayMode(j, g) {
+  const n = j.length;
+  let m = [];
+  for (let col = 0; col < n; col++) {
+    const a = j.map((row, r) =>
+      Float64Array.from(row, (x, c) => (r === c ? g - x : -x)),
+    );
+    const x = gaussSolve(
+      a,
+      Array.from({ length: n }, (_, r) => (r === col ? g : 0)),
+    );
+    if (!x) return null;
+    m.push(x);
+  }
+  // m[col][row]: columns; transpose to rows.
+  m = Array.from({ length: n }, (_, r) =>
+    Float64Array.from({ length: n }, (_, c) => m[c][r]),
+  );
+  for (let k = 0; k < 40; k++) {
+    const sq = m.map(() => new Float64Array(n));
+    let big = 0;
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        let sum = 0;
+        for (let i = 0; i < n; i++) sum += m[r][i] * m[i][c];
+        sq[r][c] = sum;
+        big = Math.max(big, Math.abs(sum));
+      }
+    }
+    if (!(big > 0) || !Number.isFinite(big)) return null;
+    for (const row of sq) for (let c = 0; c < n; c++) row[c] /= big;
+    m = sq;
+  }
+  // The column that carries the most of it.
+  let best = 0;
+  let bestNorm = -1;
+  for (let c = 0; c < n; c++) {
+    let norm = 0;
+    for (let r = 0; r < n; r++) norm = Math.max(norm, Math.abs(m[r][c]));
+    if (norm > bestNorm) [best, bestNorm] = [c, norm];
+  }
+  if (!(bestNorm > 0)) return null;
+  return Array.from({ length: n }, (_, r) => m[r][best] / bestNorm);
+}
+
+/** The sign of a square matrix's determinant (−1, 0 or 1), by elimination
+    with partial pivoting. `a` is overwritten. */
+export function determinantSign(a) {
+  const n = a.length;
+  let sign = 1;
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < n; r++) {
+      if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r;
+    }
+    if (!(Math.abs(a[pivot][col]) > 0)) return 0;
+    if (pivot !== col) {
+      [a[col], a[pivot]] = [a[pivot], a[col]];
+      sign = -sign;
+    }
+    if (a[col][col] < 0) sign = -sign;
+    for (let r = col + 1; r < n; r++) {
+      const m = a[r][col] / a[col][col];
+      if (m === 0) continue;
+      for (let c = col; c < n; c++) a[r][c] -= m * a[col][c];
+    }
+  }
+  return sign;
 }
 
 /**

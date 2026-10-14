@@ -46,15 +46,23 @@ const { parseArgs } = require("./cli-args");
 const { CloseGuard } = require("./close-guard");
 const { guardWebContents } = require("./navigation-guard");
 const { guardIpcMain } = require("./ipc-guard");
-const { keepUnreadSlot } = require("./boot-slot");
+const { keepUnreadSlot, bootKeepingSlot } = require("./boot-slot");
 const i18n = require("./i18n");
 const updater = require("./updater");
-const { isStoreBuild, distribution } = require("./store-build");
+const {
+  allowsDonations,
+  isStoreBuild,
+  distribution,
+} = require("./store-build");
 const { CredentialStore } = require("./store/credential-store");
 const { BookmarkStore } = require("./store/bookmark-store");
 const aiClient = require("./ai/client");
 const aiProviders = require("./ai/providers");
-const { SettingsStore, rendererPatch } = require("./store/settings-store");
+const {
+  SettingsStore,
+  rendererPatch,
+  firstRunPatch,
+} = require("./store/settings-store");
 const { DeskStore } = require("./store/desk-store");
 const {
   ProjectStore,
@@ -96,6 +104,14 @@ const isDevLike = isDev || isHotReload || isDevTools;
 // shows it on the About card; the two processes share no module, so keep them
 // in step.
 const SUPPORT_EMAIL = "hippoherd@gmail.com";
+
+// The voluntary donation page behind the About card's sponsor link — Jason's
+// GitHub Sponsors, the destination Rest Hippo's tip jar opens. Donating is a
+// thank-you: it unlocks nothing, is never asked for, and nothing is tracked.
+// It is the ONE page `app:donate` opens: the renderer asks for "the donation
+// page" and names no URL, so nothing it says can make main open anything else.
+// Not offered in a Mac App Store build (store-build.js `allowsDonations`).
+const DONATE_URL = "https://github.com/sponsors/jfigge";
 
 // ── App icon ──────────────────────────────────────────────────────────────────
 // Resolved once at startup; used for the macOS dock and every BrowserWindow (so
@@ -163,6 +179,8 @@ function collectAppInfo() {
     // because main is where `process.mas` is unambiguously true, and because
     // Settings ▸ About already asks for this object before it draws anything.
     distribution: distribution(),
+    // Whether the About card offers the donation link (store-build.js).
+    donate: allowsDonations(),
   };
 }
 
@@ -260,6 +278,25 @@ function getSettingsStore() {
     _settingsStore = new SettingsStore(app.getPath("userData"));
   }
   return _settingsStore;
+}
+
+/**
+ * Stamp the version this machine first ran (`firstRunVersion`), once. An
+ * earlier install is known by what it left behind — the settings file, or the
+ * saves folder its projects were kept in — and makes this launch an upgrade,
+ * which is what the desk's what's-new banner is shown to
+ * (web/scripts/model/notices.js). Run before anything writes either, so this
+ * launch's own writes can't count as the evidence.
+ */
+function stampFirstRun() {
+  const store = getSettingsStore();
+  const priorInstall =
+    store.exists() || fs.existsSync(getProjectStore().savesDir);
+  const patch = firstRunPatch(store.get(), {
+    priorInstall,
+    version: resolveAppVersion(),
+  });
+  if (patch) store.set(patch);
 }
 
 let _deskStore = null;
@@ -491,9 +528,18 @@ function recoveryBoot(peeked, upgraded, notes = []) {
     meta.location = path.resolve(target);
     rememberProject(target);
     establishPath(target);
-    getBookmarks().hold("project", target);
+    // A hold that fails costs the next ⌘S its access, which that save says;
+    // thrown from here it cost the boot, and the renderer's fallback then
+    // took over the slot this has just restored.
+    safeCall("project:boot:recovery-hold", () =>
+      getBookmarks().hold("project", target),
+    );
   } else {
     meta.location = null; // no home any more; Save As is the way back
+    // …so the slot is now the untitled project's own file, not a stash of
+    // another one: unstamped, a quit that discards it leaves no crash flag
+    // behind to restore it again at every launch after.
+    safeCall("project:boot:recovery-unstamp", () => store.unstampRecovery());
   }
   // The FACTS, not the sentence. The notice is shown by the renderer, which is
   // where `t()` and the dialog both live — main's own `m()` is for text main
@@ -570,6 +616,7 @@ function openBootProject(notes) {
       return meta;
     }
   }
+  let denied = null;
   for (const filePath of recentProjects()) {
     // Both the stat and the read are inside the bookmark's scope: this is a
     // path from an earlier session, which is exactly what the sandbox forgets.
@@ -581,12 +628,37 @@ function openBootProject(notes) {
     if (meta) {
       rememberProject(filePath);
       establishPath(filePath);
-      getBookmarks().hold("project", filePath);
+      safeCall("project:boot:recent-hold", () =>
+        getBookmarks().hold("project", filePath),
+      );
+      if (denied) meta.warnings = [{ deniedRecent: denied }, ...(meta.warnings ?? [])]; // prettier-ignore
       return meta;
     }
+    // THERE, but the sandbox will not open it — the store build's answer for a
+    // project whose Save-As bookmark went stale with the launch (see
+    // bookmark-store.js). Not a missing file: the boot goes on to an older
+    // project (or a new one), and the renderer offers to re-grant this one
+    // rather than opening something else without a word.
+    if (!denied && isDeniedRecent(filePath)) denied = filePath;
   }
   establishPath(store.defaultProjectPath);
-  return store.newProject();
+  const meta = store.newProject();
+  if (denied) meta.warnings = [{ deniedRecent: denied }];
+  return meta;
+}
+
+/** A recent project that exists but the sandbox will not let us read (store
+    builds only: anywhere else an unreadable file is just unreadable). */
+function isDeniedRecent(filePath) {
+  const bookmarks = getBookmarks();
+  return safeCall(
+    "project:boot:recent-denied",
+    () =>
+      bookmarks.enabled() &&
+      fs.existsSync(filePath) &&
+      !bookmarks.canAccess(filePath),
+    false,
+  );
 }
 
 /**
@@ -632,13 +704,17 @@ function adoptProject(filePath) {
   const meta = store.read(filePath);
   if (!meta) return null;
   if (meta.location) rememberProject(filePath);
-  if (path.resolve(filePath) !== path.resolve(store.defaultProjectPath)) {
+  // The slot however it is spelt (`isSlotPath`): opened as `Default.chiphippo`
+  // on a case-insensitive volume it is still the slot, and dropping it would
+  // delete the very file just read.
+  if (!store.isSlotPath(filePath)) {
     safeCall("project:drop-default", () => store.removeDefaultProject());
   }
   establishPath(filePath);
   // ⌘S writes back to this file minutes or hours from now, so the sandboxed
-  // build holds access for the session rather than per read.
-  getBookmarks().hold("project", filePath);
+  // build holds access for the session rather than per read. (A hold that
+  // fails is that later save's to report: the project is open either way.)
+  safeCall("project:hold", () => getBookmarks().hold("project", filePath));
   return meta;
 }
 
@@ -756,7 +832,12 @@ async function regrantProject(filePath) {
  * @param {string} [current] - the file it is saved in now, if any.
  * @returns {Promise<string|null>} the chosen path, or null when cancelled.
  */
-async function chooseSavePath(kind, name, current) {
+async function chooseSavePath(
+  kind,
+  name,
+  current,
+  { openProject = null } = {},
+) {
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   const store = getProjectStore();
   const isProject = kind === "project";
@@ -765,23 +846,44 @@ async function chooseSavePath(kind, name, current) {
   // The working slot's file name was never meant to be seen, so a project
   // still living in it is offered its own name instead. An export has no
   // "current file" at all — it is always a fresh copy.
-  const appKept = !from || from === path.resolve(store.defaultProjectPath);
-  const defaultPath = appKept
-    ? path.join(store.savesDir, suggestFileName(name, ext, isProject ? "project" : "desktop")) // prettier-ignore
-    : from;
-  const opts = getBookmarks().dialogOpts({
-    defaultPath,
-    filters: isProject ? projectFilters() : desktopFilters(),
-    properties: ["createDirectory", "showOverwriteConfirmation"],
-  });
-  const result = win
-    ? await dialog.showSaveDialog(win, opts)
-    : await dialog.showSaveDialog(opts);
-  if (result.canceled || !result.filePath) return null;
-  // NOTE the SINGULAR `bookmark`/`filePath` a save panel returns, against the
-  // open panel's arrays — see bookmark-store.js.
-  getBookmarks().captureSave(result);
-  return establishPath(path.resolve(result.filePath));
+  const appKept = !from || store.isSlotPath(from);
+  const suggested = (dir) =>
+    store.besideSlot(path.join(dir, suggestFileName(name, ext, isProject ? "project" : "desktop"))); // prettier-ignore
+  let defaultPath = appKept ? suggested(store.savesDir) : from;
+  for (;;) {
+    const opts = getBookmarks().dialogOpts({
+      defaultPath,
+      filters: isProject ? projectFilters() : desktopFilters(),
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    const result = win
+      ? await dialog.showSaveDialog(win, opts)
+      : await dialog.showSaveDialog(opts);
+    if (result.canceled || !result.filePath) return null;
+    const chosen = path.resolve(result.filePath);
+    // NOT the working slot, whatever the panel was told: it is the app's own
+    // file (see `isSlotPath`) — and not, for a desktop export, the open
+    // project's own file, which would then hold one desktop while the window
+    // still showed it saved. Both are said, and the panel offered again.
+    const clash = store.saveClash(chosen, isProject ? null : openProject);
+    if (!clash) {
+      // NOTE the SINGULAR `bookmark`/`filePath` a save panel returns, against
+      // the open panel's arrays — see bookmark-store.js.
+      getBookmarks().captureSave(result);
+      return establishPath(chosen);
+    }
+    const box = {
+      type: "warning",
+      message: m("dialog.reserved.message", "Choose another name"),
+      detail:
+        clash === "slot"
+          ? m("dialog.reserved.slot", "“{file}” is where Chip Hippo keeps work that has not been saved yet, so nothing else can be saved under that name.", { file: path.basename(chosen) }) // prettier-ignore
+          : m("dialog.reserved.open", "“{file}” is the project you have open. A desktop exported over it would replace the whole project.", { file: path.basename(chosen) }), // prettier-ignore
+    };
+    await (win ? dialog.showMessageBox(win, box) : dialog.showMessageBox(box));
+    defaultPath =
+      clash === "slot" && isProject ? store.besideSlot(chosen) : suggested(path.dirname(chosen)); // prettier-ignore
+  }
 }
 
 // ── Export / Import one desktop ──────────────────────────────────────────────
@@ -795,8 +897,18 @@ async function chooseSavePath(kind, name, current) {
  * Export ONE desktop. Picks a path, then writes the snapshot.
  * @returns {Promise<{path: string}|null>} null when cancelled.
  */
-async function exportDesktop({ name, description, doc, customChips }) {
-  const chosen = await chooseSavePath("desktop", name, null);
+async function exportDesktop({
+  name,
+  description,
+  doc,
+  customChips,
+  openProject,
+}) {
+  // The open project's own file (the renderer's, as a FACT to steer clear of —
+  // it is compared, never touched) is no place for one of its desktops.
+  const chosen = await chooseSavePath("desktop", name, null, {
+    openProject: typeof openProject === "string" && openProject ? openProject : null, // prettier-ignore
+  });
   if (!chosen) return null;
   return { path: getProjectStore().writeDesktopSnapshot(chosen, { name, description, doc, customChips }) }; // prettier-ignore
 }
@@ -1302,16 +1414,9 @@ async function pickMemoryImage() {
   try {
     // The dialog's filter offers "All files" too, so this can't rely on the
     // extension alone — every other path into a memory chip's image (create/
-    // load/program/writeAll in mem-store.js) caps at MAX_BYTES; an unbounded
-    // read here was the one exception, risking a hang/OOM on a large pick.
-    const { size } = fs.statSync(filePath);
-    if (size > memStore.MAX_BYTES) {
-      return {
-        ok: false,
-        error: `file is too large (${size} bytes, max ${memStore.MAX_BYTES})`,
-      };
-    }
-    return { ok: true, path: filePath, bytes: fs.readFileSync(filePath) };
+    // load/program/writeAll in mem-store.js) caps at MAX_BYTES, and so does
+    // this one: a regular file only, read no further than the cap.
+    return { ok: true, path: filePath, bytes: memStore.readImage(filePath) };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -2174,6 +2279,13 @@ function registerIpc() {
   ipcMain.handle("app:version", () => resolveAppVersion());
   // Read-only app / build metadata for the About dialog.
   ipcMain.handle("app:info:get", () => collectAppInfo());
+  // The About card's sponsor link: DONATE_URL in the OS browser, and nothing
+  // else — refused where the build may not offer it.
+  ipcMain.handle("app:donate", () => {
+    if (!allowsDonations()) return false;
+    shell.openExternal(DONATE_URL).catch(() => {});
+    return true;
+  });
 
   // The renderer's answer to `app:confirm-close`: `true` to go ahead (it has
   // saved or discarded whatever was unsaved), `false` to stay. Resuming is
@@ -2313,7 +2425,11 @@ function registerIpc() {
   //
   // `project:boot` always answers with a project: the unsaved one in the saves
   // folder, else the most recent saved one, else a brand-new one.
-  ipcMain.handle("project:boot", () => bootProject());
+  // A boot that throws part-way still answers, and never at the slot's cost
+  // (boot-slot.js `bootKeepingSlot`).
+  ipcMain.handle("project:boot", () =>
+    bootKeepingSlot(getProjectStore(), bootProject),
+  );
   ipcMain.handle("project:new", () => {
     const store = getProjectStore();
     establishPath(store.defaultProjectPath);
@@ -2340,6 +2456,15 @@ function registerIpc() {
   ipcMain.handle("project:save", (_event, meta, filePath) => {
     const store = getProjectStore();
     const target = filePath ? knownPath(filePath) : store.defaultProjectPath;
+    // A REAL path is never the slot, however it is spelt: written there, the
+    // project would be "saved" into the file the next line deletes (or that
+    // the next stash overwrites). `chooseSavePath` refuses it; this is the
+    // backstop for any other road to it.
+    if (filePath && store.isSlotPath(target)) {
+      throw Object.assign(new Error("that is the app's working file"), {
+        code: "INVALID_ARG",
+      });
+    }
     try {
       store.write(target, meta);
     } catch (err) {
@@ -2350,12 +2475,8 @@ function registerIpc() {
     }
     if (filePath) {
       rememberProject(target);
-      if (target !== path.resolve(store.defaultProjectPath)) {
-        // prettier-ignore
-        safeCall("project:save:drop-default", () =>
-          store.removeDefaultProject(),
-        );
-      }
+      // prettier-ignore
+      safeCall("project:save:drop-default", () => store.removeDefaultProject());
     }
     return { ok: true, path: target };
   });
@@ -2370,10 +2491,11 @@ function registerIpc() {
   ipcMain.handle("project:recovery:write", (_event, meta, location) => {
     const store = getProjectStore();
     const target = location ? knownPath(location) : null;
-    if (!target) {
+    if (!target || store.isSlotPath(target)) {
       // No file of its own: the slot IS its home, so this is a plain save and
       // must not be stamped — a stamp would turn its own home into a question
-      // at the next launch. `project:save` is the channel for that.
+      // at the next launch. `project:save` is the channel for that. (A
+      // "home" that IS the slot, however spelt, is no home of its own either.)
       const err = new Error("a recovery copy needs the project's own path");
       err.code = "INVALID_ARG";
       throw err;
@@ -3037,6 +3159,7 @@ function bootstrap() {
     guardWebContents(contents),
   );
   app.whenReady().then(() => {
+    safeCall("settings:first-run", stampFirstRun);
     registerIpc();
     // Before the first window exists, so it opens already in the right
     // palette rather than repainting into it.

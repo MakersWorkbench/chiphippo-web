@@ -1204,6 +1204,57 @@ test("AboutDialog: the support LABEL is catalog text, the address is not", () =>
   applyCatalog({ active: "en", lang: "en", messages: EN, fallback: EN, locales: LOCALES }); // prettier-ignore
 });
 
+test("AboutDialog: the footer is two lines — credit with copyright, support address with the sponsor link", async () => {
+  resetDom();
+  let opened = 0;
+  window.chiphippo = {
+    getAppInfo: async () => ({ version: "1.2.3", donate: true }),
+    openDonatePage: async () => (opened += 1),
+  };
+  AboutDialog.open();
+  await flush();
+  const dialog = document.querySelector(".about-dialog");
+  const lines = [...dialog.querySelectorAll("p")].map((p) => p.className);
+  assert.deepEqual(
+    lines,
+    ["about-subtitle", "about-desc", "about-credit", "about-support"],
+    "no line more than before the sponsor link",
+  );
+  const credit = dialog.querySelector(".about-credit").textContent;
+  assert.match(credit, /Created by Jason, coded by Claude/);
+  assert.match(credit, /Copyright © 2026 Jason Figge/);
+  const donate = dialog.querySelector(".about-support .about-donate");
+  assert.ok(donate && !donate.hidden, "offered where main says it may be");
+  assert.match(donate.textContent, /Sponsor Chip Hippo…/);
+  assert.equal(donate.tagName, "BUTTON", "main opens the page — no URL here");
+  donate.click();
+  assert.equal(opened, 1, "the click asks main for the donation page");
+  PopupManager.close();
+  delete window.chiphippo;
+});
+
+test("AboutDialog: no sponsor link where the build may not offer one (the Mac App Store)", async () => {
+  for (const info of [{ version: "1.2.3", donate: false }, null]) {
+    resetDom();
+    window.chiphippo = { getAppInfo: async () => info };
+    AboutDialog.open();
+    await flush();
+    const donate = document.querySelector(".about-donate");
+    assert.equal(donate.hidden, true, JSON.stringify(info));
+    assert.equal(
+      document.querySelector(".about-support .about-dot").hidden,
+      true,
+      "and no dot left dangling after the address",
+    );
+    assert.ok(
+      document.querySelector(".about-support-link"),
+      "the address stays",
+    );
+    PopupManager.close();
+    delete window.chiphippo;
+  }
+});
+
 test("AboutDialog: the (i) toggle reveals the build popover", () => {
   resetDom();
   AboutDialog.open();

@@ -224,7 +224,7 @@ import {
 } from "./rc-curve.js";
 import { couplingSteps } from "./coupling.js";
 import { awayAmps, shortedInductors } from "./inductors.js";
-import { gaussSolve } from "./network.js";
+import { fallOffBalance, gaussSolve } from "./network.js";
 import { coupledValue, nullModes, rcSystem } from "./dynamics.js";
 import {
   differenceAt,
@@ -344,6 +344,11 @@ const COIL = "coil:";
 /** A relay's crossing, in `nextCrossing`'s list (its key's prefix). */
 const RELAY = "relay:";
 
+/** How many times a speaker's voltage is read between two settles, at the
+    least and at the most (`noteSpeakersBetween`). */
+const SPEAKER_SAMPLES = 16;
+const SPEAKER_SAMPLES_MAX = 256;
+
 /** How close to its threshold a relay's coil current moves its contacts,
     relative: the settle its crossing asks for sits on the threshold. */
 const RELAY_EPS = 1e-6;
@@ -413,6 +418,15 @@ const GROUP_ROUNDS = 4;
     first bracketing step is this, volts. */
 const BALANCE_V = 1e-9;
 const BALANCE_STEP_V = 0.05;
+
+/** Newton's steps at most, and the nudge each slope is read over, volts,
+    when common modes balance together (`balanceTogether`). */
+const BALANCE_STEPS = 40;
+const BALANCE_SLOPE_V = 1e-6;
+
+/** The current a balanced set of plates may still carry, amps
+    (`fallOffBalance`). */
+const BALANCE_A = 1e-12;
 
 /** The longest a circuit stuck chattering (`oscillating`) waits to be looked
     at again on its own, seconds. Each capped tick replays its whole event
@@ -857,6 +871,9 @@ export function tick({ spice = null, ...opts }) {
   // Copied, never mutated: the engine stays a pure function of its inputs.
   const nodes = new Map();
   for (const [net, node] of prior?.nodes ?? []) nodes.set(net, { ...node });
+  // Where the speakers' nodes ran from since the last settle — the last
+  // tick's last, at first (`noteSpeakersBetween`).
+  let ranFrom = null;
   // What each listener last read (key → true above, false below — spice/
   // listeners.js), and each capacitor's far side as last seen from each of
   // its nodes (`<cap>@<net>` → volts — spice/coupling.js).
@@ -868,6 +885,7 @@ export function tick({ spice = null, ...opts }) {
   // it plays (spice/speakers.js).
   const tones = new Map(prior?.tones ?? []);
   const speakers = speakerTopology(opts.document, opts.netlist);
+  if (speakers.length && prior?.time != null) ranFrom = { at: prior.time, ends: speakerEnds() }; // prettier-ignore
   // Each island's oscillation faster than the desk shows, drawn by its
   // schedule (spice/cycles.js) — for as long as the circuit it was recorded
   // on stands. One per ISLAND (spice/islands.js, features/04-island-analog-
@@ -1186,7 +1204,11 @@ export function tick({ spice = null, ...opts }) {
     const hold = pace()?.holds.get(id) ?? 1;
     const cur = committed.get(id);
     if (hold <= 1 || !cur) {
+      // Driven straight through, nothing is held: a commitment kept from a
+      // tick that DID hold (an island ticked with a faster one) would be a
+      // stale output map the next holding tick drove for its hold count.
       if (hold > 1) committed.set(id, outMap);
+      else committed.delete(id);
       pending.delete(id);
       return outMap;
     }
@@ -1305,6 +1327,14 @@ export function tick({ spice = null, ...opts }) {
       if (!net) return level;
       const relay = relays.get(c.comp.id);
       if (relay) return pin === relay.a && relayOn.get(c.comp.id) ? H : L;
+      // A discrete transistor's base or gate: whether the solve has it
+      // conducting — read at its net's level, a transistor feeding its own
+      // base, or a pair feeding each other's, looped on and off until the
+      // settle gave up (spice/voltages.js `selfControlled`).
+      if (c.def.transistor && pin === c.def.logic?.channels?.[0]?.inputs?.[0]) {
+        const self = volt.selfControl(c.comp.id);
+        if (self != null) return self;
+      }
       const key = readerKey(c.comp.id, pin);
       if (heard?.owned.has(key)) {
         rereadListener(key);
@@ -1868,8 +1898,12 @@ export function tick({ spice = null, ...opts }) {
       (prev.pieces === corner.now || recent.includes(corner.now));
     let run = 0;
     if (repeat) {
+      // Nor, along a piece with a GROWING mode (a device linearized to a
+      // negative slope), past one e-fold of it: run on unchecked it carried a
+      // coil's current to e^4600 — Infinity, then NaN for the rest of the run.
       const slow = Number.isFinite(sys.scale.slow) ? sys.scale.slow : Infinity;
-      run = Math.min(2 * Math.max(prev.run ?? 0, t - prev.t0, STUCK_MIN_S), slow); // prettier-ignore
+      const grow = sys.scale.grow ?? Infinity;
+      run = Math.min(2 * Math.max(prev.run ?? 0, t - prev.t0, STUCK_MIN_S), slow, grow); // prettier-ignore
       const runTo = t + run;
       // …but never carries a coil's current through zero: a current dying
       // into a one-way path (a transistor's breakdown, a diode) stops there,
@@ -1877,11 +1911,11 @@ export function tick({ spice = null, ...opts }) {
       // clamp that had stopped conducting (a relay's coil with no diode).
       let end = runTo;
       group.forEach((l, j) => {
-        const curve = sys.curves[nc + j];
+        const curve = sys.curves[nc + nw + j]; // the coils come after the waves
         const i0 = coupledValue(curve, 0);
         if (!(Math.abs(i0) > 0)) return;
         const f = (u) => -Math.sign(i0) * valueAt(curve, u);
-        end = Math.min(end, firstRoot(f, t, sampleTimes(t, runTo, sys.scale.fast))); // prettier-ignore
+        end = Math.min(end, firstRoot(f, t, sampleTimes(t, runTo, sys.scale.fast, sys.scale.osc))); // prettier-ignore
       });
       tEnd = Math.min(Math.max(tEnd, end), limit);
     }
@@ -1906,6 +1940,18 @@ export function tick({ spice = null, ...opts }) {
       mode can land past a corner — a stage saturating, a clamp — where that
       piece no longer holds, and step straight back. */
   const balance = (nets, modes, v0, rc, amps) => {
+    // Two or more modes: Newton's steps together from where they stand
+    // first, which keeps them on the balance they are near. A flasher's two
+    // plate pairs, the voltage across each capacitor held, ARE a flip-flop —
+    // two balances — and the sweeps' bracket, doubling out one mode at a time,
+    // stepped clean over the near one to the far one: the transistor that was
+    // on switched off at a corner, and back on at the next, every 1.5 ms.
+    // Only if that does not settle, the sweeps, and Newton from where they
+    // leave it.
+    if (modes.length > 1) {
+      const near = balanceTogether(nets, modes, v0, new Map(rc), amps);
+      if (near.balanced) return near.v;
+    }
     let v = Float64Array.from(v0);
     const at = new Map(rc);
     const into = (mode, z) => {
@@ -1955,7 +2001,78 @@ export function tick({ spice = null, ...opts }) {
         v = v.map((x, i) => x + z * mode[i]);
       }
     }
-    return v;
+    return modes.length > 1 ? balanceTogether(nets, modes, v, at, amps).v : v;
+  };
+
+  /** Two or more common modes balanced TOGETHER, by Newton's steps on the
+      true networks (each slope read a hair off, every mode at once):
+      `{v, balanced}`. Where the modes pull on each other through a gain —
+      the two capacitors of a transistor flasher, each plate pair on one
+      transistor's base and the other's collector — mode-by-mode sweeps creep
+      (or swing) and stop short of the balance; the linear piece then put the
+      gap's current into its algebraic modes at once, and a collector landed
+      at −43 V. */
+  const balanceTogether = (nets, modes, v0, at, amps) => {
+    const k = modes.length;
+    let v = Float64Array.from(v0);
+    const residual = (w) => {
+      nets.forEach((net, i) => at.set(net, w[i]));
+      const cur = volt.currentsAt(nets, at, amps);
+      return modes.map((mode) => mode.reduce((sum, m, i) => sum + m * cur[i], 0)); // prettier-ignore
+    };
+    const size = (f) => f.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+    const along = (w, dz) => w.map((x, i) => x + modes.reduce((sum, mode, j) => sum + dz[j] * mode[i], 0)); // prettier-ignore
+    let f = residual(v);
+    let balanced = false;
+    for (let step = 0; step < BALANCE_STEPS; step++) {
+      const jacobian = modes.map(() => new Float64Array(k));
+      for (let j = 0; j < k; j++) {
+        const dz = new Array(k).fill(0);
+        dz[j] = BALANCE_SLOPE_V;
+        const fj = residual(along(v, dz));
+        for (let r = 0; r < k; r++) jacobian[r][j] = (fj[r] - f[r]) / BALANCE_SLOPE_V; // prettier-ignore
+      }
+      const dz = gaussSolve(
+        jacobian,
+        f.map((x) => -x),
+      );
+      if (!dz) break;
+      // Never a step that leaves it further from balance: halved until it
+      // gains, as the solve's own Newton steps are.
+      const before = size(f);
+      let t = 1;
+      let next = null;
+      let w = null;
+      for (let h = 0; h < 30; h++) {
+        w = along(
+          v,
+          dz.map((x) => x * t),
+        );
+        next = residual(w);
+        if (size(next) < before) break;
+        t /= 2;
+      }
+      if (!(size(next) < before)) break;
+      v = w;
+      f = next;
+      if (size(dz) * t < BALANCE_V) {
+        balanced = true;
+        break;
+      }
+    }
+    // A balance the plates would fall OFF (the flasher powered up even, both
+    // transistors half on): onto one that holds, the same way every Run.
+    if (balanced) {
+      const base = v;
+      const fell = fallOffBalance(
+        (z) => residual(along(base, z)),
+        new Float64Array(k),
+        { dx: BALANCE_SLOPE_V, tolerance: BALANCE_A },
+      );
+      if (fell) v = along(base, fell);
+    }
+    nets.forEach((net, i) => at.set(net, v[i]));
+    return { v, balanced };
   };
 
   /** When a group's coupled curves first reach a corner (`tEnd`) — any of
@@ -1971,7 +2088,7 @@ export function tick({ spice = null, ...opts }) {
     if (model.linear) return { tEnd: limit, now };
     const slow = sys.scale.slow;
     const end = Math.min(limit, t + (Number.isFinite(slow) && slow > 0 ? 50 * slow : 86400)); // prettier-ignore
-    const tEnd = firstRoot((u) => (piecesAt(u) === now ? -1 : 1), t, sampleTimes(t, end, sys.scale.fast)); // prettier-ignore
+    const tEnd = firstRoot((u) => (piecesAt(u) === now ? -1 : 1), t, sampleTimes(t, end, sys.scale.fast, sys.scale.osc)); // prettier-ignore
     return { tEnd: Math.min(tEnd, limit), now };
   };
 
@@ -2323,13 +2440,51 @@ export function tick({ spice = null, ...opts }) {
       }
     }
     if (!s) return;
+    for (const sp of speakers) noteSpeaker(sp, at);
+    ranFrom = { at, ends: speakerEnds() };
+  };
+  /** The voltage across a speaker at `at`, into its tone (spice/measure.js)
+      — read off `ends` (its two nets' nodes, an RC node's as the curve it
+      ran on) where given. */
+  const noteSpeaker = (sp, at, ends = null) => {
+    const a = ends?.[0] ? voltsOf(ends[0], at) : voltsAt(sp.a, at);
+    const b = ends?.[1] ? voltsOf(ends[1], at) : voltsAt(sp.b, at);
+    if (a == null || b == null) return;
+    const island = islandOf(sp.a) ?? islandOf(sp.b);
+    const scale = !drawn.size ? 1 : oneIsland() ? drawn.values().next().value.cycle.scale : (drawn.get(island)?.cycle.scale ?? 1); // prettier-ignore
+    noteTone(tones, toneKey(sp.id), a - b, at, scale);
+  };
+  /** Each speaker's two RC nodes as they stand: the curves they run on
+      from here to the next settle. */
+  function speakerEnds() {
+    const out = new Map();
     for (const sp of speakers) {
-      const a = voltsAt(sp.a, at);
-      const b = voltsAt(sp.b, at);
-      if (a == null || b == null) continue;
-      const island = islandOf(sp.a) ?? islandOf(sp.b);
-      const scale = !drawn.size ? 1 : oneIsland() ? drawn.values().next().value.cycle.scale : (drawn.get(island)?.cycle.scale ?? 1); // prettier-ignore
-      noteTone(tones, toneKey(sp.id), a - b, at, scale);
+      const ends = [nodes.get(sp.a) ?? null, nodes.get(sp.b) ?? null];
+      if (ends.some((node) => node?.curve)) out.set(sp.id, ends);
+    }
+    return out;
+  }
+  /** Each speaker's voltage BETWEEN the last settle and this one, along the
+      curves its nodes ran on (`ranFrom`, kept as that one left them: by
+      this one's start they have run on to here). Read at settles alone (a
+      clock's edges), a smooth drive was read where its edges fall, never at
+      its crests: a 440 Hz sine through a 1 µF capacitor played nothing, and
+      swings came out short by the cosine of their phase. Every eighth of
+      its fastest ringing, and at least SPEAKER_SAMPLES across the span. */
+  const noteSpeakersBetween = (to) => {
+    const from = ranFrom?.at;
+    // (Before this tick's first context there are no rails to read a lead
+    // on one off: a drawn cycle's first segment, its nodes stood still.)
+    if (!s || from == null || !(to > from)) return;
+    for (const sp of speakers) {
+      const ends = ranFrom.ends.get(sp.id);
+      if (!ends) continue; // nothing moved along a curve
+      let osc = 0;
+      for (const node of ends)
+        osc = Math.max(osc, node?.curve?.scale?.osc ?? 0);
+      const per = osc > 0 ? Math.ceil(((to - from) * 4 * osc) / Math.PI) : 0;
+      const n = Math.min(SPEAKER_SAMPLES_MAX, Math.max(SPEAKER_SAMPLES, per));
+      for (let k = 1; k < n; k++) noteSpeaker(sp, from + ((to - from) * k) / n, ends); // prettier-ignore
     }
   };
   /** Whether a speaker is on an island this tick is for (or on none). */
@@ -2353,6 +2508,7 @@ export function tick({ spice = null, ...opts }) {
     foldSpikes();
     settlePeak = new Map();
     passes = 0;
+    noteSpeakersBetween(at);
     settleTime = at;
     syncRelays(at);
     const inputs = at < target ? before : own;
@@ -2564,7 +2720,10 @@ export function tick({ spice = null, ...opts }) {
   };
   /** Forget the readout edges timed on island `key` (spice/measure.js) —
       and those of a part on no analog island (every one, on a desk of one
-      island). */
+      island) — and the tones of the speakers on it. Only ON it: a speaker
+      on an island of its own (a square clock through a resistor) is timed
+      in true time whatever the others' cycles do, and forgetting its tone
+      whenever one of them started or ended silenced it for two periods. */
   const clearMarks = (key) => {
     if (oneIsland()) {
       marks.clear();
@@ -2577,7 +2736,7 @@ export function tick({ spice = null, ...opts }) {
     }
     for (const sp of speakers) {
       const i = islandOf(sp.a) ?? islandOf(sp.b);
-      if (i == null || i === key || !isl.analogSet.has(i)) tones.delete(toneKey(sp.id)); // prettier-ignore
+      if (i == null || i === key) tones.delete(toneKey(sp.id));
     }
   };
   /** Draw island `key`'s cycle from its timeline moment `j` to now by its
@@ -3397,6 +3556,21 @@ export function tick({ spice = null, ...opts }) {
   // tripped goes off at once.
   for (const until of thermal.values()) later(until);
   if (bench.tripped) later(target + TRIP_S);
+  // A relay pulled in whose coil a switch has shorted out of the network:
+  // its current dies away round the loop through its winding (`coilsAway`),
+  // with no curve left for a crossing to be timed on — so its drop-out is
+  // timed in closed form, or it held its contacts until something else
+  // ticked the desk.
+  for (const [id, relay] of relays) {
+    const away = coilsAway.get(id);
+    if (!away || relayOn.get(id) !== true) continue;
+    if (!(away.tau > 0) || !Number.isFinite(away.tau)) continue;
+    const drop = relay.dropOut * relay.rated;
+    const amps = Math.abs(away.amps);
+    if (!(drop > 0) || !(amps > drop)) continue;
+    const at = away.at + away.tau * Math.log(amps / drop);
+    if (at > target) later(at);
+  }
   // Each analog island's own next event (features/12): what the next tick
   // reads to know which islands it is for. An island this tick was not for
   // keeps the one it had — nothing on it moved.

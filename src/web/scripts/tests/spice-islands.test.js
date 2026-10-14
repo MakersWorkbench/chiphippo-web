@@ -35,7 +35,8 @@ import {
   relabel,
 } from "../bench/islands-fixtures.js";
 import { busyDocument } from "../bench/busy-circuit.js";
-import { relaxation } from "./incremental-fixtures.js";
+import { powered, relaxation } from "./incremental-fixtures.js";
+import { astable555, bench } from "./timing-fixtures.js";
 import { INVARIANCE, TOLERANCE } from "./spice-golden-cases.js";
 
 /** A 555's measured period at the end of `seconds` of `doc`, and the run. */
@@ -203,6 +204,89 @@ test("a CD4000 island beside a 74LS board keeps its own gates' pace", () => {
     if (mixed.passes[i] > alone.passes[i]) return;
     assert.ok(Math.abs(t - alone.at[i]) <= INVARIANCE * period, `flip ${i}: ${t} vs ${alone.at[i]}`); // prettier-ignore
   });
+});
+
+test("a CD4000 chip ticked alone keeps no stale held output for its next tick beside a 74LS board", () => {
+  // Ticked with the board, the CD4013 holds each output change for its gate
+  // delay's count of the board's 10 ns passes; ticked alone its hold is one
+  // and it drives straight through. The commitment a holding tick kept must
+  // not outlive a tick that drove past it: the next holding tick drove the
+  // OLD Q for twelve passes.
+  const b = bench();
+  const u = powered(b, "u1", "CD4013B", "e10");
+  b.link(u.get(5), u.get(2)); // D1 ← Q1'
+  b.gnd(u.get(4));
+  b.gnd(u.get(6));
+  b.link(u.get(9), u.get(12)); // D2 ← Q2'
+  b.gnd(u.get(10));
+  b.gnd(u.get(8));
+  b.link(u.get(11), u.get(1)); // CLK2 ← Q1
+  b.doc.components.push({ id: "clk1", kind: "clock", ref: "clock", x: 20, y: 30, params: { hz: 100 } }); // prettier-ignore
+  b.doc.wires.push(
+    { id: "wc1", from: "clk1.vcc", to: "psu1.+", color: "red" },
+    { id: "wc2", from: "clk1.gnd", to: "psu1.-", color: "black" },
+    { id: "wc3", from: "clk1.out", to: b.at(u.get(3).replace(/^e/, "a")), color: "yellow" }, // prettier-ignore
+  );
+  const doc = desk(busyDocument(1, { hz: 50 }), relabel(b.doc, "b_", 200, 0));
+  let ticks = 0;
+  driveSpice(doc, {
+    seconds: 0.03,
+    end: true,
+    onTick: (now, r) => {
+      const held = r.analog.outputs.get("b_u1");
+      if (!held) return;
+      ticks++;
+      const out = r.analog.driven.get("b_u1");
+      assert.deepEqual([...held], [...out], `at ${now} s: holding what it drives`); // prettier-ignore
+    },
+  });
+  assert.ok(ticks >= 2, `it held on the ticks it shared (${ticks})`);
+});
+
+test("a speaker on a logic island plays on while an analog island's cycles start and end", () => {
+  // A 555 gated by a 4 Hz clock ends its cycle and enters a new one every
+  // eighth of a second; a second 555 runs on its own; and a speaker on a
+  // third island of its own, fed a 200 Hz square through 100 Ω, is timed in
+  // true time throughout. Its tone was forgotten at each of the gated 555's
+  // changes and it fell silent for two of its periods.
+  const gated = astable555({ ...ASTABLES.fast, reset: false });
+  gated.doc.components.push({ id: "clk9", kind: "clock", ref: "clock", x: 20, y: 40, params: { hz: 4 } }); // prettier-ignore
+  gated.doc.wires.push(
+    { id: "wg1", from: "clk9.vcc", to: "psu1.+", color: "red" },
+    { id: "wg2", from: "clk9.gnd", to: "psu1.-", color: "black" },
+    { id: "wg3", from: "clk9.out", to: gated.b.at(gated.u.get(4).replace(/^e/, "a")), color: "yellow" }, // prettier-ignore
+  );
+  const b = bench();
+  const r = b.seat("r1", "resistor", "a10", { ohms: 100 });
+  const sp = b.seat("ls1", "speaker", "a20", { impedance: 8 });
+  b.link(r.get(2), sp.get(1));
+  b.gnd(sp.get(2));
+  b.doc.components.push({ id: "clk1", kind: "clock", ref: "clock", x: 20, y: 30, params: { hz: 200 } }); // prettier-ignore
+  b.doc.wires.push(
+    { id: "wc1", from: "clk1.vcc", to: "psu1.+", color: "red" },
+    { id: "wc2", from: "clk1.gnd", to: "psu1.-", color: "black" },
+    { id: "wc3", from: "clk1.out", to: b.at(r.get(1).replace(/^a/, "c")), color: "yellow" }, // prettier-ignore
+  );
+  const doc = desk(
+    EMPTY,
+    relabel(gated.doc, "i0_", 100, 0),
+    island555(ASTABLES.slow, 1),
+    relabel(b.doc, "s_", 300, 0),
+  );
+  const silent = [];
+  const run = driveSpice(doc, {
+    seconds: 0.4,
+    end: true,
+    onTick: (now, res) => {
+      if (now > 0.05 && !res.tones.get("s_ls1")) silent.push(now);
+    },
+  });
+  assert.equal(
+    run.result.analog.islands.analog.length,
+    2,
+    "two analog islands",
+  );
+  assert.deepEqual(silent, [], "never silent once it has started");
 });
 
 test("an island that appears mid-run is ticked as one that was there from Run", () => {

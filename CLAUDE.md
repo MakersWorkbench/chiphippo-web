@@ -92,7 +92,7 @@ tick on `chiphippo:sim-tick`; clocks to 1 kHz (dropped to 250 Hz 2026-10-09; 500
 press rule for every object — a click is a drag that didn't travel; a drag on the
 background (bare desk, or an unselected strip's holes) is the rubber band, selecting by
 full enclosure; ⌘/Ctrl toggles; Option/Alt is pin-targeting (one lead, never additive);
-pan is Space-drag / middle button; a board's parts are unlit passengers; a move carries
+pan is Space-drag / Option-drag off a lead / middle button; a board's parts are unlit passengers; a move carries
 the wiring and drops atomically, reusing the landing it showed; Delete takes the whole
 selection; selection changes are undo steps (see `.claude/rules/desk-editing.md` →
 "Selection" and "Moving parts and clusters").
@@ -418,7 +418,8 @@ in `doc.boards`; a "breadboard" is a **kit** of them placed in one action.
   `d`→`h` distance, which a test measures) sizes `chipBox`/`chipBodyBox`/`buildChipSvg`, and a
   `ChipView` redraws when a move changes its width; the 3D model reads the same
   `chipBodyBox`. The generators — the AI compiler, the demo benches — still seat every
-  DIP in `e`/`f`, a seat that stays legal.
+  DIP in `e`/`f`, a seat that stays legal (the always-wide 7-segment digit excepted, in
+  `d`/`h`).
 - **Addresses** are the only cross-module currency for holes: `<ownerId>.<point>` —
   `bb1.a12` (grid hole), `bb2.+7` (rail hole), `psu1.+` (component terminal). One hole
   holds at most one lead. **Nothing outside `model/breadboard.js` does row/column

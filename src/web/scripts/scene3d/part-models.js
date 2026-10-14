@@ -569,6 +569,10 @@ function buildBarArray(sb, doc, comp, def, params) {
     const x = params?.rot === 180 ? 7 - c : c;
     printRect(lamp, o, x - 0.28, -3.0, x + 0.28, 0, Y1 + INK, colors.off);
   });
+  // Pin 1's dot in the corner over it, as the desk draws it — turned with
+  // the bars, it is what says a turned one is turned.
+  const dot = params?.rot === 180 ? [7.28, -3.18] : [-0.28, 0.18];
+  sb.mesh.disc(at(o, dot[0], Y1 + INK, dot[1]), UP, 0.1, p.partInset, 12);
 }
 
 /** The 7-segment display (seg7cc/seg7ca): its block over the ten legs it
@@ -929,6 +933,16 @@ function buildSpeaker(sb, doc, comp, def, params) {
     ...ON_TOP,
     height: 0.4,
     maxWidth: 1.6,
+    color: p.speakerText,
+  });
+  // Its + leg marked on the top, over that leg, as the desk marks it.
+  const plus = rotateOffset({ dx: 0.05, dy: -0.15 }, params.rot ?? 0);
+  sb.label({
+    text: "+",
+    center: at(o, plus.dx, Y1 + 2 * INK, plus.dy),
+    ...ON_TOP,
+    height: 0.5,
+    maxWidth: 0.6,
     color: p.speakerText,
   });
 }

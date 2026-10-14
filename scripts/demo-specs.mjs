@@ -390,7 +390,7 @@ function cmosHex(ref, title, map, invert, note) {
 const PATTERN_A = [true, false, true, true, false, false, true, false];
 const PATTERN_B = [false, true, false, false, true, true, false, true];
 
-/** Segment letters in the order the seg8ca's pins run — a…g, then dp. */
+/** Segment letters in the order a display's `segPins` name them — a…g. */
 const SEG = ["a", "b", "c", "d", "e", "f", "g"];
 
 /**
@@ -1452,7 +1452,7 @@ export const DEMOS = Object.freeze([
     ],
     defaults: [true, false, true, false], // BCD 5
     ties: [{ pins: [3, 4, 5], rail: "+" }],
-    // Outputs a…g (pins 13, 12, 11, 10, 9, 15, 14) → display pins 1…7.
+    // Outputs a…g (pins 13, 12, 11, 10, 9, 15, 14) → segments a…g.
     display: { segPins: [13, 12, 11, 10, 9, 15, 14] },
     digits: SEG7,
     segments: SEG,
@@ -2223,8 +2223,8 @@ export const DEMOS = Object.freeze([
       { label: "LE", pins: [5] },
     ],
     defaults: [true, false, true, false, true, true, false], // 5, all inactive
-    // Outputs a…g (pins 13, 12, 11, 10, 9, 15, 14) → display pins 1…7.
-    display: { segPins: [13, 12, 11, 10, 9, 15, 14], ref: "seg8cc" },
+    // Outputs a…g (pins 13, 12, 11, 10, 9, 15, 14) → segments a…g.
+    display: { segPins: [13, 12, 11, 10, 9, 15, 14], ref: "seg7cc" },
     // The '47's font — its 6 and 9 are the 4511's too — and, from the 4511's
     // own truth table, a blank for each code that is not a digit.
     digits: { ...SEG7, 10: "", 11: "", 12: "", 13: "", 14: "", 15: "" },

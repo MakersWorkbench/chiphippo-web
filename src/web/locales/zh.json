@@ -105,6 +105,11 @@
       "message": "确认对该项目的访问权限",
       "button": "授予访问权限"
     },
+    "reserved": {
+      "message": "请选择其他名称",
+      "slot": "“{file}”是 Chip Hippo 存放尚未保存的工作的文件，因此不能以此名称保存其他内容。",
+      "open": "“{file}”是当前打开的项目。在其上导出桌面会替换整个项目。"
+    },
     "exportKicad": {
       "title": "导出到 KiCad",
       "message": "选择 KiCad 项目的文件夹：新建一个，或选择之前导出过的文件夹。",
@@ -1074,6 +1079,7 @@
     "buildCrashed": "搭建意外失败：{message}",
     "compilerFault": "电路描述是正确的，但无法搭建。这是 Chip Hippo 编译器的缺陷，不是设计的问题。",
     "gaveUp": "尝试修正 {total} 次后放弃。仍然存在的问题：",
+    "declined": "据模型判断，无法用目录中的元件搭建：",
     "retrying": "该设计未通过 — 正在请求修正（第 {n} 次，共 {total} 次）：",
     "untitledCircuit": "电路",
     "summary": "{title} — {parts} 个元件、{wires} 根导线、{strips} 块板条。",
@@ -1470,6 +1476,7 @@
     "description": "在虚拟免焊面包板上设计并仿真逻辑电路 — 放上芯片、导线、开关、LED 和电源，然后看电流在每个网络中稳定下来。",
     "byline": "由 Jason 创建，Claude 编写",
     "support": "支持：",
+    "donate": "赞助 Chip Hippo…",
     "versionInfo": "版本信息",
     "version": "版本",
     "platform": "平台",
@@ -1578,7 +1585,7 @@
       "analyzer": "显示或隐藏逻辑分析仪",
       "fit": "适应窗口",
       "pan": "平移桌面",
-      "panKeys": "空格+拖动或中键拖动",
+      "panKeys": "空格+拖动、{alt}+拖动或中键拖动",
       "zoomOut": "缩到最小（找回丢失的元件）",
       "zoom": "放大／缩小／还原",
       "fontSize": "编辑器字体大小 放大／缩小／还原",
@@ -2493,6 +2500,17 @@
   "toast": {
     "more": {
       "other": "+还有 {count} 条"
+    }
+  },
+  "notice": {
+    "dragModel": {
+      "title": "拖动方式已更改",
+      "band": "在工作台上拖动，即可选中框内的所有内容。",
+      "pickLead": "{alt}+拖动：单独移动一个导线端或元件引脚。",
+      "toggle": "{mod}+单击：将项目加入选择或移出选择。",
+      "carry": "拖动元件时，其连线会随之移动。",
+      "bare": "{shift}+拖动：只移动元件，连线留在原处。",
+      "pan": "用 空格+拖动、在引脚以外处 {alt}+拖动 或鼠标中键平移工作台。"
     }
   }
 }

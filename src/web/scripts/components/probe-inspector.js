@@ -87,6 +87,7 @@ export class ProbeInspector {
   #armed = false;
   #anchor = null; // pinned point address, or null
   #hoverWire = null; // wire id under the cursor, or null (see onWireHover)
+  #wirePathOf; // wire id → the path it is drawn along (WireLayer.restingPath)
 
   constructor({
     doc,
@@ -96,6 +97,7 @@ export class ProbeInspector {
     simOverlay,
     hitTest,
     addressWorld,
+    wirePathOf,
     onStateChange,
     onNameNet,
     onClearNetNames,
@@ -110,6 +112,7 @@ export class ProbeInspector {
     this.#simOverlay = simOverlay;
     this.#hitTest = hitTest;
     this.#addressWorld = addressWorld;
+    this.#wirePathOf = wirePathOf ?? null;
     this.#onStateChange = onStateChange;
     this.#onNameNet = onNameNet;
     this.#onClearNetNames = onClearNetNames;
@@ -256,6 +259,7 @@ export class ProbeInspector {
           b: { x: b.x * PX_PER_UNIT, y: b.y * PX_PER_UNIT },
         };
       },
+      wirePathOf: (wireId) => this.#wirePathOf?.(wireId) ?? null,
     };
   }
 

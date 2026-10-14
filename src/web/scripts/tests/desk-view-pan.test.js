@@ -116,3 +116,47 @@ test("Space held leaves the viewport's own chrome its clicks", () => {
   assert.equal(drag(deskView, button), 0);
   assert.equal(heard, 1);
 });
+
+test("a pan whose release lands off the viewport still ends — and so does one whose window loses focus", () => {
+  resetDom();
+  const { viewport, deskView, thing } = mount({ panOnEmptyDrag: false });
+  const send = (target, type, x) =>
+    target.dispatchEvent(
+      new window.PointerEvent(type, { bubbles: true, button: 1, pointerId: 5, clientX: x, clientY: 0 }), // prettier-ignore
+    );
+  // Released over something outside the viewport: the window hears it.
+  const outside = document.createElement("div");
+  document.body.append(outside);
+  send(thing, "pointerdown", 0);
+  send(thing, "pointermove", 40);
+  send(outside, "pointerup", 40);
+  assert.equal(viewport.classList.contains("desk-viewport--panning"), false);
+  const after = deskView.camera.cx;
+  send(viewport, "pointermove", 90); // a bare hover pans nothing
+  assert.equal(deskView.camera.cx, after);
+  // Focus lost mid-pan, with no release ever coming.
+  send(thing, "pointerdown", 0);
+  send(thing, "pointermove", 40);
+  window.dispatchEvent(new window.Event("blur"));
+  assert.equal(viewport.classList.contains("desk-viewport--panning"), false);
+});
+
+test("beginPan: a press another part claimed pans once it travels — a click does not", () => {
+  resetDom();
+  const { viewport, deskView } = mount({ panOnEmptyDrag: false });
+  const send = (type, x) =>
+    viewport.dispatchEvent(
+      new window.PointerEvent(type, { bubbles: true, button: 0, pointerId: 7, clientX: x, clientY: 0, altKey: true }), // prettier-ignore
+    );
+  const down = new window.PointerEvent("pointerdown", { button: 0, pointerId: 7, clientX: 0, clientY: 0 }); // prettier-ignore
+  const before = deskView.camera.cx;
+  assert.equal(deskView.beginPan(down), true);
+  send("pointermove", 2); // under the click threshold
+  send("pointerup", 2);
+  assert.equal(deskView.camera.cx, before, "a click is no pan");
+  assert.equal(deskView.beginPan(down), true);
+  send("pointermove", 40);
+  send("pointerup", 40);
+  assert.notEqual(deskView.camera.cx, before, "a drag is");
+  assert.equal(viewport.classList.contains("desk-viewport--panning"), false);
+});

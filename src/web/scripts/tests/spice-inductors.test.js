@@ -37,6 +37,7 @@ import {
 } from "../catalog/discretes.js";
 import { BJT_GRADES } from "../sim/spice/transistors.js";
 import { bench, runner } from "./timing-fixtures.js";
+import { driveSpice } from "../bench/drive-spice.js";
 
 /** +5 V → `ohms` → an inductor → GND. */
 function rlStep({ henries = 0.1, ohms = 100 } = {}) {
@@ -259,4 +260,46 @@ test("a large coil and a tiny capacitor still ring: the capacitor is no common m
   assert.ok(Math.abs(at(0)) < 0.05, "starts empty");
   assert.ok(Math.abs(at(0.5) - 10) < 0.1, "overshoots to twice the supply");
   assert.ok(Math.abs(at(1)) < 0.1, "and swings back");
+});
+
+test("a coil switched by a clock WAVE stays finite and never runs backwards", () => {
+  // A wave in the group put the coils after it in the state (nc + nw + j):
+  // the guard against carrying a coil's current through zero read the wave's
+  // volts instead, and a ramp drove it to −39 mA, the collector to −23 V. And
+  // a stuck corner's run-on along a piece with a GROWING mode carried the
+  // current to e^4600 — NaN for the rest of the run — on a triangle.
+  for (const wave of ["triangle", "trapezoid", "ramp-up"]) {
+    const b = bench();
+    const q = b.seat("q1", "npn", "a30");
+    b.gnd(q.get(1));
+    const rb = b.seat("rb", "resistor", "a40", { ohms: 1e3 });
+    b.link(rb.get(2), q.get(2));
+    const coil = b.seat("l1", "inductor", "a50", { henries: 0.1, style: "can" }); // prettier-ignore
+    b.vcc(coil.get(1));
+    b.link(coil.get(2), q.get(3));
+    b.doc.components.push({ id: "clk1", kind: "clock", ref: "clock", x: 20, y: 30, params: { hz: 20, wave } }); // prettier-ignore
+    b.doc.wires.push(
+      { id: "wc1", from: "clk1.vcc", to: "psu1.+", color: "red" },
+      { id: "wc2", from: "clk1.gnd", to: "psu1.-", color: "black" },
+      { id: "wc3", from: "clk1.out", to: b.at(rb.get(1).replace(/^a/, "c")), color: "yellow" }, // prettier-ignore
+    );
+    let lo = Infinity;
+    let hi = -Infinity;
+    let low = Infinity;
+    driveSpice(b.doc, {
+      seconds: 0.2,
+      end: true,
+      onTick: (now, r, input) => {
+        const a = r.analog.coilAmps.get("l1") ?? 0;
+        lo = Math.min(lo, a);
+        hi = Math.max(hi, a);
+        const v = r.nodeVolts.get(input.netlist.netOfPoint.get(b.at(q.get(3))));
+        if (v != null) low = Math.min(low, v);
+      },
+    });
+    assert.ok(Number.isFinite(lo) && Number.isFinite(hi), `${wave}: ${lo}…${hi} A`); // prettier-ignore
+    assert.ok(hi < 0.06, `${wave}: ${hi} A — no more than 5 V across the winding drives`); // prettier-ignore
+    assert.ok(lo > -1e-9, `${wave}: ${lo} A — never backwards`);
+    assert.ok(low > -0.01, `${wave}: the collector at ${low} V`);
+  }
 });
