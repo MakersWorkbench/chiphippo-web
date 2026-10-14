@@ -76,12 +76,27 @@ const shortcutGroups = () => [
     title: t("shortcuts.group.edit"),
     rows: [
       { desc: t("shortcuts.edit.selectAll"), keys: `${MOD}+A` },
-      // The one MOUSE chord in here, and it earns its place beside Select All:
-      // the marquee replaces a selection, this adds to one. Its keys ARE
-      // catalog text — unlike a bare glyph, "Click" is a word.
+      // The MOUSE chords in here, and they earn their place beside Select
+      // All: a drag on the background replaces a selection, ⌘/Ctrl adds to
+      // one, Option/Alt picks one lead alone and with ⌘/Ctrl adds one
+      // (CLAUDE.md → "Selection"), and Shift moves the selection without its
+      // wiring.
+      // Their keys ARE catalog text — unlike a bare glyph, "Click" is a word.
       {
         desc: t("shortcuts.edit.toggleSelect"),
         keys: t("shortcuts.edit.toggleSelectKeys", { mod: MOD }),
+      },
+      {
+        desc: t("shortcuts.edit.pickLead"),
+        keys: t("shortcuts.edit.pickLeadKeys", { alt: ALT }),
+      },
+      {
+        desc: t("shortcuts.edit.toggleLead"),
+        keys: t("shortcuts.edit.toggleLeadKeys", { alt: ALT, mod: MOD }),
+      },
+      {
+        desc: t("shortcuts.edit.moveBare"),
+        keys: t("shortcuts.edit.moveBareKeys", { shift: SHIFT }),
       },
       { desc: t("shortcuts.edit.copy"), keys: `${MOD}+C` },
       { desc: t("shortcuts.edit.paste"), keys: `${MOD}+V` },
@@ -98,6 +113,9 @@ const shortcutGroups = () => [
       { desc: t("shortcuts.view.fadeWires"), keys: "H" },
       { desc: t("shortcuts.view.palette"), keys: `${MOD}+P` },
       { desc: t("shortcuts.view.analyzer"), keys: "A" },
+      // Pan left the plain drag (that is the rubber band now): Space held, or
+      // the middle button. Catalog text, since "drag" is a word.
+      { desc: t("shortcuts.view.pan"), keys: t("shortcuts.view.panKeys") },
       { desc: t("shortcuts.view.fit"), keys: `${MOD}+F` },
       { desc: t("shortcuts.view.zoomOut"), keys: `${SHIFT}+${MOD}+F` },
       {

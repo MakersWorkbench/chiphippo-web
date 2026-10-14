@@ -63,10 +63,16 @@ const available =
   spawnSync("java", ["-version"]).status === 0;
 const skip = !available && "set DIGITAL_JAR to a Digital.jar (and have java)";
 
+/** Digital's CLI, HEADLESS: without it every run starts AWT, which on macOS
+    puts a Java icon in the Dock and takes the focus — once per bench, a few
+    hundred times a run, leaving the machine unusable until it ends. Headless,
+    the CLI needs no window and starts about four times faster. */
 function digital(...args) {
-  const r = spawnSync("java", ["-cp", JAR, "CLI", ...args], {
-    encoding: "utf8",
-  });
+  const r = spawnSync(
+    "java",
+    ["-Djava.awt.headless=true", "-cp", JAR, "CLI", ...args],
+    { encoding: "utf8" },
+  );
   const out = `${r.stdout}\n${r.stderr}`
     .split("\n")
     .filter((l) => l && !l.startsWith("WARNING"))

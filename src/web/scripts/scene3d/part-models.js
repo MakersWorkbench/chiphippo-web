@@ -47,9 +47,10 @@ import { chipMarking, footprintOffsets, partDef } from "../catalog/index.js";
 import { partNumberOf, transistorCase } from "../catalog/discretes.js";
 import { hzLabel } from "../catalog/parts.js";
 import { loadBadge, relayCoilVolts } from "../catalog/bench-parts.js";
-import { holePosition } from "../model/breadboard.js";
+import { holePosition, rotateOffset } from "../model/breadboard.js";
 import { packageSpec, seatsWide } from "../model/footprints.js";
 import { partPinsWorld } from "../model/part-geometry.js";
+import { legsBent } from "../model/free-legs.js";
 import { formatOhms } from "../model/ohm-format.js";
 import { formatFarads } from "../model/farad-format.js";
 import { formatHenries } from "../model/henry-format.js";
@@ -57,6 +58,7 @@ import { chipBodyBox, chipBox } from "../components/chip-view.js";
 import {
   DIP_BODY_BOTTOM,
   DIP_BODY_TOP,
+  SEVEN_SEG,
   SPEAKER_BODY,
   TO220,
   TYPE_LABEL,
@@ -114,6 +116,9 @@ export function modelKind(def) {
       return "bar";
     case "bar8iso":
       return "bar-array";
+    case "seg7cc":
+    case "seg7ca":
+      return "seven-seg";
     case "rnet9":
       return "rnet";
     case "pot":
@@ -516,8 +521,19 @@ function buildBar(sb, doc, comp, def, params) {
   if (!o) return false;
   const p = sb.palette;
   const Y1 = 1.5;
-  slab(sb, o, -0.45, -4.4, 8.45, -0.6, 0.3, Y1, p.chipBody, 0.35);
-  displayLegs(sb, o, footprintOffsets(def, params), -0.6);
+  // Turned end for end (`rot` 180), as on the desk: the block swings round
+  // its middle hole to the other side of the row, bar 1 to the right.
+  const f = partFrame(def, params);
+  const turned = params?.rot === 180;
+  f.slab(sb, o, -0.45, -4.4, 8.45, -0.6, 0.3, Y1, p.chipBody, 0.35);
+  for (const dx of footprintOffsets(def, params)) {
+    sb.lead([
+      f.at(o, dx, -HOLE_DEPTH, 0),
+      f.at(o, dx, 0.18, 0),
+      f.at(o, dx, 0.18, -0.9),
+      f.at(o, dx, 0.45, -0.9),
+    ]);
+  }
   const colors = ledColors(p, params.color);
   def.segments.forEach((seg, i) => {
     const lamp = sb.lamp({
@@ -526,7 +542,9 @@ function buildBar(sb, doc, comp, def, params) {
       seg: seg.id,
       ...colors,
     });
-    printRect(lamp, o, i - 0.28, -4.0, i + 0.28, -1.0, Y1 + INK, colors.off);
+    const [x0, x1] = turned ? [8 - i - 0.28, 8 - i + 0.28] : [i - 0.28, i + 0.28]; // prettier-ignore
+    const [z0, z1] = turned ? [1.0, 4.0] : [-4.0, -1.0];
+    printRect(lamp, o, x0, z0, x1, z1, Y1 + INK, colors.off);
   });
 }
 
@@ -547,8 +565,80 @@ function buildBarArray(sb, doc, comp, def, params) {
       seg: seg.id,
       ...colors,
     });
-    printRect(lamp, o, c - 0.28, -3.0, c + 0.28, 0, Y1 + INK, colors.off);
+    // Turned a half lap (`rot` 180), bar 1 stands at the far end.
+    const x = params?.rot === 180 ? 7 - c : c;
+    printRect(lamp, o, x - 0.28, -3.0, x + 0.28, 0, Y1 + INK, colors.off);
   });
+}
+
+/** The 7-segment display (seg7cc/seg7ca): its block over the ten legs it
+    straddles the channel on, and the leaning digit on top — the desk's own
+    numbers (discrete-view.js's SEVEN_SEG and buildSevenSegment), each segment
+    a lamp. Turned end for end (`rot` 180) it stands on its head about the
+    middle of its legs, as on the desk. */
+function buildSevenSeg(sb, doc, comp, def, params) {
+  const o = anchorOf(doc, comp);
+  if (!o) return false;
+  const p = sb.palette;
+  const turned = params?.rot === 180;
+  // A local point (desk-drawing x, y) — turned a half lap about (2, -3).
+  const lp = (x, z) => (turned ? [4 - x, -6 - z] : [x, z]);
+  const { left, right, top, bottom, digitTop, digitBottom, lean } = SEVEN_SEG;
+  const Y1 = DIP_Y0 + 0.8;
+  const [ax, az] = lp(left, top);
+  const [bx, bz] = lp(right, bottom);
+  slab(sb, o, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz), DIP_Y0, Y1, p.chipBody, 0.2); // prettier-ignore
+  for (const pin of pinsOf(doc, comp)) stub(sb, pin.x, pin.y, DIP_Y0 + 0.05);
+  const colors = ledColors(p, params.color);
+  const y = Y1 + INK;
+  const t = 0.42;
+  const cx = 1.75;
+  const hw = 1.2;
+  const yT = digitTop + t / 2;
+  const yB = digitBottom - t / 2;
+  const yM = (yT + yB) / 2;
+  const lh = 2.0;
+  const lv = yM - yT - 0.12;
+  const leanX = (x, z) => x + (digitBottom - z) * lean;
+  const hSeg = (sx, sz) => {
+    const h = t / 2;
+    return [[sx - lh / 2, sz], [sx - lh / 2 + h, sz - h], [sx + lh / 2 - h, sz - h], [sx + lh / 2, sz], [sx + lh / 2 - h, sz + h], [sx - lh / 2 + h, sz + h]]; // prettier-ignore
+  };
+  const vSeg = (sx, sz) => {
+    const h = t / 2;
+    return [[sx, sz - lv / 2], [sx + h, sz - lv / 2 + h], [sx + h, sz + lv / 2 - h], [sx, sz + lv / 2], [sx - h, sz + lv / 2 - h], [sx - h, sz - lv / 2 + h]]; // prettier-ignore
+  };
+  const shapes = {
+    a: hSeg(cx, yT),
+    b: vSeg(cx + hw, (yT + yM) / 2),
+    c: vSeg(cx + hw, (yM + yB) / 2),
+    d: hSeg(cx, yB),
+    e: vSeg(cx - hw, (yM + yB) / 2),
+    f: vSeg(cx - hw, (yT + yM) / 2),
+    g: hSeg(cx, yM),
+  };
+  const point = (x, z) => {
+    const [lx, lz] = lp(leanX(x, z), z);
+    return at(o, lx, y, lz);
+  };
+  for (const seg of def.segments) {
+    const lamp = sb.lamp({
+      kind: "segment",
+      compId: comp.id,
+      seg: seg.id,
+      ...colors,
+    });
+    // A half lap is a rotation, not a mirror, so the outlines keep winding.
+    if (shapes[seg.id]) {
+      lamp.polygon(
+        shapes[seg.id].map(([x, z]) => point(x, z)),
+        colors.off,
+      );
+    } else {
+      const [lx, lz] = lp(cx + hw + 0.75, yB);
+      lamp.disc(at(o, lx, y, lz), UP, 0.26, colors.off, 14);
+    }
+  }
 }
 
 /**
@@ -820,8 +910,13 @@ function buildSpeaker(sb, doc, comp, def, params) {
   const p = sb.palette;
   const Y0 = 0.3;
   const Y1 = 3.75;
-  const { x, y, r } = SPEAKER_BODY;
-  for (const dx of footprintOffsets(def, params)) stub(sb, o.x + dx, o.z, Y0 + 0.05); // prettier-ignore
+  const { r } = SPEAKER_BODY;
+  // Turned about its + leg (`params.rot`), as on the desk: the legs where
+  // they resolve, the body's centre turned with them.
+  const c = rotateOffset({ dx: SPEAKER_BODY.x, dy: SPEAKER_BODY.y }, params.rot ?? 0); // prettier-ignore
+  const x = c.dx;
+  const y = c.dy;
+  for (const pin of pinsOf(doc, comp)) stub(sb, pin.x, pin.y, Y0 + 0.05);
   sb.mesh.cylinder(at(o, x, Y0, y), UP, r, Y1 - Y0, p.speaker, {
     segments: 32,
     capColor: p.speaker,
@@ -842,6 +937,7 @@ function buildSpeaker(sb, doc, comp, def, params) {
     three legs, or a TO-220's moulding and metal tab. Either carries a lamp
     the simulation lights while it conducts. */
 function buildTransistor(sb, doc, comp, def, params) {
+  if (legsBent(comp)) return buildBentTo92(sb, doc, comp, def, params);
   const o = anchorOf(doc, comp);
   if (!o) return false;
   const f = partFrame(def, params);
@@ -877,6 +973,42 @@ function buildTransistor(sb, doc, comp, def, params) {
   }
   // TO-92: the moulding is the D of a disc — round at the back, its flat face
   // toward the viewer — standing on the legs (discrete-view.js's buildTo92).
+  const legs = [0, 1, 2].map((dx) => [
+    f.at(o, dx, -HOLE_DEPTH, 0),
+    f.at(o, dx, 0.45, 0),
+  ]);
+  buildTo92(sb, comp, def, params, o, f, legs);
+}
+
+/**
+ * A TO-92 on BENT legs (model/free-legs.js): the same moulding, centred on the
+ * middle of its three legs — turned a half
+ * lap when pin 1 is right of pin 3 — and each leg wire from its own hole up
+ * and in under it (discrete-view.js's buildLegsSvg, in the round).
+ */
+function buildBentTo92(sb, doc, comp, def, params) {
+  const pins = pinsOf(doc, comp).sort((a, b) => a.pin - b.pin);
+  if (pins.length !== 3) return false;
+  // Centred on the MIDDLE of its legs, both ways, as on the desk
+  // (discrete-view.js's legsBody): the moulding's plan middle sits 0.17 back
+  // of its legs' row, mirrored when it is turned.
+  const mean = (k) => pins.reduce((sum, p) => sum + p[k], 0) / 3;
+  const turned = pins[0].x > pins[2].x;
+  const mid = -0.17;
+  const o = { x: mean("x") - 1, z: mean("y") - (turned ? -mid : mid) };
+  const f = partFrame(def, turned ? { rot: 180 } : {});
+  const legs = pins.map((p) => [
+    [p.x, -HOLE_DEPTH, p.y],
+    [p.x, 0.45, p.y],
+  ]);
+  buildTo92(sb, comp, def, params, o, f, legs);
+}
+
+/** A TO-92's moulding over `o` in frame `f`, its three legs each running from
+    its own `legs` path (hole up) in under it. */
+function buildTo92(sb, comp, def, params, o, f, legs) {
+  const p = sb.palette;
+  const lampColors = { on: p.partOn, off: p.partInset };
   const cx = 1;
   const cz = -0.02;
   const r = 0.72;
@@ -892,13 +1024,9 @@ function buildTransistor(sb, doc, comp, def, params) {
     outline.push(f.at(o, cx + Math.cos(a) * r, Y0, cz + Math.sin(a) * r));
   }
   sb.mesh.extrude(outline, [0, Y1 - Y0, 0], p.transistor, { smooth: true });
-  for (const dx of [0, 1, 2]) {
-    const lean = (dx - 1) * 0.6;
-    sb.lead([
-      f.at(o, dx, -HOLE_DEPTH, 0),
-      f.at(o, dx, 0.45, 0),
-      f.at(o, 1 + lean * 0.6, Y0 + 0.05, 0),
-    ]);
+  for (const [i, path] of legs.entries()) {
+    const lean = (i - 1) * 0.6;
+    sb.lead([...path, f.at(o, 1 + lean * 0.6, Y0 + 0.05, 0)]);
   }
   sb.label({
     text: transistorText(def, params),
@@ -1283,6 +1411,7 @@ const BUILDERS = Object.freeze({
   digit: buildDigit,
   bar: buildBar,
   "bar-array": buildBarArray,
+  "seven-seg": buildSevenSeg,
   lcd: buildLcd,
   slide: buildSlide,
   button: buildButton,

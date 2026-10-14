@@ -370,7 +370,7 @@ export class BusTools {
    * started. The handle check comes first — it's the smaller, more specific
    * target sitting on top of the band's own hit stroke.
    */
-  tryBeginDrag(e, world) {
+  beginDrag(e, world) {
     const handle = e.target?.closest?.(".bus-end-handle");
     if (handle) {
       this.#beginBusDrag(handle.dataset.busId, e, world, handle.dataset.end);
@@ -437,6 +437,7 @@ export class BusTools {
       // once per GESTURE instead of once per candidate offset per move.
       canBatch: doc.prepareWireBatchMove(ids),
       startWorld: world,
+      shown: null, // the legal landing the last move showed (#onBusMove)
       pointerId: e.pointerId,
       startClientX: e.clientX,
       startClientY: e.clientY,
@@ -470,10 +471,12 @@ export class BusTools {
     // A cheap, SNAP_RADIUS-bounded lookup for the live preview, for BOTH
     // grab kinds — see the SNAP_RADIUS comment for why the end-handle's own
     // unbounded search is reserved for the one-time #onBusUp resolve
-    // instead of running here every move. What this finds is ONLY the
-    // preview: the drop itself re-resolves at the release point (#onBusUp),
-    // so a coalesced move stream can't decide where the bus lands.
+    // instead of running here every move. What this finds is what the drop
+    // commits whenever it found anything (CLAUDE.md → "Selection": a shown
+    // target is reused, never recomputed).
     const found = this.#resolveBusDrop(m, rawDx, rawDy, SNAP_RADIUS);
+    // What the screen now SHOWS — the drop commits it as it stands (#onBusUp).
+    m.shown = found;
     this.#host.wireLayer.setBusDrag({
       busId: m.busId,
       memberIds: m.memberIds,
@@ -559,23 +562,23 @@ export class BusTools {
     // `#mode`.
     if (e.type === "pointercancel" || this.#host.editingLocked) return;
 
-    // Resolve the drop from the RELEASE point itself, not from whatever the
-    // last pointermove happened to leave behind. Moves are coalesced (and on
-    // a wide bus the preview could fall behind the cursor outright), so the
-    // last sample can be several frames stale — and a stale sample sitting
-    // somewhere illegal used to make the whole drop silently revert, which
-    // is exactly what "the drop got missed" looked like.
-    const { dx, dy } = this.#releaseDelta(m, e);
-    // The tight near-miss margin first (the same one the preview showed),
-    // then — for an END-HANDLE drag only — the ONE unbounded "always find
-    // the nearest, however far" search, a single call rather than a
-    // per-frame cost. A WHOLE-BUS drag (m.end null) has no such fallback: it
-    // stays SNAP_RADIUS-only end to end, same as a whole-wire drag, since a
-    // big rigid jump would relocate the entire bus somewhere the cursor
-    // never was.
-    const found =
-      this.#resolveBusDrop(m, dx, dy, SNAP_RADIUS) ??
-      (m.end ? this.#resolveBusDrop(m, dx, dy) : null);
+    // The drop is the landing the last move SHOWED, when it showed one — it
+    // is never re-resolved, so a shown, legal drop always lands where it was
+    // drawn. Only with nothing legal showing does the RELEASE point get a say
+    // (moves are coalesced, so the last sample can be frames stale): the
+    // tight near-miss margin first, then — for an END-HANDLE drag only — the
+    // ONE unbounded "always find the nearest, however far" search, a single
+    // call rather than a per-frame cost. A WHOLE-BUS drag (m.end null) has no
+    // such fallback: it stays SNAP_RADIUS-only end to end, same as a
+    // whole-wire drag, since a big rigid jump would relocate the entire bus
+    // somewhere the cursor never was.
+    let found = m.shown ?? null;
+    if (!found) {
+      const { dx, dy } = this.#releaseDelta(m, e);
+      found =
+        this.#resolveBusDrop(m, dx, dy, SNAP_RADIUS) ??
+        (m.end ? this.#resolveBusDrop(m, dx, dy) : null);
+    }
     // An illegal drop (no delta seats every member's moved end in a free
     // hole) commits nothing, and the render above already reverted to the
     // document's real (unmoved) addresses.

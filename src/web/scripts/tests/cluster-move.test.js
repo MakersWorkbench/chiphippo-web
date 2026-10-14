@@ -25,9 +25,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  LEAD_LEG,
+  LEAD_WIRE_END,
   clusterDelta,
   clusterMembers,
+  leadShift,
   memberDragForm,
+  mergeLeadRiders,
   partsRidingCluster,
   planClusterRiders,
   resolveClusterTargets,
@@ -849,4 +853,78 @@ test("a cluster move keeps a rotatable member's stored FORM", () => {
     "still the footprint form",
   );
   assert.equal(doc.getComponent("c1").params.end, null);
+});
+
+// ── Picked leads (Option/Alt+⌘/Ctrl) ─────────────────────────────────────────
+
+test("mergeLeadRiders: a picked end joins its wire's riders, and wins its own end", () => {
+  const riding = [{ wireId: "w1", ends: [{ end: "from", memberId: "c1" }] }];
+  const legs = [{ id: "r1", pins: [{ pin: 1, memberId: "c1" }] }];
+  const merged = mergeLeadRiders(riding, legs, [
+    { kind: "wire-end", id: "w1", end: "to" }, // the other end of a rider
+    { kind: "wire-end", id: "w2", end: "from" }, // a wire nothing carried
+    { kind: "lead", id: "r1", end: "a" }, // a leg that ALSO rides: the pick wins
+    { kind: "lead", id: "r2", end: "b" },
+  ]);
+  assert.deepEqual(merged.riding, [
+    {
+      wireId: "w1",
+      ends: [
+        { end: "from", memberId: "c1" },
+        { end: "to", memberId: LEAD_WIRE_END },
+      ],
+    },
+    { wireId: "w2", ends: [{ end: "from", memberId: LEAD_WIRE_END }] },
+  ]);
+  assert.deepEqual(merged.ridingParts, [
+    { id: "r1", pins: [{ pin: 1, memberId: LEAD_LEG }] },
+    { id: "r2", pins: [{ pin: 2, memberId: LEAD_LEG }] },
+  ]);
+  assert.deepEqual(riding[0].ends.length, 1, "the inputs are untouched");
+});
+
+test("leadShift: a picked end lands where the delta puts it — never onto what is moving", () => {
+  const doc = scene({ boards: [FULL, AWAY] });
+  const shift = leadShift(doc, { dx: 2, dy: 0 }, new Set(["bb2"]));
+  assert.equal(shift("bb1.a5"), "bb1.a7");
+  // On a moving strip it keeps its address — the strip carries it.
+  assert.equal(shift("bb2.a5"), "bb2.a5");
+  // Off the end of the strip: nowhere to go.
+  assert.equal(shift("bb1.a63"), null);
+  // Onto the moving strip: that hole is about to leave.
+  const onto = leadShift(doc, { dx: 80, dy: 0 }, new Set(["bb2"]));
+  assert.equal(onto("bb1.a5"), null);
+});
+
+test("a planned set of picked leads: one wire end stretches, a leg bends, the plan is one batch", () => {
+  const doc = scene({
+    boards: [FULL],
+    components: [led("r1", "a20", { rot: 90, end: { dx: 3, dy: 0 } })],
+    wires: [{ from: "bb1.a40", to: "bb1.a50" }],
+  });
+  const { riding, ridingParts } = mergeLeadRiders(
+    [],
+    [],
+    [
+      { kind: "wire-end", id: "w1", end: "to" },
+      { kind: "lead", id: "r1", end: "b" },
+    ],
+  );
+  const delta = { dx: 2, dy: 0 };
+  const presetShifts = new Map([
+    [LEAD_WIRE_END, leadShift(doc, delta, new Set())],
+    [LEAD_LEG, leadShift(doc, delta, new Set(), { holesOnly: true })],
+  ]);
+  const plan = planClusterRiders(doc, {
+    members: [],
+    targets: [],
+    riding,
+    ridingParts,
+    presetShifts,
+  });
+  assert.equal(plan.resolved, true);
+  assert.deepEqual(plan.moves, [{ id: "w1", from: "bb1.a40", to: "bb1.a52" }]);
+  assert.equal(plan.parts.length, 1);
+  assert.equal(plan.parts[0].anchor, "a20", "pin 1 stays");
+  assert.deepEqual(plan.parts[0].params.end, { dx: 5, dy: 0 }, "pin 2 bent");
 });

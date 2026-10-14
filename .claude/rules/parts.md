@@ -299,6 +299,52 @@ a red `*` beside it too, which he dropped as redundant (2026-10-04) — don't br
   **Grade** (`grade`, a `spiceOnly` select stored only off that default — spice-lite.md
   → Transistors). A part picked from the list brings its package and grade
   (`TRANSISTOR_PART_FACTS`); a typed one neither.
+- **A TO-92's legs bend; a TO-220's never do** (Jason, 2026-10-14; `model/free-legs.js`).
+  `def.freeLegs(params)` (TO-92 only). Bent, the part stores `params.legs` — pins 2 and 3
+  as `{dx, dy}` offsets from pin 1's hole (`transistorLegs`, each through
+  `normalizeLeadOffset`); pin 1 anchors in ANY hole (`LEAD_ANCHOR_RE`, occupancy.js
+  `partPinHoles`), and `normalizeParams` FORCES `case: "TO-92"` and drops `rot` when `legs`
+  is present. **Straight is canonical**: every write goes through `legSeat(doc, comp,
+  landed)`, which answers the footprint form (`rot` 0/180) whenever the three pins are in
+  one grid row, neighbouring columns, in order (`straightSeat`). Its leads are `{kind:
+  "lead", id, end}` with a third end `"c"` (`LEG_ENDS`/`pinOfEnd`). Option/Alt on a leg is
+  `drag-leg` (`#beginLegDrag`/`#trackLegDrag`/`#legSeatAt`, committed through
+  `moveClusterWithWires`); a BENT part's body press is a one-member `#beginGroupDrag`
+  (`memberDragForm` → `"lead"`, so pin 1 snaps and the legs keep their bend); R swaps pins
+  1 and 3 (`rotateComponent`); a leg rides a moving part's node like a resistor's
+  (`leadsRiding`, `planRidingLead` → `legSeat`). The Package field greys every option but
+  TO-92 while `straightSeatOf` answers null (`#packageField`, `opt.disabled` + `title` in
+  `segmented-picker.js`; `properties.refused.case`), and a TO-220 asked for on a bent part
+  that does stand in a row is stood straight first (`#straightenForPackage`). Drawn by
+  `buildLegsSvg`/`legsBox` (the moulding centred on the MIDDLE of the three legs, both
+  ways — never on one leg, Jason 2026-10-14 — turned when pin 1 is right of pin 3) and in 3D by `buildBentTo92`; a
+  single ⌘V pastes it straight, a cluster paste keeps the bend (`memberForm` `"legs"`).
+- **The 7-segment display** (`seg7cc`/`seg7ca`, Jason 2026-10-14, `sevenSegmentDef` in
+  catalog/parts.js): a 0.56-in LTS-6760-style digit, `package: "DIP-10-600"` (a parsed
+  custom package name), pins 1 e · 2 d · 3 COM · 4 c · 5 dp · 6 b · 7 a · 8 COM · 9 f ·
+  10 g, the two commons one net (`internalBridges` `[[3, 8]]`), every segment to pin 3.
+  `normalizeParams` ALWAYS stores `wide: true`, so every seat is wide (row e → e/i;
+  `dipRows` reads the marker only there) — there is no narrow seat for a part that size;
+  `alwaysWide` is the data hook `ai/catalog-brief.js` reads to leave it out of the AI
+  builder until the compiler (every DIP in e/f) seats it wide. Drawn by
+  `buildSevenSegment` (`SEVEN_SEG`: the 12.6 × 19 mm body centred on the legs, the digit
+  leaning 8°; `rot` 180 turns it about (2, -3)) and in 3D by `buildSevenSeg`; KiCad
+  `7SegmentLED_LTS6760_LTS6780`, Digital's Seven-Seg. **Retired parts**: `retired: true`
+  (seg8cc/seg8ca, the single-row digits) keeps a def in the catalog so old desks load
+  and run, and only drops it from the tray (`palette-panel.js` `#render`).
+- **R on a turned two-lead part tries LENGTHS, not just the two quarters**
+  (`rotateComponent`'s rotatable branch, Jason 2026-10-14): CW then CCW at the
+  footprint's own span, then the nearest other spans (never under `minSpan`, at most
+  three pitches over), the current length last (a rail-reaching bend) — so a diode in
+  row c, whose 3-pitch quarters run off the board or into the channel, stands on its
+  three-hole minimum rather than not turning. `canPlacePart`'s `minSpan` test has a
+  1e-6 slack (row y's are a 0.01 grid floats do not hold). **bar8 is `reversible`**
+  (rot 180: block swung below the row — `turnsHalfLap` lists it, `buildBarDisplay`
+  turns about (4, 0)); **bar8iso** draws its half lap (bars reversed, a pin-1 dot,
+  `rotate(180 3.5 -1.5)`), the burn cue outside the turn in both.
+- **A diode bends down to THREE holes** (`minSpan` 2, Jason 2026-10-14 — a DO-35 at 0.2 in;
+  a resistor's 2.5 is four). Its default seat stays `[0, 3]`: pin 2 of a saved diode is
+  DERIVED from the footprint, so changing the offsets would rewire every saved desk.
 - **Diode = ONE-WAY** (`oneWayBridges(params)` → `[[anode, cathode]]`; anode pin 1, no
   F-flip, so `polarity` is LED-only). In `resolveAll`: `diodeDrive` resolves the strong
   pass to a fixpoint WITHIN the pass, starting from no diode driving (monotone — a ring of

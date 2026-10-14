@@ -707,6 +707,109 @@ const OSCILLATOR_PROPERTIES = [
   },
 ];
 
+/**
+ * The 7-segment display — the real single-digit 0.56-in part (an LTS-6760 /
+ * LTS-6780, a Kingbright SA/SC56-11): ten legs, five along the top and five
+ * along the bottom, 0.6 in (15.24 mm) apart, so it straddles the channel as a
+ * 600-mil DIP-10 does — pin 1 bottom-left, counting round anticlockwise
+ * (Jason's datasheet, 2026-10-14). Seven segments a–g and the decimal point,
+ * each an LED to the COMMON, which comes out twice (pins 3 and 8, joined
+ * inside). Common cathode: a segment lights with its pin HIGH and the common
+ * to ground; common anode: the common to +V and a segment pin pulled LOW —
+ * what a 74LS47's active-low outputs do.
+ *
+ * Its body (12.6 × 19 mm) stands over the three rows between its pin rows,
+ * as a wide chip's does, so it is ALWAYS seated at that width
+ * (`normalizeParams` keeps `wide`): there is no narrow seat for a part this
+ * size.
+ */
+const SEVEN_SEGMENT_PINS = Object.freeze({
+  e: 1,
+  d: 2,
+  c: 4,
+  dp: 5,
+  b: 6,
+  a: 7,
+  f: 9,
+  g: 10,
+});
+const SEVEN_SEGMENT_COMMONS = Object.freeze([3, 8]);
+
+function sevenSegmentDef({ anode }) {
+  const segRole = anode ? "cathode" : "anode";
+  const comRole = anode ? "anode" : "cathode";
+  const byPin = new Map(
+    Object.entries(SEVEN_SEGMENT_PINS).map(([seg, pin]) => [pin, seg]),
+  );
+  return {
+    id: anode ? "seg7ca" : "seg7cc",
+    kind: "discrete",
+    title: `7-segment display (common ${anode ? "anode" : "cathode"})`,
+    blurb:
+      "Single-digit 0.56-in 7-segment LED display with a decimal point, " +
+      `common ${anode ? "ANODE" : "cathode"}: ten legs, five along the top ` +
+      "and five along the bottom, 0.6 in apart, so it straddles the channel " +
+      "like a wide chip. Pin 1 (e) is bottom-left, counting round " +
+      "anticlockwise: 1 e, 2 d, 3 COM, 4 c, 5 dp, 6 b, 7 a, 8 COM, 9 f, " +
+      "10 g. The common comes out twice (3 and 8), joined inside. " +
+      (anode
+        ? "Tie COM to +V and pull a segment LOW to light it — the form a " +
+          "74LS47 (active-low outputs) drives directly. "
+        : "Tie COM to ground and drive a segment HIGH to light it — the " +
+          "form a CD4511B drives. ") +
+      "Each segment is an LED: give each a series resistor. Comes in red / " +
+      "green / blue / yellow / white. R turns it end for end.",
+    group: "LEDs",
+    package: "DIP-10-600",
+    // Seated wide wherever it goes (normalizeParams) — the data hook the AI
+    // builder's catalog reads to leave it out for now (ai/catalog-brief.js).
+    alwaysWide: true,
+    pins: Array.from({ length: 10 }, (_, i) => {
+      const n = i + 1;
+      const seg = byPin.get(n);
+      return seg
+        ? { n, name: seg, role: segRole }
+        : { n, name: "COM", role: comRole };
+    }),
+    // Each segment is an LED between its own pin and the common (pin 3; pin 8
+    // is joined to it inside) — pure data, lit by the sim-overlay with the
+    // single LED's rule.
+    segments: Object.freeze(
+      ["a", "b", "c", "d", "e", "f", "g", "dp"].map((id) =>
+        Object.freeze({
+          id,
+          anodePin: anode ? SEVEN_SEGMENT_COMMONS[0] : SEVEN_SEGMENT_PINS[id],
+          cathodePin: anode ? SEVEN_SEGMENT_PINS[id] : SEVEN_SEGMENT_COMMONS[0],
+        }),
+      ),
+    ),
+    colors: LED_COLOR_OPTIONS,
+    properties: [
+      {
+        key: "color",
+        label: "Color",
+        type: "color",
+        options: LED_COLOR_OPTIONS,
+      },
+    ],
+    normalizeParams(raw) {
+      return {
+        color: LED_COLOR_OPTIONS.includes(raw?.color) ? raw.color : "red",
+        // Always the wide seat (see above) — the e/i seat's marker included,
+        // which no other seat reads (footprints.js `dipRows`).
+        wide: true,
+        // A chip-style half-lap turn, stored only when set (as bar8iso does).
+        ...(raw?.rot === 180 ? { rot: 180 } : {}),
+      };
+    },
+    // The two commons are one strip inside the package — a hard join, as a
+    // DIP switch's closed contact is.
+    internalBridges() {
+      return [[...SEVEN_SEGMENT_COMMONS]];
+    },
+  };
+}
+
 export const PART_DEFS = Object.freeze(
   [
     {
@@ -851,6 +954,11 @@ export const PART_DEFS = Object.freeze(
       id: "seg8cc",
       kind: "discrete",
       title: "8-segment digit (common cathode)",
+      // RETIRED (Jason, 2026-10-14): a real digit's pins are five above and
+      // five below, straddling the channel — seg7cc. This one stays in the
+      // catalog so every desk that has one loads and runs as it did, but the
+      // tray no longer offers it.
+      retired: true,
       blurb:
         "Single-block 7-segment numeric display plus decimal point (8 lit " +
         "segments), common cathode. Drive each segment anode (a–g, dp) HIGH " +
@@ -905,6 +1013,8 @@ export const PART_DEFS = Object.freeze(
       id: "seg8ca",
       kind: "discrete",
       title: "8-segment digit (common anode)",
+      // RETIRED, as seg8cc is — seg7ca is the real part.
+      retired: true,
       blurb:
         "Single-block 7-segment numeric display plus decimal point (8 lit " +
         "segments), common ANODE. Tie pin 9 (A) to VCC; pull each segment " +
@@ -958,6 +1068,8 @@ export const PART_DEFS = Object.freeze(
         return []; // segments are diodes — devices, not bridges (Feature 90)
       },
     },
+    sevenSegmentDef({ anode: false }),
+    sevenSegmentDef({ anode: true }),
     {
       id: "bar8",
       kind: "discrete",
@@ -971,6 +1083,10 @@ export const PART_DEFS = Object.freeze(
       footprint: Object.freeze({
         offsets: Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8]),
       }),
+      // R turns it end for end (params.rot 180), as the resistor array does:
+      // the same nine holes, the numbering backwards — the cathode at the
+      // left — and its block swung round to the other side of the row.
+      reversible: true,
       pins: [
         { n: 1, name: "1", role: "anode" },
         { n: 2, name: "2", role: "anode" },
@@ -1001,6 +1117,8 @@ export const PART_DEFS = Object.freeze(
       normalizeParams(raw) {
         return {
           color: LED_COLOR_OPTIONS.includes(raw?.color) ? raw.color : "red",
+          // The end-for-end turn, stored only when set.
+          ...(raw?.rot === 180 ? { rot: 180 } : {}),
         };
       },
       internalBridges() {

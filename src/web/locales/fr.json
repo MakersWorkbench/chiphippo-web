@@ -674,6 +674,12 @@
     "seg8ca": {
       "title": "Afficheur 8 segments (anode commune)"
     },
+    "seg7cc": {
+      "title": "Afficheur 7 segments (cathode commune)"
+    },
+    "seg7ca": {
+      "title": "Afficheur 7 segments (anode commune)"
+    },
     "bar8": {
       "title": "Barre de LED 8 segments"
     },
@@ -1223,14 +1229,6 @@
       "boards": {
         "one": "{count} platine",
         "other": "{count} platines"
-      },
-      "moreParts": {
-        "one": "{count} composant de plus",
-        "other": "{count} composants de plus"
-      },
-      "moreWires": {
-        "one": "{count} fil de plus",
-        "other": "{count} fils de plus"
       }
     },
     "menu": {
@@ -1254,9 +1252,7 @@
       "boardMessage": "{id} porte {what} — retirer la platine les retire aussi.",
       "boardsMessage": "Ces {count} platines assemblées portent {what} — les retirer les retire aussi.",
       "brickTitle": "Retirer {noun} ?",
-      "brickMessage": "{id} porte {what} — le retirer les retire aussi.",
-      "selectionTitle": "Retirer {what} ?",
-      "selectionMessage": "{extra} qui y sont rattachés seront retirés aussi."
+      "brickMessage": "{id} porte {what} — le retirer les retire aussi."
     },
     "paste": {
       "failTitle": "La conception n'a pas pu être collée",
@@ -1590,6 +1586,12 @@
       "selectAll": "Tout sélectionner — tout le plan de travail, ou le texte d'un champ",
       "toggleSelect": "Ajouter / retirer un élément de la sélection",
       "toggleSelectKeys": "{mod}+Clic",
+      "pickLead": "Choisir une seule patte — une extrémité de fil ou une broche (jamais en ajout)",
+      "pickLeadKeys": "{alt}+Clic",
+      "toggleLead": "Ajouter / retirer une patte — une extrémité de fil ou une broche",
+      "toggleLeadKeys": "{alt}+{mod}+Clic",
+      "moveBare": "Déplacer la sélection seule — son câblage reste en place",
+      "moveBareKeys": "{shift}+Glisser",
       "copy": "Copier le composant sélectionné",
       "paste": "Coller un double",
       "delete": "Supprimer la sélection",
@@ -1603,6 +1605,8 @@
       "palette": "Afficher ou masquer la palette de composants",
       "analyzer": "Afficher ou masquer l'analyseur logique",
       "fit": "Ajuster à la fenêtre",
+      "pan": "Faire défiler le bureau",
+      "panKeys": "Espace+glisser ou bouton du milieu",
       "zoomOut": "Dézoomer au maximum (retrouver un composant perdu)",
       "zoom": "Zoomer / dézoomer / réinitialiser",
       "fontSize": "Taille de police de l'éditeur : augmenter / réduire / réinitialiser",
@@ -1785,7 +1789,8 @@
       "adviceLabel": "À propos de cette valeur"
     },
     "refused": {
-      "bodyHoles": "Pas de place — le trou où irait sa patte est occupé, ou au-delà du bord de la plaque."
+      "bodyHoles": "Pas de place — le trou où irait sa patte est occupé, ou au-delà du bord de la plaque.",
+      "case": "Ses pattes sont pliées, et celles d'un TO-220 forment une rangée rigide — placez-les d'abord dans trois trous alignés, dans l'ordre."
     },
     "hint": {
       "title": "Valeurs normalisées proches :",

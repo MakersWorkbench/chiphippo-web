@@ -71,6 +71,8 @@ test("the part catalog carries the Feature 60 inventory", () => {
     "relay",
     "resistor",
     "rnet9",
+    "seg7ca",
+    "seg7cc",
     "seg8ca",
     "seg8cc",
     "speaker",
@@ -90,11 +92,12 @@ test("the part catalog carries the Feature 60 inventory", () => {
   assert.ok(partDef("lcd16x2"));
   assert.equal(chipDef("sw-slide"), null);
   // 115 chips (24 + 29 LS + 46 CD4000 + 7 memory + 2 io + 2 cpu + the 555
-  // + the bench parts' LM358, ULN2003A, 4N35 and PC817) + 38 parts (the
+  // + the bench parts' LM358, ULN2003A, 4N35 and PC817) + 40 parts (the
   // discretes brought 7: two diodes, an inductor and four transistors; the
   // bench parts 7: five regulators, the relay and the electronic load; and
-  // the speaker)
-  assert.equal(PALETTE_DEFS.length, 153);
+  // the speaker; and the two 7-segment displays that replaced the retired
+  // single-row digits, which stay for the desks that hold them) = 155
+  assert.equal(PALETTE_DEFS.length, 155);
 });
 
 for (const def of PART_DEFS.filter((d) => d.kind === "discrete")) {

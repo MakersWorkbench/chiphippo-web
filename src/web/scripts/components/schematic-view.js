@@ -1000,6 +1000,16 @@ export class SchematicView {
     this.#deskView.zoomOutFull();
   }
 
+  /** Space is down (or up): a left-drag anywhere pans — DeskView.setSpaceHeld. */
+  setSpaceHeld(on) {
+    this.#deskView.setSpaceHeld(on);
+  }
+
+  /** Whether a Space-drag pan used the hold just ended (and forget it). */
+  takeSpacePanned() {
+    return this.#deskView.takeSpacePanned();
+  }
+
   /** Centre + scale the camera to frame the whole diagram. */
   fit() {
     if (this.#stale) this.#render();

@@ -673,6 +673,12 @@
     "seg8ca": {
       "title": "8-Segment-Ziffer (gemeinsame Anode)"
     },
+    "seg7cc": {
+      "title": "7-Segment-Anzeige (gemeinsame Kathode)"
+    },
+    "seg7ca": {
+      "title": "7-Segment-Anzeige (gemeinsame Anode)"
+    },
     "bar8": {
       "title": "8-Segment-LED-Balken"
     },
@@ -1222,14 +1228,6 @@
       "boards": {
         "one": "{count} Steckbrett",
         "other": "{count} Steckbretter"
-      },
-      "moreParts": {
-        "one": "{count} weiteres Bauteil",
-        "other": "{count} weitere Bauteile"
-      },
-      "moreWires": {
-        "one": "{count} weiterer Draht",
-        "other": "{count} weitere Drähte"
       }
     },
     "menu": {
@@ -1253,9 +1251,7 @@
       "boardMessage": "An {id} hängen {what} — mit dem Steckbrett gehen sie mit.",
       "boardsMessage": "An diesen {count} verbundenen Steckbrettern hängen {what} — mit ihnen gehen sie mit.",
       "brickTitle": "{noun} entfernen?",
-      "brickMessage": "An {id} hängen {what} — damit gehen sie mit.",
-      "selectionTitle": "{what} entfernen?",
-      "selectionMessage": "{extra} daran werden ebenfalls entfernt."
+      "brickMessage": "An {id} hängen {what} — damit gehen sie mit."
     },
     "paste": {
       "failTitle": "Der Entwurf konnte nicht eingefügt werden",
@@ -1587,6 +1583,12 @@
       "selectAll": "Alles auswählen — die ganze Arbeitsfläche oder der Text eines Eingabefelds",
       "toggleSelect": "Ein einzelnes Element zur Auswahl hinzufügen / daraus entfernen",
       "toggleSelectKeys": "{mod}+Klick",
+      "pickLead": "Einen einzelnen Anschluss wählen — ein Drahtende oder ein Bein (nie zusätzlich)",
+      "pickLeadKeys": "{alt}+Klick",
+      "toggleLead": "Einen Anschluss hinzufügen / entfernen — ein Drahtende oder ein Bein",
+      "toggleLeadKeys": "{alt}+{mod}+Klick",
+      "moveBare": "Auswahl ohne Verdrahtung verschieben — Drähte und Beine bleiben stecken",
+      "moveBareKeys": "{shift}+Ziehen",
       "copy": "Das ausgewählte Bauteil kopieren",
       "paste": "Eine Kopie einfügen",
       "delete": "Die Auswahl löschen",
@@ -1600,6 +1602,8 @@
       "palette": "Bauteilpalette ein-/ausblenden",
       "analyzer": "Logikanalysator ein-/ausblenden",
       "fit": "An Fenster anpassen",
+      "pan": "Arbeitsfläche verschieben",
+      "panKeys": "Leertaste+Ziehen oder mittlere Maustaste",
       "zoomOut": "Ganz herauszoomen (ein verlorenes Bauteil finden)",
       "zoom": "Vergrößern / verkleinern / zurücksetzen",
       "fontSize": "Editor-Schriftgröße größer / kleiner / zurücksetzen",
@@ -1782,7 +1786,8 @@
       "adviceLabel": "Zu diesem Wert"
     },
     "refused": {
-      "bodyHoles": "Kein Platz – das Loch, in das sein Anschluss wandern würde, ist belegt oder liegt hinter dem Ende der Platine."
+      "bodyHoles": "Kein Platz – das Loch, in das sein Anschluss wandern würde, ist belegt oder liegt hinter dem Ende der Platine.",
+      "case": "Seine Beine sind gebogen, und die eines TO-220 sind eine starre Reihe – stecke sie zuerst der Reihe nach in drei nebeneinanderliegende Löcher."
     },
     "hint": {
       "title": "Normwerte in der Nähe:",

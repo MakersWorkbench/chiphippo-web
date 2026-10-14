@@ -104,8 +104,12 @@ are noted alongside the shortcut.</p>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>Space</code></td>
-<td>Run / Stop the simulation (not while typing, or while a placement/wire/bus tool is armed)</td>
+<td><code>Space</code> (tap)</td>
+<td>Run / Stop the simulation (not while typing, or while a placement/wire/bus tool is armed) — it acts as the key comes up</td>
+</tr>
+<tr>
+<td><code>Space</code> (hold) + drag</td>
+<td>Pan the desk, from anywhere — over a board or a part too</td>
 </tr>
 <tr>
 <td><code>Cmd+R</code></td>
@@ -125,14 +129,15 @@ are noted alongside the shortcut.</p>
 </tr>
 <tr>
 <td><code>Delete</code> / <code>Backspace</code></td>
-<td>Remove the current selection (a part, wire, bus, annotation, board, or a whole multi-selection); a selected <a href="arduino.html#outputs-and-inputs">Output or Input tag</a> is unplugged back onto its card instead</td>
+<td>Remove the whole current selection in one step, no questions (a part, wire, bus, annotation, board with everything on it, a picked leg&#39;s part, or a whole multi-selection); a selected <a href="arduino.html#outputs-and-inputs">Output or Input tag</a> is unplugged back onto its card instead</td>
 </tr>
 </tbody></table>
 <h2 id="selecting--moving">Selecting &amp; moving</h2>
 <p>These are mouse chords rather than keystrokes, but they are the modifiers the
-desk answers to. <a href="the-desk.html#selecting-things">The Desk</a> covers building a
-selection; <a href="components.html#moving-several-parts-at-once">Chips &amp; Components</a>
-covers moving one.</p>
+desk answers to — four jobs, and they never combine. A click is just a drag
+that didn&#39;t move: it selects what you pressed. <a href="the-desk.html#selecting-things">The
+Desk</a> covers building a selection; <a href="components.html#moving-several-parts-at-once">Chips &amp;
+Components</a> covers moving one.</p>
 <table>
 <thead>
 <tr>
@@ -141,40 +146,44 @@ covers moving one.</p>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>Shift</code>-drag</td>
-<td>Rubber-band a selection — it replaces whatever was selected</td>
+<td>click / drag a thing</td>
+<td>Select just that thing; dragging moves it — <strong>with its wiring</strong> (wires on what moves come along; one with an end left behind stretches)</td>
+</tr>
+<tr>
+<td>drag empty desk</td>
+<td>Draw a selection box (a drag can start on a board&#39;s bare holes too) — it replaces the selection with everything it encloses <strong>completely</strong>; a click on empty desk clears the selection</td>
+</tr>
+<tr>
+<td>click a board</td>
+<td>Select the whole board — every strip snapped to it, its parts riding along</td>
 </tr>
 <tr>
 <td><code>Cmd</code>-click</td>
-<td>Add one item to the selection, or take it back out (<code>Ctrl</code>-click on Windows/Linux; on a Mac <code>Ctrl</code>-click stays the context menu)</td>
-</tr>
-<tr>
-<td>drag a part</td>
-<td>Re-seat that part alone, leaving every wire where it was</td>
-</tr>
-<tr>
-<td><code>Option</code>-drag a part</td>
-<td>Move it <strong>with everything plugged into it</strong> — the wire ends, and the legs of the resistors and LEDs, in the column-halves its pins occupy</td>
+<td>Add one item to the selection, or take it back out (<code>Ctrl</code>-click on Windows/Linux; on a Mac <code>Ctrl</code>-click stays the context menu). On empty desk it does nothing</td>
 </tr>
 <tr>
 <td>drag any member of a selection</td>
-<td>Move the whole selection as one rigid unit</td>
+<td>Move the whole selection as one unit — boards, parts and wires — all or nothing</td>
 </tr>
 <tr>
-<td><code>Option</code>-drag a member of a selection</td>
-<td>The same, carrying everything riding any member of it</td>
+<td>hold <code>Option</code></td>
+<td>Pin targeting: only a lead that can move on its own (a wire end, a resistor&#39;s or LED&#39;s leg, a TO-92 transistor&#39;s leg) reacts, its hole ringed red</td>
 </tr>
 <tr>
-<td>hold <code>Option</code> over a selection</td>
-<td>Ring every hole an <code>Option</code>-drag would carry, before committing to the drag (a selected part, or a whole multi-selection)</td>
+<td><code>Shift</code>-drag a part or selection</td>
+<td>Move it <strong>bare</strong> — the selected parts move, every wire and leg plugged into them stays in its hole</td>
 </tr>
 <tr>
-<td><code>Option</code>-drag a board</td>
-<td>Tear off the run of mated strips reachable forward (below/right) from the one you grabbed</td>
+<td><code>Option</code>-click / -drag a lead</td>
+<td>Pick just that lead (never added to the selection) / move it to another hole, the other end staying put</td>
 </tr>
 <tr>
-<td><code>Option</code>+<code>Shift</code>-drag a board</td>
-<td>The same, running backward (above/left)</td>
+<td><code>Option+Cmd</code>-click a lead</td>
+<td>Add that lead to the selection, or take it back out (<code>Alt+Ctrl</code>-click on Windows/Linux); drag the selection and every picked lead moves with it</td>
+</tr>
+<tr>
+<td><code>Space</code>-drag, middle-drag</td>
+<td>Pan the desk</td>
 </tr>
 </tbody></table>
 <h2 id="tools">Tools</h2>

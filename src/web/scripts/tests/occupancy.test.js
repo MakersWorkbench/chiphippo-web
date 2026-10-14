@@ -364,6 +364,23 @@ test("canPlacePart: a resistor's ends must be at least minSpan apart", () => {
   assert.equal(at("a10", { dx: -9, dy: -11 }), true); // j1
 });
 
+test("canPlacePart: a diode bends down to THREE holes, a resistor's four never", () => {
+  const doc = docWith({ boards: [FULL] });
+  const at = (ref, end) =>
+    canPlacePart(doc, {
+      ref,
+      board: "bb1",
+      anchor: "a10",
+      params: { rot: 90, end },
+    });
+  for (const ref of ["diode", "zener"]) {
+    assert.equal(at(ref, { dx: 2, dy: 0 }), true, ref); // a10 · a11 · a12
+    assert.equal(at(ref, { dx: 1, dy: 0 }), false, ref); // a11 — side by side
+    assert.equal(at(ref, { dx: 0, dy: -2 }), true, ref); // c10 — up the column
+  }
+  assert.equal(at("resistor", { dx: 2, dy: 0 }), false);
+});
+
 test("partPinAddresses: a lead whose strip went away floats, it doesn't vanish", () => {
   const comp = {
     id: "r1",

@@ -100,8 +100,11 @@ that snap and mate together the way real boards do on a bench.</p>
 <p>The desk has no edges — pan and zoom to work at whatever scale suits the
 circuit in front of you.</p>
 <ul>
-<li><strong>Pan</strong>: click-drag an empty patch of desk, or two-finger scroll on a
-trackpad.</li>
+<li><strong>Pan</strong>: hold <code>Space</code> and drag (from anywhere — over a board or a part
+too), drag with the <strong>middle mouse button</strong>, or two-finger scroll on a
+trackpad. A plain drag on empty desk doesn&#39;t pan: it draws a selection box
+(see <a href="#selecting-things">Selecting things</a>). A quick <em>tap</em> of <code>Space</code> still
+runs and stops the circuit — it&#39;s only a pan while you hold it and drag.</li>
 <li><strong>Zoom</strong>: scroll/pinch to zoom, centered on the pointer, or use the
 <strong>+</strong> / <strong>−</strong> buttons in the zoom control (bottom-right of the desk).
 Keyboard: <code>Option+Cmd/Ctrl+=</code> (zoom in), <code>Option+Cmd/Ctrl+-</code> (zoom out),
@@ -129,7 +132,7 @@ reaching the desk</strong>.</p>
 reports a scroll from a finger merely resting on the surface, so the wheel is
 the one thing that moves the desk without being asked to; midway through
 seating a chip, that&#39;s a circuit that slides out from under you. Everything
-else still works while it&#39;s locked: drag-to-pan, the zoom cluster, the
+else still works while it&#39;s locked: <code>Space</code>-drag and middle-drag panning, the zoom cluster, the
 keyboard shortcuts above, and <strong>Fit</strong>. It&#39;s the wheel that&#39;s locked, not the
 camera.</p>
 <p>The padlock&#39;s shape changes rather than just its colour — an open shackle when
@@ -196,71 +199,127 @@ then on drag together as one rigid unit, just like a real breadboard&#39;s rails
 stay attached to its pin-board when you nudge it on the bench. A kit arrives
 pre-grouped; anything you drop flush against an existing board joins its
 group (or merges two groups into one, if it bridges a gap). When several
-strips are mated, clicking any one of them highlights the whole set — the
-outline traces the union of the group&#39;s strips, so flush neighbours read as
-one board rather than showing a seam between them.</p>
+strips are mated, <code>Cmd/Ctrl</code>-clicking any one of them selects the whole set —
+the outline traces the union of the group&#39;s strips, so flush neighbours read
+as one board rather than showing a seam between them.</p>
 <h2 id="selecting-things">Selecting things</h2>
-<p>Clicking a board, part, wire, bus or note selects that one thing, and clicking
-empty desk clears the selection. There are two ways to select <strong>several</strong> at
-once, and they are complementary:</p>
+<p>Every press on the desk follows one rule: <strong>a click is just a drag that didn&#39;t
+go anywhere.</strong> Press on something and you&#39;ve picked it up; let go in the same
+place and it&#39;s set back down where it was — and the one thing that&#39;s changed
+is that it&#39;s now selected, with everything else let go. Press and move, and
+you&#39;re dragging it. There&#39;s nothing to learn about &quot;clicking to select&quot;
+versus &quot;dragging to move&quot;; the only difference is whether the pointer
+travelled.</p>
+<p>What you press decides the rest:</p>
 <ul>
-<li><strong>Shift-drag a marquee</strong> anywhere on the desk. It <em>replaces</em> the selection
-with everything the box encloses <strong>completely</strong> — any board wholly inside,
-any part whose every pin is inside, and any wire with <strong>both</strong> ends inside.
-Half-covered things are left out on purpose: a wire with one end outside the
-box would have to be cut to come along.</li>
-<li><strong><code>Cmd</code>-click</strong> (<code>Ctrl</code>-click on Windows and Linux) an individual item to
-<em>add</em> it to the selection, or to take it back out if it&#39;s already in. This is
-how you pick up the four chips you actually want without drawing a box around
-the eight that are next to each other, and how you drop the one thing a
-marquee caught that you didn&#39;t mean.</li>
+<li><strong>On a part, wire, bus, flag or note</strong> — that one thing becomes the
+selection, and a drag moves it. A wire&#39;s end, or a resistor&#39;s or LED&#39;s leg,
+counts as part of the thing it belongs to: pressing it grabs the whole wire
+or the whole part. (To grab <em>one</em> leg, see <code>Option</code> below.)</li>
+<li><strong>On empty desk</strong> — a drag draws a <strong>selection box</strong>; a click clears the
+selection.</li>
+<li><strong>On a board&#39;s bare holes</strong> — a click selects the <strong>whole board</strong>: every
+strip snapped to it, with everything seated on them riding along. A drag
+there still draws a selection box, so you can start one right across a
+board; the box only takes the board itself when it swallows it whole.</li>
+<li><strong>On a selected board&#39;s bare holes</strong> — that drags the selection, board and
+all.</li>
 </ul>
-<p><code>Cmd/Ctrl</code>-clicking a <strong>board</strong> takes its whole snapped group, the same set a
-plain click selects. Clicking a <strong>bus</strong> takes all of its member wires — a bus
-is bookkeeping over wires, and the wires are what a delete or a copy acts on.
-Clicking <strong>empty desk</strong> with the modifier held leaves the selection alone
-rather than clearing it: an add that landed on nothing has nothing to add.</p>
-<p>Notes and labels are the one thing a multi-selection can&#39;t hold, so
-<code>Cmd/Ctrl</code>-clicking one does nothing; a plain click still selects it.</p>
+<h3 id="several-things-at-once">Several things at once</h3>
+<ul>
+<li><strong>Drag a box</strong> from empty desk (or a board&#39;s holes). It <em>replaces</em> the
+selection with everything it encloses <strong>completely</strong> — a part only when its
+whole body is inside, a wire only when both ends (and every bend) are, a
+board only when the whole strip is. Anything the box merely grazes is left
+out on purpose: on a tight grid of holes, catching the neighbour by accident
+is more annoying than helpful.</li>
+<li><strong><code>Cmd</code>-click</strong> (<code>Ctrl</code>-click on Windows and Linux) an item to <em>add</em> it to
+the selection, or to take it back out if it&#39;s already in. This is how you
+pick up the four chips you actually want without drawing a box around the
+eight next to each other, and how you drop the one thing a box caught that
+you didn&#39;t mean. <code>Cmd/Ctrl</code>-clicking empty desk changes nothing — you just
+missed.</li>
+</ul>
+<p><code>Cmd/Ctrl</code>-clicking a <strong>board</strong> takes its whole snapped group. Clicking a
+<strong>bus</strong> takes all of its member wires — a bus is bookkeeping over wires, and
+the wires are what a delete or a copy acts on. Notes, labels, signal flags
+and picked legs can&#39;t join a multi-selection, so <code>Cmd/Ctrl</code>-clicking one does
+nothing; a plain click still selects it.</p>
 <blockquote>
 <p><strong>On macOS this is <code>Cmd</code>, not <code>Ctrl</code></strong> — the modifier the rest of the
 platform&#39;s lists use. <code>Ctrl</code>-click there is the system&#39;s secondary click, and
 it keeps that job: it still opens an item&#39;s context menu.</p>
 </blockquote>
-<p>Either way the result is one selection: <code>Delete</code> removes all of it in a single
-step, <code>Cmd/Ctrl+C</code> copies it (as a whole design, if it includes boards — see
-<a href="projects-and-desktops.html">Projects &amp; Desktops</a>), and <code>Esc</code> clears it.
+<h3 id="a-board-carries-its-parts">A board carries its parts</h3>
+<p>A selected board takes everything seated on it along — its chips and parts,
+and the wires running wholly on it — as <strong>passengers</strong>. Passengers ride with
+the board when you move or delete it, but they aren&#39;t selected in their own
+right, so <strong>they aren&#39;t highlighted</strong>: a highlighted part always means &quot;this
+part, selected for itself&quot;. If you&#39;d already selected some chips and then add
+their board, the chips drop out of the selection (they&#39;ll come along anyway);
+take the board back out and they stay out — undo is the way back. Pressing a
+passenger on its own is an ordinary click on it: that part alone becomes the
+selection.</p>
+<p>A box that covers only <strong>part</strong> of a board doesn&#39;t take the board. It takes
+the parts that are wholly inside the box instead, each selected (and
+highlighted) on its own.</p>
+<h3 id="one-leg-at-a-time--option">One leg at a time — <code>Option</code></h3>
+<p>Hold <strong><code>Option</code></strong> (<code>Alt</code> on Windows and Linux) and the desk switches to
+<strong>pin targeting</strong>: bodies stop reacting, and the only things you can pick are
+the holes holding a lead that can move on its own — a <strong>wire end</strong>, a leg
+of a <strong>resistor, LED, capacitor, diode or other two-legged part</strong>, or a leg of
+a <strong>TO-92 transistor</strong>. Hover over one and its hole rings in <strong>red</strong>. A chip&#39;s
+pins never light, nor do a TO-220&#39;s: a pin can&#39;t move apart from its body.</p>
+<p><code>Option</code>-click a red hole and that one lead becomes the whole selection (it
+never adds to what was selected). <code>Option</code>-drag it to move just that lead to
+another hole — the other end stays where it is. <code>Delete</code> with a leg picked
+removes the part (or wire) it belongs to.</p>
+<p>To pick <strong>several</strong> leads, hold <strong><code>Cmd</code></strong> as well (<code>Alt+Ctrl</code> on Windows and
+Linux): <code>Option+Cmd</code>-click a red hole adds that lead to the selection, and
+clicking it again takes it back out. The leads can sit beside parts, wires and
+boards in the same selection. Then drag — grab one of the ringed holes, or
+anything else in the selection — and every picked lead moves with it: a wire
+with one end picked stretches, a resistor or LED with one leg picked bends, and
+anything whose other end is moving too travels whole. A lead whose wire or part
+is already selected is covered by it, so picking it again changes nothing. A
+plain <code>Option</code>-click still starts over with just that one lead.</p>
+<h3 id="what-a-selection-does">What a selection does</h3>
+<p><code>Delete</code> removes <strong>all of it in one go</strong> — no questions, and one
+<code>Cmd/Ctrl+Z</code> brings it all back. A selected board takes its passengers with
+it, and a wire left with nothing at one end (because that end was in a
+deleted board, or on a deleted PSU) goes too. <code>Cmd/Ctrl+C</code> copies the
+selection (as a whole design, if it includes boards — see
+<a href="projects-and-desktops.html">Projects &amp; Desktops</a>), <code>Esc</code> clears it, and
 <code>Cmd/Ctrl+A</code> selects the entire desk.</p>
-<p><strong>A selection also moves as one.</strong> Grab any part in it and the whole set
-travels by the same amount, keeping the arrangement you built; hold <strong>Option</strong>
-as you press and the wiring comes too — every wire end, and every resistor or
-LED leg, plugged into any member. The drop is all or nothing, and the move is
-one <code>Cmd/Ctrl+Z</code>. See <a href="components.html#moving-several-parts-at-once">Moving several parts at
-once</a> for the whole of it.</p>
-<p>Boards are the exception, and it&#39;s the one thing to know before you drag a
-mixed selection. A <strong>board</strong> in the set makes a press on a part do nothing at
-all — strips have their own drag, which carries everything seated on them under
-mating and overlap rules a part re-seat knows nothing about — and the selection
-is left untouched so you can <code>Cmd/Ctrl</code>-click the board back out. Grabbing the
-<strong>board</strong> instead drags that board&#39;s own group (and everything seated on it) in
-the usual way, replacing the selection as any plain click does.</p>
+<p><strong>A selection also moves as one.</strong> Grab anything in it and the whole set —
+boards, parts, wires — travels by the same amount, keeping the arrangement
+you built. The thing under your pointer snaps to the hole grid and everything
+else follows exactly. Wiring comes along: a wire with both ends on what&#39;s
+moving moves with it, and a wire with one end left behind <strong>stretches</strong> — the
+moving end follows its part to the new hole and the other stays put, so
+nothing is quietly disconnected. The drop is <strong>all or nothing</strong>: if anything
+in the set can&#39;t land (a pin over a taken hole, a board on top of another),
+the whole selection springs back. Hold <strong><code>Shift</code></strong> as you press to move it
+<strong>bare</strong> instead: only what you selected moves, and the wiring plugged into it
+stays where it is. See <a href="components.html#moving-several-parts-at-once">Moving several parts at
+once</a> for the details.</p>
+<p><strong>Undo covers your clicks too.</strong> Each change of selection is a step in the
+undo history, so a misclick that threw away a careful selection is one
+<code>Cmd/Ctrl+Z</code> away from coming back.</p>
 <p>Nothing can be selected while the simulation is <strong>running</strong> — the topology is
-frozen, so a selection would be one you couldn&#39;t act on.</p>
+frozen, so a selection would be one you couldn&#39;t act on. (Clicking a wire still
+highlights it, to trace where it runs.)</p>
 <h2 id="groups--breaking-a-snap">Groups &amp; breaking a snap</h2>
-<p>Grabbing a mated strip normally drags the <strong>whole group</strong> together. To pull
-just part of a group apart, hold a modifier while you start the drag:</p>
-<ul>
-<li><strong>Option-drag</strong> — moves the <strong>reachable run forward</strong> from the strip you
-grabbed: itself plus every strip mated to it through a below/right edge.</li>
-<li><strong>Option+Shift-drag</strong> — moves the run <strong>backward</strong> instead, following
-above/left edges.</li>
-</ul>
-<p>Either way, only strips still reachable through the group come along; a strip
-that merely happens to sit flush elsewhere in the layout is left behind. When
-you drop a torn-off run, both the piece you moved and what&#39;s left of the
-original group are re-evaluated — each is split into fresh groups based on
-what&#39;s still actually mated within it, so the two halves never end up
-sharing a group id after the break.</p>
+<p>Moving a selected board moves exactly the strips that are selected.
+<code>Cmd/Ctrl</code>-clicking a board selects its whole snapped group, so the kit moves
+as one, just like a real breadboard&#39;s rails stay attached to its pin-board.</p>
+<p>To <strong>pull a strip off</strong> its group, select just that strip: draw a box around
+the pin-board (and its parts) but not the rail beside it, then drag. The strip
+peels away from the rail left behind, and every wire running between them
+<strong>stretches</strong> across the new gap — the connection survives the separation.
+When you drop it, both the piece you moved and what&#39;s left of the group are
+re-evaluated, each split into fresh groups based on what&#39;s still actually
+mated within it. Dropping strips flush against each other mates them again.</p>
 <h2 id="rotating-a-rail">Rotating a rail</h2>
 <p><strong>Power rails can rotate; pin-boards cannot.</strong> A pin-board&#39;s trench (and
 every DIP seated across it) only makes sense in one orientation, so it&#39;s

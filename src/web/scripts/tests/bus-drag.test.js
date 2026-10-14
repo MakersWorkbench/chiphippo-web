@@ -356,7 +356,7 @@ test("a member's cap right at the bus's own collar still declines its drag", () 
   assert.equal(doc.getWire(bit0.id).to, "bb1.a20", "unchanged — no re-route");
 });
 
-test("a member's cap FAR from any collar drags exactly like an ordinary wire", () => {
+test("a member's cap FAR from any collar drags exactly like an ordinary wire's (Option/Alt)", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -370,7 +370,7 @@ test("a member's cap FAR from any collar drags exactly like an ordinary wire", (
   // — well clear of HANDLE_HIT_RADIUS — so it re-routes like any wire's end.
   world.x = 10;
   world.y = ROW.a;
-  fire(viewport, "pointerdown");
+  fire(viewport, "pointerdown", { mods: { altKey: true } }); // a lead: Option/Alt
   world.x = 10;
   world.y = ROW.b;
   fire(wireSvg(surface), "pointermove", { client: [40, 40] });
@@ -429,7 +429,7 @@ test("a press on a member's cap re-routes the wire, never the board beneath it",
   // wire endpoint priority over the board underneath it.
   world.x = 10;
   world.y = ROW.a;
-  fire(board, "pointerdown");
+  fire(board, "pointerdown", { mods: { altKey: true } }); // a lead: Option/Alt
   world.x = 10;
   world.y = ROW.d;
   fire(wireSvg(surface), "pointermove", { client: [40, 40] });
@@ -478,7 +478,9 @@ test("clicking a member wire still selects it (only dragging is disabled)", () =
   const bit0 = doc.getWire(bus.members[0]);
   const body = surface.querySelector(`.wire[data-wire-id="${bit0.id}"]`);
 
-  body.dispatchEvent(new window.Event("click", { bubbles: true }));
+  // Selected on the PRESS — a click is a drag that didn't travel.
+  fire(body, "pointerdown");
+  fire(body, "pointerup");
   assert.equal(controller.selectedId, bit0.id);
 });
 
@@ -610,7 +612,7 @@ test("Escape mid whole-wire (non-bus) drag aborts it — the shared plumbing", (
 // all and left the drag live, Escape the only way out. See
 // components/pointer-gesture.js.
 
-test("the drop resolves at the RELEASE point, not at the last pointermove", () => {
+test("the drop is the landing the last move SHOWED, never re-resolved at the release", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -627,16 +629,16 @@ test("the drop resolves at the RELEASE point, not at the last pointermove", () =
   world.x = 100;
   world.y = 98;
   fire(wireSvg(surface), "pointermove", { client: [40, 40] });
-  // ... but the pointer was actually let go one row further (a -> d). A
-  // coalesced/stale move stream must not decide where the bus lands.
+  // ... and the up event comes one row further (a -> d). The landing the
+  // screen showed is the one committed (CLAUDE.md → "Selection").
   world.y = 97;
   fire(wireSvg(surface), "pointerup", { client: [40, 40] });
 
   assert.deepEqual(pairsOf(doc, bus), [
-    ["bb1.d10", "bb1.d20"],
-    ["bb1.d11", "bb1.d21"],
-    ["bb1.d12", "bb1.d22"],
-    ["bb1.d13", "bb1.d23"],
+    ["bb1.c10", "bb1.c20"],
+    ["bb1.c11", "bb1.c21"],
+    ["bb1.c12", "bb1.c22"],
+    ["bb1.c13", "bb1.c23"],
   ]);
 });
 

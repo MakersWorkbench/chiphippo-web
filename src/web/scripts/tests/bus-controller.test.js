@@ -117,12 +117,17 @@ test("arming the bus tool and clicking start→end lays width wires + a band", (
   assert.equal(changes, 1, "the whole run is ONE doc change");
   assert.equal(controller.busToolArmed, true, "stays armed for the next bus");
 
-  // The bundle band renders in the wire layer and selects the bus on click.
+  // The bundle band renders in the wire layer and selects the bus on a press
+  // (a click is a drag that didn't travel).
   const band = surface.querySelector(".bus-band");
   assert.ok(band, "a bundle band is drawn");
   assert.equal(band.dataset.busId, bus.id);
   controller.disarmBusTool();
-  band.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  for (const type of ["pointerdown", "pointerup"]) {
+    band.dispatchEvent(
+      new window.PointerEvent(type, { bubbles: true, button: 0, pointerId: 2 }),
+    );
+  }
   assert.equal(controller.selectedId, bus.id);
 });
 

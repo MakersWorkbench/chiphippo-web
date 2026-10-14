@@ -166,38 +166,44 @@ test("board drag: an illegal drop (onto another board) reverts, doc untouched", 
   assert.equal(changes, 0, "an illegal drop writes nothing");
 });
 
-test("board drag: Option tears the forward chain off and re-groups both halves", () => {
+test("board unsnap: a band round the pin strip but not its rails peels it off; the wires into the rails STRETCH", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
-  const { surface, controller } = makeDesk(doc, world);
-  controller.addKitAt("full", 0, 0); // bb1 rail@0 · bb2 pins@3.70 · bb3 @17.72
+  const { viewport, surface, controller } = makeDesk(doc, world);
+  controller.addKitAt("full", 0, 0); // bb1 rail@0 · bb2 pins@3.5 · bb3 rail@17.52
+  const chip = controller.addComponentAt("74LS00", "bb2", "e5");
+  const wire = doc.addWire({ from: "bb2.a3", to: "bb3.+3" }); // into the rail
+  window.dispatchEvent(new window.CustomEvent("chiphippo:doc-changed"));
   const g0 = doc.getBoard("bb2").group;
+  const pinsTop = doc.getBoard("bb2").y;
+  const pinsBottom = pinsTop + spec("pins-full").height;
 
-  // Option-grab the pin-board: the forward chain (down/right) is bb2 + bb3;
-  // bb1 (above) stays behind. Drag them 40 down.
-  drag(
-    boardEl(surface, "bb2"),
-    world,
-    { x: 5, y: ROW.e },
-    { x: 5, y: ROW.e + 40 },
-    {
-      mods: { altKey: true },
-    },
+  // Band from the bare desk left of the kit round the pin strip only — its
+  // top and bottom edges inside the two rails, so neither rail is enclosed.
+  drag(viewport, world, { x: -2, y: pinsTop - 0.2 }, { x: 70, y: pinsBottom + 0.2 }); // prettier-ignore
+  assert.deepEqual(controller.multiSelectedBoardIds, ["bb2"]);
+  assert.deepEqual(
+    controller.multiSelectedIds,
+    [],
+    "the chip on it is a passenger, not selected in its own right",
   );
 
-  // bb1 left where it was and now loose; bb2+bb3 travelled as a fresh group.
-  assert.equal(doc.getBoard("bb1").y, 0);
-  assert.equal(doc.getBoard("bb1").group, null);
+  // Grab the selected strip by its bare holes and pull it 40 down.
+  drag(boardEl(surface, "bb2"), world, { x: 40, y: pinsTop + ROW.c }, { x: 40, y: pinsTop + ROW.c + 40 }); // prettier-ignore
+
   const q = (n) => Math.round(n * 100) / 100;
-  assert.equal(doc.getBoard("bb2").y, q(spec("rail-full").height + 40));
-  assert.equal(
-    doc.getBoard("bb3").y,
-    q(spec("rail-full").height + spec("pins-full").height + 40),
+  assert.equal(doc.getBoard("bb2").y, q(pinsTop + 40), "the pin strip moved");
+  assert.equal(doc.getBoard("bb1").y, 0, "the top rail stayed");
+  assert.equal(doc.getBoard("bb3").y, 17.52, "the bottom rail stayed");
+  assert.equal(doc.getBoard("bb1").group, doc.getBoard("bb3").group);
+  assert.notEqual(doc.getBoard("bb2").group, g0, "torn off its kit");
+  assert.equal(doc.getComponent(chip.id).board, "bb2", "the chip rode along");
+  assert.deepEqual(
+    [doc.getWire(wire.id).from, doc.getWire(wire.id).to],
+    ["bb2.a3", "bb3.+3"],
+    "the wire into the rail stretched — still connected at both ends",
   );
-  const g = doc.getBoard("bb2").group;
-  assert.ok(g != null && g !== g0, "torn-off pair minted a fresh group id");
-  assert.equal(doc.getBoard("bb3").group, g);
 });
 
 test("board drag: a routed bend over the board rides it, live and on the drop", () => {
@@ -316,37 +322,22 @@ test("part drag: a chip re-seats to the anchor under the pointer, once", () => {
   assert.equal(changes, 1);
 });
 
-test("part drag: a narrow-seated 600-mil chip re-seats at its true width; Option carries a rider out from under its body", () => {
+test("part drag: a narrow-seated 600-mil chip re-seats at its true width, carrying a rider out from under its body", () => {
   // A desk saved before wide seating: HM62256 in rows e/f at e5, a wire in g8
   // (pin 22's node above the trench). Wide, the body stands over rows e–g.
-  const setup = () => {
-    resetDom();
-    const doc = new DeskDoc(null);
-    const world = { x: 0, y: 0 };
-    const { surface, controller } = makeDesk(doc, world);
-    controller.addBoardAt("pins-full", 0, 0);
-    const chip = controller.addComponentAt("HM62256", "bb1", "e5");
-    const wire = doc.addWire({ from: "bb1.g8", to: "bb1.a50" });
-    return { doc, world, surface, chip, wire };
-  };
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const chip = controller.addComponentAt("HM62256", "bb1", "e5");
+  const wire = doc.addWire({ from: "bb1.g8", to: "bb1.a50" });
 
-  // Plain: the wire would end up under the plastic — refused, nothing moves.
-  let t = setup();
-  drag(partEl(t.surface, t.chip.id), t.world, { x: 8, y: 6.5 }, { x: 9, y: 6.5 }); // prettier-ignore
-  assert.equal(t.doc.getComponent(t.chip.id).anchor, "e5", "reverted");
-
-  // Option: the wire rides — out of row g, to row i, two holes from its pin as
-  // it was — and the chip lands at its true width.
-  t = setup();
-  drag(
-    partEl(t.surface, t.chip.id),
-    t.world,
-    { x: 8, y: 6.5 },
-    { x: 9, y: 6.5 },
-    { mods: { altKey: true } },
-  );
-  assert.equal(t.doc.getComponent(t.chip.id).anchor, "d6");
-  assert.equal(t.doc.getWire(t.wire.id).from, "bb1.i9");
+  // The wire rides — out of row g, to row i, two holes from its pin as it was
+  // — and the chip lands at its true width.
+  drag(partEl(surface, chip.id), world, { x: 8, y: 6.5 }, { x: 9, y: 6.5 });
+  assert.equal(doc.getComponent(chip.id).anchor, "d6");
+  assert.equal(doc.getWire(wire.id).from, "bb1.i9");
 });
 
 test("part drag: a 600-mil chip moves between its wide seats by the pointer's travel", () => {
@@ -412,6 +403,24 @@ test("placement: a 600-mil chip takes the wide seat nearest the cursor", () => {
   assert.equal(place((ROW.e + ROW.i) / 2), "e14+");
   assert.equal(place((ROW.c + ROW.g) / 2), "c14");
   assert.equal(place((ROW.b + ROW.f) / 2), "b14");
+});
+
+test("placement: the 7-segment display takes the wide seat nearest the cursor, like a wide chip", () => {
+  const place = (y) => {
+    resetDom();
+    const doc = new DeskDoc(null);
+    const world = { x: 0, y: 0 };
+    const { viewport, controller } = makeDesk(doc, world);
+    controller.addBoardAt("pins-full", 0, 0);
+    controller.armPartPlacement("seg7cc");
+    placeClick(viewport, world, { x: 20, y });
+    const [c] = doc.components;
+    return c && `${c.anchor}${c.params.wide ? "+" : ""}`;
+  };
+  // Always the wide marker — the e/i seat is the only one that reads it.
+  assert.equal(place((ROW.d + ROW.h) / 2), "d18+");
+  assert.equal(place((ROW.e + ROW.i) / 2), "e18+");
+  assert.equal(place((ROW.b + ROW.f) / 2), "b18+");
 });
 
 test("part drag: a sub-threshold press selects the chip but does not move it", () => {
@@ -491,7 +500,7 @@ test("brick drag: a brick a recentre left on a fractional row keeps the fraction
   assert.equal(moved.y, 10.51, "moved by whole pitches, the fraction kept");
 });
 
-test("resistor BODY drag: Option carries its wiring, same as any other part", () => {
+test("resistor BODY drag: carries its wiring, same as any other part", () => {
   // A rotatable part takes the two-free-ends gesture rather than the footprint
   // reseat, so without this it was the one part that carried its wiring as a
   // member of a selection but not when dragged on its own.
@@ -512,7 +521,6 @@ test("resistor BODY drag: Option carries its wiring, same as any other part", ()
     world,
     { x: 21.5, y: ROW.a },
     { x: 26.5, y: ROW.a },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(res.id).anchor, "a25");
@@ -556,13 +564,13 @@ test("resistor BODY drag: a rider with nowhere to land falls back to where it IS
   const at = (x) => {
     world.x = x;
     world.y = ROW.a - 2; // the middle of the span
-    fire(el, "pointermove", { client: [x, 40], mods: { altKey: true } });
+    fire(el, "pointermove", { client: [x, 40] });
     return caps();
   };
 
   world.x = 10;
   world.y = ROW.a - 2;
-  fire(el, "pointerdown", { mods: { altKey: true } });
+  fire(el, "pointerdown", {});
 
   assert.deepEqual(at(30), [300, 400], "on the board, the rider follows");
   // Over the gap there is no hole for the LED, so nothing can move: the rider
@@ -573,7 +581,7 @@ test("resistor BODY drag: a rider with nowhere to land falls back to where it IS
   assert.ok(wire.classList.contains("wire-preview--illegal"), "…and refused");
   assert.deepEqual(at(90), [900, 400], "on the far board, following again");
 
-  fire(el, "pointerup", { client: [90, 40], mods: { altKey: true } });
+  fire(el, "pointerup", { client: [90, 40] });
   assert.equal(doc.getComponent(led.id).board, "bb2");
   assert.equal(doc.getWire("w1").from, "bb2.c10", "and it lands there");
 });
@@ -603,7 +611,6 @@ test("resistor BODY drag crosses to the next board of a SPANNED run", () => {
     world,
     { x: 6.5, y: upper }, // the body, between the two leads
     { x: 6.5, y: lower },
-    { mods: { altKey: true } },
   );
 
   const comp = doc.getComponent(res.id);
@@ -672,7 +679,7 @@ test("cluster drag: every selected part moves, and commits ONCE", () => {
   assert.equal(changes, 1, "one batched doc-changed for the whole set");
 });
 
-test("cluster drag: Option carries every member's wiring", () => {
+test("cluster drag: carries every member's wiring", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -692,7 +699,6 @@ test("cluster drag: Option carries every member's wiring", () => {
     world,
     { x: 8, y: ROW.e },
     { x: 13, y: ROW.e },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
@@ -704,7 +710,7 @@ test("cluster drag: Option carries every member's wiring", () => {
   assert.equal(changes, 1, "parts and wiring were never two edits");
 });
 
-test("cluster drag: WITHOUT Option the wires stay exactly where they are", () => {
+test("cluster drag: a jumper between two members travels with both, rigidly", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -723,8 +729,8 @@ test("cluster drag: WITHOUT Option the wires stay exactly where they are", () =>
   );
 
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
-  assert.equal(doc.getWire(join.id).from, "bb1.a5");
-  assert.equal(doc.getWire(join.id).to, "bb1.b30");
+  assert.equal(doc.getWire(join.id).from, "bb1.a10");
+  assert.equal(doc.getWire(join.id).to, "bb1.b35");
 });
 
 test("cluster drag: ONE member with nowhere to land reverts the WHOLE drop", () => {
@@ -773,7 +779,6 @@ test("cluster drag: a BRICK travels, and its terminal wires with it", () => {
     world,
     { x: 8, y: ROW.e },
     { x: 11, y: ROW.e },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(chip.id).anchor, "e8");
@@ -787,7 +792,7 @@ test("cluster drag: a BRICK travels, and its terminal wires with it", () => {
   );
 });
 
-test("cluster drag: a BOARD in the selection refuses the press outright", () => {
+test("passengers: adding their board takes the chips OUT of the selection, and taking it back does not restore them", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -795,30 +800,72 @@ test("cluster drag: a BOARD in the selection refuses the press outright", () => 
   controller.addBoardAt("pins-full", 0, 0);
   const chip = controller.addComponentAt("74LS00", "bb1", "e5");
   const btn = controller.addComponentAt("sw-push", "bb1", "a30");
+  const wire = doc.addWire({ from: "bb1.a3", to: "bb1.a40" });
   selectMany(controller, [chip.id, btn.id]);
+  controller.toggleWireSelection(wire.id);
   controller.toggleBoardSelection("bb1");
+
+  assert.deepEqual(controller.multiSelectedBoardIds, ["bb1"]);
+  assert.deepEqual(controller.multiSelectedIds, [], "the chips ride, unlit");
+  assert.deepEqual(controller.multiSelectedWireIds, [], "so does the wire");
+  assert.ok(!partEl(surface, chip.id).classList.contains("part--selected"));
+
+  controller.toggleBoardSelection("bb1");
+  assert.deepEqual(controller.multiSelectedIds, [], "no selection memory");
+  assert.equal(controller.selectedId, null);
+});
+
+test("group drag: a board and a part on ANOTHER board travel by one delta; a wire between them stretches", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0); // bb1
+  controller.addBoardAt("pins-full", 0, 30); // bb2, clear below
+  const rider = controller.addComponentAt("74LS00", "bb1", "e5");
+  const chip = controller.addComponentAt("74LS00", "bb2", "e5");
+  const wire = doc.addWire({ from: "bb1.a20", to: "bb2.a40" });
+  controller.deselect();
+  controller.toggleBoardSelection("bb1");
+  controller.toggleComponentSelection(chip.id);
 
   let changes = 0;
   window.addEventListener("chiphippo:doc-changed", () => changes++);
-  drag(
-    partEl(surface, chip.id),
-    world,
-    { x: 8, y: ROW.e },
-    { x: 13, y: ROW.e },
-  );
+  // Grab the chip on bb2 — its own seat decides the delta: five columns right.
+  drag(partEl(surface, chip.id), world, { x: 8, y: 30 + ROW.e }, { x: 13, y: 30 + ROW.e }); // prettier-ignore
 
-  assert.equal(doc.getComponent(chip.id).anchor, "e5", "nothing moved");
-  assert.equal(doc.getComponent(btn.id).anchor, "a30");
-  assert.equal(changes, 0);
-  // …and the selection it declined to drag is still there to act on.
-  assert.deepEqual(
-    controller.multiSelectedIds.sort(),
-    [chip.id, btn.id].sort(),
-  );
-  assert.deepEqual(controller.multiSelectedBoardIds, ["bb1"]);
+  assert.equal(doc.getBoard("bb1").x, 5, "the board moved by the same delta");
+  assert.equal(doc.getComponent(rider.id).anchor, "e5", "its passenger rode");
+  assert.equal(doc.getComponent(chip.id).anchor, "e10", "the chip re-seated");
+  assert.equal(doc.getWire(wire.id).from, "bb1.a20", "the board end rode");
+  assert.equal(doc.getWire(wire.id).to, "bb2.a40", "the far end stayed");
+  assert.equal(changes, 1, "one edit, one undo step");
 });
 
-test("cluster drag: Option bends a resistor plugged into a member", () => {
+test("group drag: a drop with any part refused springs the WHOLE selection back", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0); // bb1
+  controller.addBoardAt("pins-full", 0, 30); // bb2
+  const chip = controller.addComponentAt("74LS00", "bb2", "e5");
+  controller.addComponentAt("74LS00", "bb2", "e12"); // in the chip's way
+  controller.deselect();
+  controller.toggleBoardSelection("bb1");
+  controller.toggleComponentSelection(chip.id);
+
+  drag(partEl(surface, chip.id), world, { x: 8, y: 30 + ROW.e }, { x: 13, y: 30 + ROW.e }); // prettier-ignore
+
+  assert.equal(
+    doc.getBoard("bb1").x,
+    0,
+    "the board could have moved, and didn't",
+  );
+  assert.equal(doc.getComponent(chip.id).anchor, "e5");
+});
+
+test("cluster drag: bends a resistor plugged into a member", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -841,7 +888,6 @@ test("cluster drag: Option bends a resistor plugged into a member", () => {
     world,
     { x: 8, y: ROW.e },
     { x: 11, y: ROW.e },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(chip.id).anchor, "e8");
@@ -873,7 +919,6 @@ test("cluster drag: the bottom half to the top half, wiring and all", () => {
     world,
     { x: 12, y: ROW.a },
     { x: 12, y: ROW.g },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(one.id).anchor, "g10");
@@ -904,7 +949,6 @@ test("cluster drag: ACROSS BOARDS, wiring and all", () => {
     world,
     { x: 11, y: ROW.a },
     { x: 91, y: ROW.a },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(one.id).board, "bb2");
@@ -938,7 +982,6 @@ test("cluster drag: grabbing the BRICK still crosses between MATED kits", () => 
     world,
     { x: 81, y: 31 },
     { x: 81, y: 31 - gap },
-    { mods: { altKey: true } },
   );
 
   assert.equal(doc.getComponent(part.id).board, "bb2", "up one kit");
@@ -963,9 +1006,9 @@ test("cluster drag: an illegal target reddens EVERY member, and its wires", () =
   const el = partEl(surface, chip.id);
   world.x = 8;
   world.y = ROW.e;
-  fire(el, "pointerdown", { mods: { altKey: true } });
+  fire(el, "pointerdown", {});
   world.x = 13;
-  fire(el, "pointermove", { client: [40, 40], mods: { altKey: true } });
+  fire(el, "pointermove", { client: [40, 40] });
 
   for (const id of [chip.id, btn.id]) {
     const view = partEl(surface, id);
@@ -1011,6 +1054,9 @@ test("cluster drag: a sub-threshold click COLLAPSES to the part pressed", () => 
 });
 
 // ── Wire drag ───────────────────────────────────────────────────────────────
+// A wire END is a lead: it is picked and dragged in Option/Alt's pin-targeting
+// mode, so every end drag below presses with altKey. A plain press anywhere on
+// a wire — its caps included — is the WIRE's body (CLAUDE.md → "Selection").
 
 const wireSvg = (surface) => surface.querySelector(".wire-svg");
 
@@ -1032,7 +1078,11 @@ test("wire-endpoint drag: re-ends a grabbed cap onto a new free hole", () => {
   // Grab the 'from' cap: viewport pointerdown at world (1,12).
   world.x = 1;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   // Drag it to the free hole b1 (1,11); move/up ride the persistent wire SVG.
   world.x = 1;
   world.y = ROW.b;
@@ -1060,7 +1110,11 @@ test("wire-endpoint drag: a near-miss onto an occupied hole snaps to the nearest
   // tie goes to the higher one.
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 1;
   world.y = ROW.a;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1086,7 +1140,11 @@ test("wire-endpoint drag: a release far from every hole reverts — an end never
   // and otherwise goes back where it came from.
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 100;
   world.y = ROW.a;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1105,7 +1163,11 @@ test("wire-endpoint drag: a target with nothing legal anywhere nearby reverts", 
   // Drag 'to' off the board entirely, nowhere near any hole.
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 1000;
   world.y = 1000;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1132,7 +1194,11 @@ test("wire-endpoint drag: half a pitch off f1 lands on f1, not on a strip pitche
 
   world.x = 24;
   world.y = 3.5 + ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 5.5;
   world.y = 3.5 + ROW.f;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1159,7 +1225,11 @@ test("wire-endpoint drag: a release that lands NOWHERE drops where the ring last
 
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 25;
   world.y = ROW.b;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1183,7 +1253,11 @@ test("wire-endpoint drag: the drop is the RINGED hole, never re-resolved at the 
 
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 25;
   world.y = ROW.a;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1208,7 +1282,11 @@ test("wire-endpoint drag: a short drag never snaps back to its ORIGIN as the but
 
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 21;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
   world.x = 20.4;
@@ -1227,7 +1305,11 @@ test("wire-endpoint drag: a RED ring at the release reverts, wherever the button
 
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   // Aim at a1, the wire's OTHER end, with a2 and b1 (all else in reach of it)
   // taken: nothing there is legal, so the ring is red.
   doc.addWire({ from: "bb1.a2", to: "bb1.a40" });
@@ -1252,7 +1334,11 @@ test("wire-endpoint drag: out of reach of every hole the end rides the cursor, a
   // reach — so there is nothing to snap to while the cursor is there.
   world.x = 20;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 10;
   world.y = (ROW.e + ROW.f) / 2;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1390,7 +1476,11 @@ test("routed wire: an END dropped on a waypoint absorbs it", () => {
   // bend was, so the bend has nothing left to do.
   world.x = 1;
   world.y = ROW.a;
-  fire(viewport, "pointerdown", { id: 9, client: [0, 0] });
+  fire(viewport, "pointerdown", {
+    id: 9,
+    client: [0, 0],
+    mods: { altKey: true },
+  });
   world.x = 1;
   world.y = ROW.b;
   fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
@@ -1771,4 +1861,146 @@ test("a run whose only lasting change is a switch flip adds no undo step", () =>
   // document): two steps, as before the run — no third holding nothing but
   // the switch.
   assert.equal(steps(), 2);
+});
+
+// ── The selection & drag model, object by object (CLAUDE.md → "Selection") ──
+
+test("band: a board only PARTLY inside is not taken — the chips wholly inside are, and light up", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { viewport, surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const inside = controller.addComponentAt("74LS00", "bb1", "e5");
+  const outside = controller.addComponentAt("74LS00", "bb1", "e40");
+  controller.deselect();
+
+  drag(viewport, world, { x: 2, y: 3 }, { x: 14, y: 10 });
+  assert.deepEqual(controller.multiSelectedBoardIds, []);
+  assert.deepEqual(controller.multiSelectedIds, [inside.id]);
+  assert.ok(partEl(surface, inside.id).classList.contains("part--selected"));
+  assert.ok(!partEl(surface, outside.id).classList.contains("part--selected"));
+});
+
+test("band: a click on the background — a band that never travelled — clears the selection", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { viewport, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
+  assert.equal(controller.selectedId, chip.id);
+  drag(
+    viewport,
+    world,
+    { x: 80, y: 80 },
+    { x: 80, y: 80 },
+    { clientTravel: 0 },
+  );
+  assert.equal(controller.selectedId, null);
+});
+
+test("a press on a PASSENGER is a press on that object: it alone becomes the selection", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
+  controller.selectBoard("bb1");
+
+  // ⌘/Ctrl on it changes nothing — it is already carried, never selected twice.
+  controller.toggleComponentSelection(chip.id);
+  assert.equal(controller.selectedId, "bb1");
+
+  drag(partEl(surface, chip.id), world, { x: 8, y: 6.5 }, { x: 13, y: 6.5 });
+  assert.equal(controller.selectedId, chip.id);
+  assert.equal(doc.getBoard("bb1").x, 0, "the board stayed put");
+  assert.equal(doc.getComponent(chip.id).anchor, "e10", "the chip moved alone");
+});
+
+test("group drag: two selected wires move rigidly by the delta their grabbed END snaps to", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const w1 = seedWire(doc, "bb1.a1", "bb1.a5");
+  const w2 = seedWire(doc, "bb1.b10", "bb1.b14");
+  controller.deselect();
+  controller.toggleWireSelection(w1.id);
+  controller.toggleWireSelection(w2.id);
+
+  const body = surface.querySelector(`.wire[data-wire-id="${w1.id}"]`);
+  world.x = 1.2; // nearest end: a1
+  world.y = ROW.a;
+  fire(body, "pointerdown", { id: 9, client: [0, 0] });
+  world.x = 4.2;
+  world.y = ROW.c;
+  fire(wireSvg(surface), "pointermove", { id: 9, client: [40, 40] });
+  fire(wireSvg(surface), "pointerup", { id: 9, client: [40, 40] });
+
+  assert.deepEqual([doc.getWire(w1.id).from, doc.getWire(w1.id).to], ["bb1.c4", "bb1.c8"]); // prettier-ignore
+  assert.deepEqual([doc.getWire(w2.id).from, doc.getWire(w2.id).to], ["bb1.d13", "bb1.d17"]); // prettier-ignore
+  assert.deepEqual(
+    controller.multiSelectedWireIds.sort(),
+    [w1.id, w2.id].sort(),
+  );
+});
+
+test("group drag: a selected board takes a selected wire rigidly, and its passengers' wires stretch", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0); // bb1
+  controller.addBoardAt("pins-full", 0, 30); // bb2
+  const loose = doc.addWire({ from: "bb2.a1", to: "bb2.a5" }); // selected itself
+  const across = doc.addWire({ from: "bb1.a3", to: "bb2.a40" }); // straddles
+  window.dispatchEvent(new window.CustomEvent("chiphippo:doc-changed"));
+  controller.deselect();
+  controller.toggleBoardSelection("bb1");
+  controller.toggleWireSelection(loose.id);
+
+  // Grab bb1 by its bare holes and pull it two pitches right.
+  drag(
+    boardEl(surface, "bb1"),
+    world,
+    { x: 30, y: ROW.c },
+    { x: 32, y: ROW.c },
+  );
+
+  assert.equal(doc.getBoard("bb1").x, 2);
+  assert.deepEqual([doc.getWire(loose.id).from, doc.getWire(loose.id).to], ["bb2.a3", "bb2.a7"]); // prettier-ignore
+  assert.deepEqual([doc.getWire(across.id).from, doc.getWire(across.id).to], ["bb1.a3", "bb2.a40"]); // prettier-ignore
+});
+
+test("Delete takes the whole selection at once — and a wire left on a deleted brick's terminal goes too", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
+  const psu = controller.addBrickAt("psu", 80, 0);
+  const lead = doc.addWire({ from: "bb1.a30", to: `${psu.id}.+` });
+  const kept = doc.addWire({ from: "bb1.a5", to: "bb1.a40" }); // on the chip's node
+  controller.deselect();
+  controller.toggleComponentSelection(chip.id);
+  controller.toggleComponentSelection(psu.id);
+
+  let changes = 0;
+  window.addEventListener("chiphippo:doc-changed", () => changes++);
+  controller.handleKeyDown(new window.KeyboardEvent("keydown", { key: "Delete" })); // prettier-ignore
+
+  assert.equal(document.querySelector(".popup-confirm"), null, "no question");
+  assert.equal(doc.getComponent(chip.id), null);
+  assert.equal(doc.getComponent(psu.id), null);
+  assert.equal(
+    doc.getWire(lead.id),
+    null,
+    "its end had nothing left to plug into",
+  );
+  assert.ok(doc.getWire(kept.id), "a wire still in two holes stays");
+  assert.equal(changes, 1, "one step");
 });

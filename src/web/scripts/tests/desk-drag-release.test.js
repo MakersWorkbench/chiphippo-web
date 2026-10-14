@@ -39,6 +39,13 @@
 // dragged element, and a capture taken away with no up/cancel behind it —
 // against every drag DeskController owns. See components/pointer-gesture.js.
 //
+// What the first case must DO changed with the selection & drag model
+// (CLAUDE.md → "Selection"): a drop REUSES the landing the last move showed,
+// when it was legal, and never recomputes it — so a seat the screen promised
+// is the seat committed. The release point is consulted only when the last
+// move showed nothing legal (the coalesced-stream case the comment above is
+// about: a sample caught mid-flight over the trench).
+//
 // Note a thrown error inside these handlers is SWALLOWED (they run as window
 // event listeners), so a broken release path shows up only as "nothing
 // committed" — which is precisely what every assertion here is shaped to
@@ -103,7 +110,7 @@ function dragReleasingAt(
   world.x = from.x;
   world.y = from.y;
   // `downMods` goes on the PRESS alone — every modifier a desk drag reads is
-  // read there and frozen (the board drag's tear-off, the part drag's wiring).
+  // read there and frozen (Option/Alt's pin pick).
   fire(el, "pointerdown", { id, client: [0, 0], mods: downMods });
   world.x = stale.x;
   world.y = stale.y;
@@ -121,21 +128,38 @@ function dragReleasingAt(
 // its old integer y, so a re-measurement moves them all at once.
 const ROW = spec("pins-full").rowY;
 
-test("board drag: the drop lands at the RELEASE point, not the last move", () => {
+test("board drag: the drop is the landing the last move SHOWED, never re-resolved", () => {
   resetDom();
   const doc = new DeskDoc(null);
   doc.addBoard("pins-full", 0, 0);
   const world = { x: 0, y: 0 };
   const { surface, controller } = makeDesk(doc, world);
-  assert.ok(controller);
+  controller.selectBoard("bb1"); // a strip is grabbed only once selected
 
   dragReleasingAt(boardEl(surface, "bb1"), world, {
     from: { x: 0, y: 0 },
-    stale: { x: 5, y: 0 }, // the last frame the app got to process…
-    at: { x: 8, y: 0 }, // …but the pointer was let go three pitches on
+    stale: { x: 5, y: 0 }, // drawn at x 5, legal…
+    at: { x: 8, y: 0 }, // …the up event, three pitches on — never re-read
   });
 
-  assert.equal(doc.getBoard("bb1").x, 8);
+  assert.equal(doc.getBoard("bb1").x, 5);
+});
+
+test("board drag: an unselected strip is BACKGROUND — the press rubber-bands, nothing moves", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  doc.addBoard("pins-full", 0, 0);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+
+  dragReleasingAt(boardEl(surface, "bb1"), world, {
+    from: { x: 0, y: 0 },
+    stale: { x: 5, y: 0 },
+    at: { x: 8, y: 0 },
+  });
+
+  assert.equal(doc.getBoard("bb1").x, 0, "the board stayed put");
+  assert.deepEqual(controller.multiSelectedBoardIds, [], "nothing enclosed");
 });
 
 test("board drag: a release over the bare desk still drops the board", () => {
@@ -143,7 +167,8 @@ test("board drag: a release over the bare desk still drops the board", () => {
   const doc = new DeskDoc(null);
   doc.addBoard("pins-full", 0, 0);
   const world = { x: 0, y: 0 };
-  const { viewport, surface } = makeDesk(doc, world);
+  const { viewport, surface, controller } = makeDesk(doc, world);
+  controller.selectBoard("bb1");
 
   dragReleasingAt(boardEl(surface, "bb1"), world, {
     from: { x: 0, y: 0 },
@@ -161,7 +186,8 @@ test("board drag: a yanked capture aborts, and the next drag still works", () =>
   const doc = new DeskDoc(null);
   doc.addBoard("pins-full", 0, 0);
   const world = { x: 0, y: 0 };
-  const { viewport, surface } = makeDesk(doc, world);
+  const { viewport, surface, controller } = makeDesk(doc, world);
+  controller.selectBoard("bb1");
 
   const el = boardEl(surface, "bb1");
   world.x = 0;
@@ -183,7 +209,7 @@ test("board drag: a yanked capture aborts, and the next drag still works", () =>
     stale: { x: 3, y: 0 },
     at: { x: 6, y: 0 },
   });
-  assert.equal(doc.getBoard("bb1").x, 6, "a yanked capture did not wedge it");
+  assert.equal(doc.getBoard("bb1").x, 3, "a yanked capture did not wedge it");
 });
 
 // ── Part drag — the headline ────────────────────────────────────────────────
@@ -208,7 +234,7 @@ test("part drag: a stale OFF-BOARD move must not revert a legal drop", () => {
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
 });
 
-test("part drag: a release over BARE DESK does not commit a legal last move", () => {
+test("part drag: a legal last move is the drop, even released over BARE DESK", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -216,18 +242,18 @@ test("part drag: a release over BARE DESK does not commit a legal last move", ()
   controller.addBoardAt("pins-full", 0, 0);
   const chip = controller.addComponentAt("74LS00", "bb1", "e5");
 
-  // The inverse of the test above — the re-resolve has to flip legality BOTH
-  // ways, or it would just be a different stale sample winning.
+  // The inverse of the test above: the seat the screen SHOWED is reused,
+  // never recomputed — so wherever the button comes up, it lands.
   dragReleasingAt(partEl(surface, chip.id), world, {
     from: { x: 8, y: 6.5 },
-    stale: { x: 13, y: 6.5 }, // e10 — legal
+    stale: { x: 13, y: 6.5 }, // e10 — legal, and drawn there
     at: { x: 13, y: 60 }, // let go off the board
   });
 
-  assert.equal(doc.getComponent(chip.id).anchor, "e5", "stayed put");
+  assert.equal(doc.getComponent(chip.id).anchor, "e10", "the seat shown");
 });
 
-test("OPTION part drag: the riding wires land at the RELEASE point too", () => {
+test("part drag: the riding wires go where the part goes, release fallback included", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -236,14 +262,13 @@ test("OPTION part drag: the riding wires land at the RELEASE point too", () => {
   const chip = controller.addComponentAt("74LS00", "bb1", "e5"); // cols 5–11
   doc.addWire({ from: "bb1.a5", to: "bb1.a40" }); // rides under pin 1
 
-  // The whole point of this suite, now with a batch behind it: the plan is
-  // re-derived at the release point, so a stale off-board sample cannot commit
-  // the wires to where the part merely passed through.
+  // A part carries its wiring by default. The stale sample showed nothing
+  // legal, so the release re-resolves — the plan with it, so the wires cannot
+  // be committed to where the part merely passed through.
   dragReleasingAt(partEl(surface, chip.id), world, {
     from: { x: 8, y: 6.5 },
     stale: { x: 13, y: 60 }, // nowhere near a row
     at: { x: 13, y: 6.5 }, // e10 — five columns right
-    downMods: { altKey: true },
   });
 
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
@@ -251,7 +276,7 @@ test("OPTION part drag: the riding wires land at the RELEASE point too", () => {
   assert.equal(doc.getWire("w1").to, "bb1.a40", "the far end stayed put");
 });
 
-test("OPTION part drag: an unseatable rider reverts the WHOLE drop", () => {
+test("part drag: an unseatable rider reverts the WHOLE drop", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -265,7 +290,6 @@ test("OPTION part drag: an unseatable rider reverts the WHOLE drop", () => {
     from: { x: 8, y: 6.5 },
     stale: { x: 13, y: 6.5 },
     at: { x: 13, y: 6.5 }, // e10 — the rider would need a16
-    downMods: { altKey: true },
   });
 
   // The chip's OWN seat is perfectly legal there; it is refused because its
@@ -274,27 +298,7 @@ test("OPTION part drag: an unseatable rider reverts the WHOLE drop", () => {
   assert.equal(doc.getWire("w1").from, "bb1.a11", "and so did its wire");
 });
 
-test("OPTION part drag: the modifier is read at PRESS, then frozen", () => {
-  resetDom();
-  const doc = new DeskDoc(null);
-  const world = { x: 0, y: 0 };
-  const { surface, controller } = makeDesk(doc, world);
-  controller.addBoardAt("pins-full", 0, 0);
-  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
-  doc.addWire({ from: "bb1.a5", to: "bb1.a40" });
-
-  // Option down for the press, released before the move and the drop: the wiring
-  // still comes, because what a drag carries is settled when it is picked up.
-  dragReleasingAt(partEl(surface, chip.id), world, {
-    from: { x: 8, y: 6.5 },
-    stale: { x: 13, y: 6.5 },
-    at: { x: 13, y: 6.5 },
-    downMods: { altKey: true },
-  });
-  assert.equal(doc.getWire("w1").from, "bb1.a10");
-});
-
-test("part drag WITHOUT Option leaves the wiring where it was", () => {
+test("a plain part drag CARRIES the wiring in its nodes", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -310,7 +314,54 @@ test("part drag WITHOUT Option leaves the wiring where it was", () => {
   });
 
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
-  assert.equal(doc.getWire("w1").from, "bb1.a5", "a plain drag is unchanged");
+  assert.equal(doc.getWire("w1").from, "bb1.a10", "the wire's end came along");
+  assert.equal(doc.getWire("w1").to, "bb1.a40", "its far end stretched");
+});
+
+test("a SHIFT part drag moves the part BARE — its wiring and legs stay put", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const r = controller.addComponentAt("resistor", "bb1", "c11"); // a leg in col 11
+  const chip = controller.addComponentAt("74LS00", "bb1", "e5"); // cols 5–11
+  doc.addWire({ from: "bb1.a5", to: "bb1.a40" });
+  const legParams = { ...doc.getComponent(r.id).params };
+
+  dragReleasingAt(partEl(surface, chip.id), world, {
+    from: { x: 8, y: 6.5 },
+    stale: { x: 13, y: 6.5 },
+    at: { x: 13, y: 6.5 },
+    downMods: { shiftKey: true },
+  });
+
+  assert.equal(doc.getComponent(chip.id).anchor, "e10", "the part moved");
+  assert.equal(doc.getWire("w1").from, "bb1.a5", "its wire stayed");
+  assert.equal(doc.getComponent(r.id).anchor, "c11", "and so did the leg");
+  assert.deepEqual(doc.getComponent(r.id).params, legParams, "unbent");
+  controller.undo();
+  assert.equal(doc.getComponent(chip.id).anchor, "e5", "one undo step");
+});
+
+test("a SHIFT resistor body drag leaves its wiring behind", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  doc.addBoard("pins-full", 0, 0);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  const r = controller.addComponentAt("resistor", "bb1", "e10"); // e10 ── e13
+  doc.addWire({ from: "bb1.a10", to: "bb1.a40" }); // in pin 1's node
+
+  dragReleasingAt(partEl(surface, r.id), world, {
+    from: { x: 0, y: 0 },
+    stale: { x: 1, y: 0 },
+    at: { x: 1, y: 0 },
+    downMods: { shiftKey: true },
+  });
+
+  assert.equal(doc.getComponent(r.id).anchor, "e11");
+  assert.equal(doc.getWire("w1").from, "bb1.a10", "the wire stayed");
 });
 
 test("part drag: a release over the bare desk viewport still re-seats", () => {
@@ -356,12 +407,12 @@ test("part drag: a yanked capture aborts without committing", () => {
     stale: { x: 10, y: 6.5 },
     at: { x: 13, y: 6.5 },
   });
-  assert.equal(doc.getComponent(chip.id).anchor, "e10");
+  assert.equal(doc.getComponent(chip.id).anchor, "e7", "the seat shown");
 });
 
 // ── Brick (PSU / clock) drag ────────────────────────────────────────────────
 
-test("brick drag: the PSU lands at the release point, element included", () => {
+test("brick drag: the PSU lands where the last move SHOWED it, element included", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -371,19 +422,18 @@ test("brick drag: the PSU lands at the release point, element included", () => {
 
   dragReleasingAt(partEl(surface, psu.id), world, {
     from: { x: 1, y: ROW.j },
-    stale: { x: 11, y: 6 },
-    at: { x: 21, y: ROW.b },
+    stale: { x: 11, y: ROW.j + 4 }, // shown 10 across, 4 down — legal
+    at: { x: 21, y: ROW.b }, // the up event — never re-read
   });
 
   const moved = doc.getComponent(psu.id);
-  assert.equal(moved.x, x0 + 20);
-  assert.equal(moved.y, y0 + 10);
+  assert.equal(moved.x, x0 + 10);
+  assert.equal(moved.y, y0 + 4);
   // A part view is not re-rendered by doc-changed, so the DOM has to have been
-  // pushed the re-resolved position explicitly — otherwise the document would
-  // commit the release point while the brick sat at the stale one.
+  // pushed the committed position explicitly.
   const style = partEl(surface, psu.id).style;
-  assert.equal(style.left, `${(x0 + 20) * PX_PER_UNIT}px`);
-  assert.equal(style.top, `${(y0 + 10) * PX_PER_UNIT}px`);
+  assert.equal(style.left, `${(x0 + 10) * PX_PER_UNIT}px`);
+  assert.equal(style.top, `${(y0 + 4) * PX_PER_UNIT}px`);
 });
 
 // ── Resistor drags (rigid body, and one end) ────────────────────────────────
@@ -448,7 +498,8 @@ test("resistor end drag: the drop is the RINGED seat, not the release point", ()
   const r = controller.addComponentAt("resistor", "bb1", "a10"); // a10 ── a13
 
   dragReleasingAt(partEl(surface, r.id), world, {
-    from: { x: 13, y: ROW.a }, // grab pin 2
+    from: { x: 13, y: ROW.a }, // grab pin 2 — Option/Alt picks the lead
+    downMods: { altKey: true },
     stale: { x: 15, y: ROW.a }, // ringed at a15
     at: { x: 17, y: ROW.a }, // the up event, two holes on — never re-read
   });
@@ -472,7 +523,8 @@ test("resistor end drag: a RED ring at the release reverts, wherever the button 
   // The last sample sits one hole from pin 1 — inside the minimum lead span,
   // so the ring is red. A release well clear of it is not consulted.
   dragReleasingAt(partEl(surface, r.id), world, {
-    from: { x: 13, y: ROW.a }, // grab pin 2
+    from: { x: 13, y: ROW.a }, // grab pin 2 — Option/Alt picks the lead
+    downMods: { altKey: true },
     stale: { x: 11, y: ROW.a }, // illegal — too close
     at: { x: 15, y: ROW.a },
   });
@@ -494,7 +546,7 @@ test("resistor end drag: a near-miss onto a TAKEN hole lands one hole along, rin
 
   const el = partEl(surface, r.id);
   Object.assign(world, { x: 13, y: ROW.a }); // grab pin 2
-  fire(el, "pointerdown", { client: [0, 0] });
+  fire(el, "pointerdown", { client: [0, 0], mods: { altKey: true } });
   Object.assign(world, { x: 16.3, y: ROW.a }); // aimed at a16, a shade right
   fire(el, "pointermove", { client: [40, 40] });
   assert.deepEqual(ringOf(surface), { x: 17, y: ROW.a, illegal: false });
@@ -516,7 +568,8 @@ test("resistor end drag: a release that lands NOWHERE drops where the ring last 
   const r = controller.addComponentAt("resistor", "bb1", "a10"); // a10 ── a13
 
   dragReleasingAt(partEl(surface, r.id), world, {
-    from: { x: 13, y: ROW.a }, // grab pin 2
+    from: { x: 13, y: ROW.a }, // grab pin 2 — Option/Alt picks the lead
+    downMods: { altKey: true },
     stale: { x: 16, y: ROW.a }, // snapped to a16 and ringed
     at: { x: 200, y: 200 }, // the up event, out of every hole's reach
   });
@@ -657,7 +710,7 @@ function clusterDesk(surface, controller, doc) {
   return { chip, btn, el: partEl(surface, chip.id) };
 }
 
-test("cluster drag: the whole group lands at the RELEASE point", () => {
+test("cluster drag: the whole group lands where the last move SHOWED it", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -666,15 +719,15 @@ test("cluster drag: the whole group lands at the RELEASE point", () => {
 
   dragReleasingAt(el, world, {
     from: { x: 8, y: 6.5 },
-    stale: { x: 11, y: 6.5 }, // the last frame the app got to process…
-    at: { x: 13, y: 6.5 }, // …but it was let go two columns further on
+    stale: { x: 11, y: 6.5 }, // drawn three columns right, legal…
+    at: { x: 13, y: 6.5 }, // …the up event two further on — never re-read
   });
 
-  assert.equal(doc.getComponent(chip.id).anchor, "e10");
-  assert.equal(doc.getComponent(btn.id).anchor, "a35");
+  assert.equal(doc.getComponent(chip.id).anchor, "e8");
+  assert.equal(doc.getComponent(btn.id).anchor, "a33");
 });
 
-test("cluster drag: a release over bare desk commits nothing at all", () => {
+test("cluster drag: a legal last move lands even when released over bare desk", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -683,15 +736,15 @@ test("cluster drag: a release over bare desk commits nothing at all", () => {
 
   dragReleasingAt(el, world, {
     from: { x: 8, y: 6.5 },
-    stale: { x: 13, y: 6.5 }, // e10 — legal
+    stale: { x: 13, y: 6.5 }, // e10 — legal, and drawn there
     at: { x: 13, y: 60 }, // let go off the board
   });
 
-  assert.equal(doc.getComponent(chip.id).anchor, "e5", "stayed put");
-  assert.equal(doc.getComponent(btn.id).anchor, "a30");
+  assert.equal(doc.getComponent(chip.id).anchor, "e10", "the seat shown");
+  assert.equal(doc.getComponent(btn.id).anchor, "a35");
 });
 
-test("OPTION cluster drag: the riding wires land at the RELEASE point too", () => {
+test("cluster drag: a refused last move falls back to the RELEASE point, wires and all", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -702,7 +755,6 @@ test("OPTION cluster drag: the riding wires land at the RELEASE point too", () =
     from: { x: 8, y: 6.5 },
     stale: { x: 13, y: 60 }, // nowhere near a row
     at: { x: 13, y: 6.5 }, // e10 — five columns right
-    downMods: { altKey: true },
   });
 
   assert.equal(doc.getComponent(chip.id).anchor, "e10");
@@ -711,7 +763,7 @@ test("OPTION cluster drag: the riding wires land at the RELEASE point too", () =
   assert.equal(doc.getWire("w1").to, "bb1.b35", "carried by both members");
 });
 
-test("OPTION cluster drag: an unseatable rider reverts the WHOLE group", () => {
+test("cluster drag: an unseatable rider reverts the WHOLE group", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -727,7 +779,6 @@ test("OPTION cluster drag: an unseatable rider reverts the WHOLE group", () => {
     from: { x: 8, y: 6.5 },
     stale: { x: 13, y: 6.5 },
     at: { x: 13, y: 6.5 }, // e10 — the rider would need a16
-    downMods: { altKey: true },
   });
 
   // Every member's OWN seat is legal there; the group is refused because one
@@ -739,6 +790,61 @@ test("OPTION cluster drag: an unseatable rider reverts the WHOLE group", () => {
     "and the button with it",
   );
   assert.equal(doc.getWire("w1").from, "bb1.a11");
+});
+
+test("a SHIFT cluster drag moves the selected parts and NOTHING else", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  const { chip, btn, el } = clusterDesk(surface, controller, doc);
+  doc.addWire({ from: "bb1.a11", to: "bb1.a40" }); // rides the chip alone
+  doc.addWire({ from: "bb1.a16", to: "bb1.a41" }); // where that rider would land
+
+  dragReleasingAt(el, world, {
+    from: { x: 8, y: 6.5 },
+    stale: { x: 13, y: 6.5 },
+    at: { x: 13, y: 6.5 },
+    downMods: { shiftKey: true },
+  });
+
+  // The rider that would have refused a plain drag is not carried at all.
+  assert.equal(doc.getComponent(chip.id).anchor, "e10");
+  assert.equal(doc.getComponent(btn.id).anchor, "a35");
+  assert.equal(doc.getWire("w1").from, "bb1.a5", "the joining wire stayed");
+  assert.equal(doc.getWire("w1").to, "bb1.b30");
+  assert.equal(doc.getWire("w2").from, "bb1.a11");
+});
+
+test("a SHIFT cluster drag still carries a selected wire and a board's passengers", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  doc.addBoard("pins-full", 0, 0);
+  doc.addBoard("pins-full", 0, 30);
+  const world = { x: 0, y: 0 };
+  const { surface, controller } = makeDesk(doc, world);
+  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
+  const rider = doc.addWire({ from: "bb1.a5", to: "bb1.a40" }); // a passenger
+  const btn = controller.addComponentAt("sw-push", "bb2", "a30");
+  const own = doc.addWire({ from: "bb2.a20", to: "bb2.a22" });
+  controller.deselect();
+  controller.toggleBoardSelection("bb1");
+  controller.toggleComponentSelection(btn.id);
+  controller.toggleWireSelection(own.id);
+
+  dragReleasingAt(partEl(surface, btn.id), world, {
+    from: { x: 31, y: 30 + ROW.a },
+    stale: { x: 33, y: 30 + ROW.a },
+    at: { x: 33, y: 30 + ROW.a },
+    downMods: { shiftKey: true },
+  });
+
+  assert.equal(doc.getComponent(btn.id).anchor, "a32");
+  assert.equal(doc.getBoard("bb1").x, 2, "the board moved");
+  assert.equal(doc.getComponent(chip.id).anchor, "e5", "its chip rode it");
+  assert.equal(doc.getWire(rider.id).from, "bb1.a5", "and its wiring");
+  assert.equal(doc.getWire(own.id).from, "bb2.a22", "the selected wire moved");
+  assert.equal(doc.getWire(own.id).to, "bb2.a24");
 });
 
 test("cluster drag: the release still lands when the CAPTURE is yanked", () => {
@@ -755,8 +861,8 @@ test("cluster drag: the release still lands when the CAPTURE is yanked", () => {
     upOn: viewport, // the release never reaches the grabbed part
   });
 
-  assert.equal(doc.getComponent(chip.id).anchor, "e10");
-  assert.equal(doc.getComponent(btn.id).anchor, "a35");
+  assert.equal(doc.getComponent(chip.id).anchor, "e8");
+  assert.equal(doc.getComponent(btn.id).anchor, "a33");
 });
 
 test("cluster drag: a scene rebuild mid-drag kills the gesture", () => {
@@ -884,8 +990,9 @@ function surround(doc, col) {
 /** The shared target ring, when it is showing: its world centre and whether
     it is the danger colour. Null when it is hidden. */
 function ringOf(surface) {
+  // The aim ring — not the ring a picked lead keeps while it stays selected.
   const ring = [...surface.querySelectorAll(".hole-ring")].find(
-    (r) => !r.hidden,
+    (r) => !r.hidden && !r.classList.contains("hole-ring--selected"),
   );
   if (!ring) return null;
   const r = 0.55 * PX_PER_UNIT;

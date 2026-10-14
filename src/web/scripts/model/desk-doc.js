@@ -80,7 +80,7 @@ import {
   rotateOffset,
   spec,
 } from "./breadboard.js";
-import { partDef } from "../catalog/index.js";
+import { footprintOffsets, partDef } from "../catalog/index.js";
 import {
   boardRect as outlineRect,
   FLUSH_EPS,
@@ -90,12 +90,14 @@ import {
 import { snapDesign } from "./design-clip.js";
 import {
   clusterMembers,
+  leadShift,
   partsRidingCluster,
   planClusterRiders,
   resolveClusterTargets,
   wiresRidingCluster,
 } from "./cluster-move.js";
 import { partsRidingPart, planPartMove, wiresRidingPart } from "./part-move.js";
+import { legSeat, legsBent } from "./free-legs.js";
 import {
   addressAtWorld,
   buildOccupancy,
@@ -1844,7 +1846,7 @@ export class DeskDoc {
     return withSeat(pkg, comp.params, String(anchor).charAt(0), wide);
   }
 
-  // ── Re-seating a part WITH its wiring (Feature 290, the Option-drag) ──────
+  // ── Re-seating a part WITH its wiring (Feature 290 — every part drag) ──────
 
   /**
    * The wires riding part `id` — every wire end sitting in a node one of its
@@ -1880,7 +1882,7 @@ export class DeskDoc {
    * together, because they were never two edits. Rolls back wholly on any
    * refusal: half a move would cut the connections it left behind.
    *
-   * A solo Option-drag IS a one-member cluster, so this is the cluster commit
+   * A solo wired part drag IS a one-member cluster, so this is the cluster commit
    * with the dragged part put at the head of the placements — one transaction
    * rule and one legality rule for both gestures rather than two that could
    * drift apart. `plan` is a `planPartMove` result; `wide` is moveComponent's.
@@ -2007,6 +2009,55 @@ export class DeskDoc {
     // (the bussed resistor array) is the same move on one row: evenly spaced
     // holes, so it covers exactly the nine it already covers and only the
     // numbering — hence which end is the common bus — turns round.
+    // A rigid body that turns a quarter lap about pin 1 (`def.turns` — the
+    // speaker, whose legs are the channel's width apart, so on end it stands
+    // across the trench). R steps to the next quarter it can take, pin 1
+    // staying in its hole; one with nowhere to go is stepped past.
+    if (def?.turns) {
+      const cur = ROTATIONS.includes(comp.params?.rot) ? comp.params.rot : 0;
+      for (let step = 1; step < ROTATIONS.length; step++) {
+        const rot = ROTATIONS[(ROTATIONS.indexOf(cur) + step) % ROTATIONS.length]; // prettier-ignore
+        const params = normalizeParams(def, { ...comp.params, rot });
+        const opts = { ignoreId: id, params };
+        if (this.canPlacePart(comp.ref, comp.board, comp.anchor, opts)) {
+          comp.params = params;
+          return { ...comp };
+        }
+      }
+      throw taggedError(`${id} cannot turn here`, "ILLEGAL_PLACEMENT");
+    }
+    // A TO-92 on BENT legs (free-legs.js) turns end for end as the straight
+    // one does — the same holes, the pin numbering backwards — which bent is
+    // pins 1 and 3 trading holes.
+    if (legsBent(comp)) {
+      const pins = partPinAddresses(this.#doc, comp);
+      const one = pins?.find((p) => p.pin === 1)?.address;
+      const three = pins?.find((p) => p.pin === 3)?.address;
+      const seat =
+        one && three
+          ? legSeat(
+              this.#doc,
+              comp,
+              new Map([
+                [1, three],
+                [3, one],
+              ]),
+            )
+          : null;
+      if (
+        !seat ||
+        !this.canPlacePart(comp.ref, seat.board, seat.anchor, {
+          ignoreId: id,
+          params: seat.params,
+        })
+      ) {
+        throw taggedError(`${id} cannot turn here`, "ILLEGAL_PLACEMENT");
+      }
+      comp.board = seat.board;
+      comp.anchor = seat.anchor;
+      comp.params = seat.params;
+      return { ...comp };
+    }
     if (def?.package || def?.reversible) {
       comp.params = normalizeParams(def, {
         ...comp.params,
@@ -2037,17 +2088,43 @@ export class DeskDoc {
     // a zero component yields -0, which would persist into the document and
     // break value comparisons, so fold it back.
     const swing = (n) => (n === 0 ? 0 : n);
-    for (const dir of [1, -1]) {
-      const end = { dx: swing(-dir * vec.dy), dy: swing(dir * vec.dx) };
+    const fits = (end) => {
       const params = normalizeParams(def, { ...comp.params, rot: 90, end });
-      if (
-        this.canPlacePart(comp.ref, comp.board, comp.anchor, {
-          ignoreId: id,
-          params,
-        })
-      ) {
-        comp.params = params;
-        return { ...comp };
+      const ok = this.canPlacePart(comp.ref, comp.board, comp.anchor, {
+        ignoreId: id,
+        params,
+      });
+      return ok ? params : null;
+    };
+    // The lengths a turned lead may take: its footprint's own first, then the
+    // nearest others — never shorter than its `minSpan` (a diode's three
+    // holes), at most three pitches longer — for a part a pitch or two from
+    // the trench or the board's edge, turned on end (Jason, 2026-10-14: a
+    // diode in row c turned into the channel and sat still).
+    const natural = footprintOffsets(def, comp.params).at(-1);
+    const shortest = Math.max(1, Math.ceil(def.minSpan ?? 1));
+    const lengths = [];
+    for (let len = shortest; len <= natural + 3; len++) lengths.push(len);
+    lengths.sort(
+      (a, b) => Math.abs(a - natural) - Math.abs(b - natural) || a - b,
+    );
+    const reach = Math.hypot(vec.dx, vec.dy);
+    // A quarter turn either way round — clockwise first — at its footprint's
+    // length if either has a hole there, so a lead stretched to get round the
+    // channel comes back to size on the next turn; then the nearest other
+    // lengths; the length it has now last, for a bend no lattice length fits
+    // (a lead reaching a rail).
+    const turns = [1, -1].map((d) => ({
+      dx: swing(-d * vec.dy) / reach,
+      dy: swing(d * vec.dx) / reach,
+    }));
+    for (const len of [...lengths, reach]) {
+      for (const t of turns) {
+        const params = fits({ dx: swing(t.dx * len), dy: swing(t.dy * len) });
+        if (params) {
+          comp.params = params;
+          return { ...comp };
+        }
       }
     }
     throw taggedError(`${id} cannot rotate here`, "ILLEGAL_PLACEMENT");
@@ -2724,13 +2801,20 @@ export class DeskDoc {
    * planning: a plan is not a legality verdict, and the caller still runs it
    * past a `prepareClusterMove` predicate before committing.
    */
-  planClusterRiders(members, targets, riding, ridingParts) {
+  planClusterRiders(members, targets, riding, ridingParts, presetShifts) {
     return planClusterRiders(this.#doc, {
       members,
       targets,
       riding,
       ridingParts,
+      presetShifts,
     });
+  }
+
+  /** `leadShift` (cluster-move.js) over this document — where a PICKED lead
+      lands under a group delta. */
+  leadShift(delta, moving, opts) {
+    return leadShift(this.#doc, delta, moving, opts);
   }
 
   /** Change a wire's color. Throws NOT_FOUND / INVALID_ARG. */

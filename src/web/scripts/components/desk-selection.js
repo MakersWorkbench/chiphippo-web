@@ -17,64 +17,83 @@
  * with Chip Hippo. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// desk-selection.js — WHAT IS SELECTED on the desk, and the two overlays that
-// say so.
+// desk-selection.js — WHAT IS SELECTED on the desk, and the overlays that say
+// so.
 //
-// The selection is built two ways and the modifier is the difference
-// (model/selection-toggle.js owns the pure rule): a Shift-drag MARQUEE replaces
-// it with everything a box wholly encloses, a ⌘/Ctrl-CLICK adds one item or
-// takes one out. Both fill the same three sets — parts, wires, boards — so
-// Delete, ⌘C's cluster/design clip and the board highlighter are untouched by
-// the second existing. A single pick sits beside them in its own slot, and is
-// FOLDED IN wherever the answer is "everything selected", since it is what a
-// modifier-click most often extends.
+// The selection is built three ways (CLAUDE.md → "Selection"): a plain click
+// picks ONE object, a rubber band drawn from the background REPLACES the
+// selection with everything it wholly encloses, and a ⌘/Ctrl-click adds one
+// object or takes one out (model/selection-toggle.js owns the pure rule). The
+// band and the chord fill the same three sets — parts, wires, boards — so
+// Delete, ⌘C's cluster/design clip and the board highlighter read one shape.
+// A single pick sits beside them in its own slot, and is FOLDED IN wherever
+// the answer is "everything selected", since it is what a chord most often
+// extends. Option/Alt-click picks one LEAD (a wire end, a two-terminal part's
+// leg) — a single pick of its own kind that REPLACES the selection — and
+// Option/Alt+⌘/Ctrl-click adds one lead to the set or takes it out: a fourth
+// set, `leads`, of `leadKey` strings. A lead whose owner is already selected
+// (or rides a selected board) is covered by it and is never in the set too.
+//
+// THE PASSENGER INVARIANT. A board in the selection carries everything seated
+// on it, so a part on a selected board — and a wire whose ends are all on
+// selected boards — is a PASSENGER: it moves and deletes with its board but is
+// not selected in its own right, and so is not lit. An object is never both:
+// the moment its board joins, it drops out of the independent sets. And there
+// is no selection memory — taking the board back out does not bring them back
+// (undo is the way back; the controller records each change of selection).
 //
 // Two overlays belong here because both are pure functions of the selection:
 // the BoardOutline traces the outer edge of every strip a grab would move (one
-// path, so flush strips show no seam), and the ride-preview HoleRings answer
-// "what comes with it?" BEFORE an Option-drag rather than during it.
+// path, so flush strips show no seam), and the lead rings mark the leads an
+// Option/Alt-click picked.
 //
-// Pulled out of DeskController, which held all of it directly. It is the same
-// host-object arrangement WireTools and BusTools already use — the shared
-// `#mode` and the surface (doc, views, layers) come from the host, so nothing
-// about how modes arbitrate changed; this is a home for the selection, not a
-// change to what selecting does. The controller keeps its public surface
-// (selectAll, deselect, multiSelectedIds, toggle*Selection, setRidePreview) and
-// delegates each one straight here.
+// It is the same host-object arrangement WireTools and BusTools use — the
+// shared `#mode` and the surface (doc, views, layers) come from the host.
 
 import { PX_PER_UNIT } from "../desk/desk-geometry.js";
-import { boardSize } from "../model/breadboard.js";
-import { partPinsWorld } from "../model/part-geometry.js";
-import { singlePick, toggleSelection } from "../model/selection-toggle.js";
+import { boardSize, parseAddress } from "../model/breadboard.js";
+import {
+  leadKey,
+  parseLeadKey,
+  singlePick,
+  toggleSelection,
+} from "../model/selection-toggle.js";
 import { BoardOutline } from "./board-outline.js";
 import { HoleRings } from "./hole-rings.js";
+
+/** The single-pick kinds that name a LEAD rather than an object. */
+const LEAD_KINDS = new Set(["lead", "wire-end"]);
+
+const samePick = (a, b) =>
+  a?.kind === b?.kind && a?.id === b?.id && a?.end === b?.end;
 
 export class DeskSelection {
   #host;
   /** The single pick: `{kind, id}` or null. `kind` is one of board / part /
-      wire / bus / annotation — only the first three can also be multi. */
+      wire / bus / annotation / signal / tag — only the first three can also
+      be multi — or a LEAD: `{kind: "lead", id, end: "a"|"b"}` (a two-terminal
+      part's leg) / `{kind: "wire-end", id, end: "from"|"to"}`. */
   #selected = null;
   #multi = new Set(); // component ids
   #multiWires = new Set(); // wire ids
   #multiBoards = new Set(); // board ids
-  /** Whether Option is down right now — pushed in from app.js, never read off
-      an event here (see setRidePreview). */
-  #optionHeld = false;
+  #multiLeads = new Set(); // leadKey strings — picked wire ends and legs
   #boardOutline;
-  #rideRings;
+  #leadRing;
 
   /**
    * @param {object} host - the controller. Supplies `doc`, the mutable `mode`,
    *   `editingLocked`, the view maps (`boardViews`, `partViews`), the shared
-   *   layers (`wireLayer`, `annotationLayer`) and `addressWorld`, and
-   *   `onSelect(sel)`, told whenever the single pick changes.
+   *   layers (`wireLayer`, `annotationLayer`, …), `leadWorld(pick)` (where a
+   *   picked lead sits), and `onSelect(sel)`, told whenever the single pick
+   *   changes.
    * @param {HTMLElement} overlay - the pointer-inert overlay layer both
    *   overlays draw into.
    */
   constructor(host, overlay) {
     this.#host = host;
     this.#boardOutline = new BoardOutline(overlay);
-    this.#rideRings = new HoleRings(overlay);
+    this.#leadRing = new HoleRings(overlay, "hole-ring--selected");
   }
 
   #applySelection(sel, on) {
@@ -83,7 +102,9 @@ export class DeskSelection {
       this.#host.boardViews.get(sel.id)?.setSelected(on);
     else if (sel.kind === "part")
       this.#host.partViews.get(sel.id)?.setSelected(on);
-    else if (sel.kind === "annotation") {
+    else if (LEAD_KINDS.has(sel.kind)) {
+      this.refreshLeadRing();
+    } else if (sel.kind === "annotation") {
       this.#host.annotationLayer.setSelected(on ? sel.id : null);
     } else if (sel.kind === "signal") {
       this.#host.signalLayer.setSelected(on ? sel.id : null);
@@ -95,92 +116,67 @@ export class DeskSelection {
   }
 
   select(sel) {
-    // A single pick always replaces a marquee selection.
+    // A single pick always replaces a multi-selection.
     if (sel && this.size()) this.clearMulti();
-    if (this.#selected?.id === sel?.id && this.#selected?.kind === sel?.kind) {
-      return;
-    }
-    this.#applySelection(this.#selected, false);
+    if (samePick(this.#selected, sel)) return;
+    const was = this.#selected;
     this.#selected = sel;
+    this.#applySelection(was, false);
     this.#applySelection(this.#selected, true);
     this.refreshBoardOutline();
-    this.refreshRidePreview(); // Option may be held over the NEW selection
+    this.refreshLeadRing();
     this.#host.onSelect?.(sel);
   }
 
-  // ── The Option-drag hint (Feature 290) ──────────────────────────────────
+  // ── The picked lead (Option/Alt-click) ──────────────────────────────────
 
-  /**
-   * Option is down (or up). While it is down over a SELECTED part, every wire
-   * end an Option-drag would carry is ringed, so "what comes with it?" is
-   * answered BEFORE the gesture rather than discovered during it — the same
-   * shape as the Fit button previewing zoom-out-full while Shift is held.
-   *
-   * The state is pushed in rather than read off events because a keyup is not
-   * the only way it ends: app.js drops it on `blur` too, since a modifier
-   * released outside the window never fires our own keyup and a ring left
-   * behind would be a lie about a key nobody is holding.
-   */
-  setRidePreview(on) {
-    const next = Boolean(on);
-    if (next === this.#optionHeld) return;
-    this.#optionHeld = next;
-    this.refreshRidePreview();
+  /** Pick ONE lead — a two-terminal part's leg (`end` "a" = pin 1, "b" = pin
+      2) — replacing whatever was selected. Option/Alt is never additive. */
+  selectLead(componentId, end) {
+    if (!this.#host.partViews.has(componentId)) return;
+    this.select({ kind: "lead", id: componentId, end });
   }
 
-  /** Re-derive the hint from whatever is true now. Called from every transition
-      that can change the answer — the selection, a doc edit, a drag starting or
-      ending, the run lock — and cheap when Option isn't held, which is the
-      overwhelmingly common case. */
-  refreshRidePreview() {
-    this.#rideRings.show(this.#ridePreviewPoints());
+  /** Pick ONE wire end — the lead of a jumper, by its `from`/`to` end. */
+  selectWireEnd(wireId, end) {
+    if (!this.#host.doc.getWire(wireId)) return;
+    this.select({ kind: "wire-end", id: wireId, end });
   }
 
-  /** World points of everything riding what is selected, or null — each wire
-      end, and each two-terminal part's LEAD, that an Option-drag would carry. A
-      rider held by BOTH ends gets two rings, which is the useful part: it shows
-      what travels and what stays put, so a resistor that will bend reads
-      differently from one that will translate.
+  /** Re-ring the picked leads where they sit NOW — after a drag lands them,
+      an undo, anything that can move them. Clears the rings when no lead is
+      picked (a lead that no longer resolves simply isn't ringed), and while a
+      group drag carries them (its own preview shows where they are going). */
+  refreshLeadRing() {
+    const mode = this.#host.mode;
+    if (mode?.kind === "drag-cluster" && mode.active) {
+      this.#leadRing.show(null);
+      return;
+    }
+    const sel = this.#selected;
+    const picks = LEAD_KINDS.has(sel?.kind)
+      ? [sel]
+      : [...this.#multiLeads].map(parseLeadKey);
+    const at = picks.map((p) => p && this.#host.leadWorld?.(p)).filter(Boolean);
+    this.#leadRing.show(at.length ? at : null);
+  }
 
-      A MULTI-selection rings every member's riders, since Option would carry
-      them all. Only when the press would actually start a drag, though: a
-      selection holding a board refuses (see #beginClusterDrag), and ringing
-      riders for it would be a promise the app won't keep. Riders are deduped
-      because two members can share a node. */
-  #ridePreviewPoints() {
-    if (!this.#optionHeld) return null;
-    // A drag in flight already shows the answer by moving the riders, and the
-    // topology is frozen while the circuit runs.
-    if (this.#host.mode || this.#host.editingLocked) return null;
-    let riding = null;
-    let legs = null;
-    if (this.#selected?.kind === "part") {
-      riding = this.#host.doc.wiresRidingPart(this.#selected.id);
-      legs = this.#host.doc.partsRidingPart(this.#selected.id);
-    } else if (this.#multi.size >= 2 && this.#multiBoards.size === 0) {
-      riding = this.#host.doc
-        .wiresRidingCluster(this.#multi)
-        .map(({ wireId, ends }) => ({ wireId, ends: ends.map((r) => r.end) }));
-      legs = this.#host.doc.partsRidingCluster(this.#multi);
+  /** Does a lead's owner still exist? */
+  #leadExists(pick) {
+    if (pick?.kind === "lead") return this.#host.partViews.has(pick.id);
+    if (pick?.kind === "wire-end")
+      return Boolean(this.#host.doc.getWire(pick.id));
+    return false;
+  }
+
+  /** Is a lead COVERED by `sets` — its wire or part selected in its own
+      right, or a passenger of a selected board? Then it moves (and deletes)
+      with its owner already, and is not in the lead set as well. */
+  #leadCovered(pick, sets) {
+    if (pick.kind === "wire-end") {
+      return sets.wires.has(pick.id) || this.isPassengerWire(pick.id, sets.boards); // prettier-ignore
     }
-    if (!riding) return null;
-    const points = [];
-    for (const { wireId, ends } of riding) {
-      const wire = this.#host.doc.getWire(wireId);
-      for (const end of ends) {
-        const p = this.#host.addressWorld(wire?.[end]);
-        if (p) points.push(p);
-      }
-    }
-    for (const { id, pins } of legs ?? []) {
-      const comp = this.#host.doc.getComponent(id);
-      const world = comp && partPinsWorld(this.#host.doc.boards, comp);
-      for (const { pin } of pins) {
-        const at = world?.find((p) => p.pin === pin);
-        if (at) points.push({ x: at.x, y: at.y });
-      }
-    }
-    return points.length > 0 ? points : null;
+    return sets.parts.has(pick.id) || this.isPassengerPart(pick.id, sets.boards); // prettier-ignore
   }
 
   /** A board's world-px box, at an overridden position while dragging. */
@@ -195,24 +191,18 @@ export class DeskSelection {
   }
 
   /**
-   * Re-draw the board highlighter around the OUTER edge of every strip the
-   * grab would move — the whole snapped group, or the one-way chain an Option
-   * grab tore off — never the single strip that was clicked. Positions come
-   * from `overrides` mid-drag, from the document otherwise.
+   * Re-draw the board highlighter around the OUTER edge of every strip in the
+   * selection — the strips a grab would move. Positions come from `overrides`
+   * mid-drag, from the document otherwise; a drag in flight outlines exactly
+   * the strips it is carrying, red while the drop would be refused.
    *
    * @param {Map<string, {x:number,y:number}>|null} [overrides]
    */
   refreshBoardOutline(overrides = null) {
-    const drag = this.#host.mode?.kind === "drag" ? this.#host.mode : null;
-    let ids = [];
-    if (drag) ids = drag.members.map((m) => m.id);
-    else if (this.#selected?.kind === "board") {
-      ids = this.#host.doc.groupMembers(this.#selected.id).map((b) => b.id);
-    } else if (this.#multiBoards.size > 0) {
-      // A marquee that took in boards outlines exactly those — the same
-      // highlighter, so a selected design reads as one block (Feature 240).
-      ids = [...this.#multiBoards];
-    }
+    const mode = this.#host.mode;
+    const drag =
+      mode?.kind === "drag-cluster" && mode.boardIds?.length ? mode : null;
+    const ids = drag ? drag.boardIds : [...this.selectedBoards()];
     const rects = [];
     for (const id of ids) {
       const board = this.#host.doc.getBoard(id);
@@ -235,13 +225,78 @@ export class DeskSelection {
     return this.#multiBoards;
   }
 
+  /** The picked leads' `leadKey` strings (the multi set only). */
+  get leads() {
+    return this.#multiLeads;
+  }
+
   /** The single pick — `{kind, id}` or null. */
   get single() {
     return this.#selected;
   }
 
   size() {
-    return this.#multi.size + this.#multiWires.size + this.#multiBoards.size;
+    return (
+      this.#multi.size +
+      this.#multiWires.size +
+      this.#multiBoards.size +
+      this.#multiLeads.size
+    );
+  }
+
+  /** Every board in the selection — the multi set, or a single picked
+      board's whole snapped group (the set its highlighter draws). */
+  selectedBoards() {
+    if (this.#multiBoards.size) return new Set(this.#multiBoards);
+    if (this.#selected?.kind === "board") {
+      const members = this.#host.doc.groupMembers(this.#selected.id);
+      return new Set(members.length ? members.map((b) => b.id) : [this.#selected.id]); // prettier-ignore
+    }
+    return new Set();
+  }
+
+  /**
+   * Everything a grab would move, with the single pick folded in: the
+   * independently selected parts and wires, the selected boards (whose
+   * passengers are carried, not listed), and the leads of the multi set (as
+   * picks, `{kind, id, end}`). A single picked lead, an annotation, a signal
+   * or a tag moves alone and contributes nothing here.
+   */
+  movingSets() {
+    const sets = {
+      parts: new Set(this.#multi),
+      wires: new Set(this.#multiWires),
+      boards: this.selectedBoards(),
+      leads: [...this.#multiLeads]
+        .map(parseLeadKey)
+        .filter((pick) => this.#leadExists(pick)),
+    };
+    const sel = this.#selected;
+    if (sel?.kind === "part") sets.parts.add(sel.id);
+    else if (sel?.kind === "wire") sets.wires.add(sel.id);
+    else if (sel?.kind === "bus") {
+      for (const id of this.#host.doc.getBus(sel.id)?.members ?? []) {
+        sets.wires.add(id);
+      }
+    }
+    return sets;
+  }
+
+  /** Is this component a PASSENGER of `boards` — seated on one of them? */
+  isPassengerPart(id, boards = this.selectedBoards()) {
+    const comp = this.#host.doc.getComponent(id);
+    return comp?.board != null && boards.has(comp.board);
+  }
+
+  /** Is this wire a PASSENGER of `boards` — every end in a hole of one of
+      them, so it rides along with no change to either address? */
+  isPassengerWire(id, boards = this.selectedBoards()) {
+    if (boards.size === 0) return false;
+    const wire = this.#host.doc.getWire(id);
+    if (!wire) return false;
+    return [wire.from, wire.to].every((address) =>
+      boards.has(parseAddress(address)?.boardId),
+    );
   }
 
   clearMulti() {
@@ -257,43 +312,68 @@ export class DeskSelection {
       this.#multiBoards.clear();
       this.#boardOutline.show([], false);
     }
+    if (this.#multiLeads.size) {
+      this.#multiLeads.clear();
+      this.refreshLeadRing();
+    }
   }
 
-  /** Replace the multi-selection; a non-empty one clears the single pick. */
-  setMulti(ids, wireIds = [], boardIds = []) {
+  /** Replace the multi-selection; a non-empty one clears the single pick.
+      Passengers of the boards named are dropped from the part and wire sets
+      — they ride their board, unlit, and are never selected twice over — and
+      a lead (`leadKey`) is dropped when its owner is covered the same way. */
+  setMulti(ids, wireIds = [], boardIds = [], leadKeys = []) {
     this.clearMulti();
     // What is actually still on the desk — the caller may name anything.
-    const parts = [...ids].filter((id) => this.#host.partViews.has(id));
-    const wires = [...wireIds].filter((id) => this.#host.doc.getWire(id));
     const boards = [...boardIds].filter((id) => this.#host.boardViews.has(id));
+    const boardSet = new Set(boards);
+    const parts = [...ids].filter(
+      (id) =>
+        this.#host.partViews.has(id) && !this.isPassengerPart(id, boardSet),
+    );
+    const wires = [...wireIds].filter(
+      (id) => this.#host.doc.getWire(id) && !this.isPassengerWire(id, boardSet),
+    );
+    const covering = {
+      parts: new Set(parts),
+      wires: new Set(wires),
+      boards: boardSet,
+    };
+    const leads = [...leadKeys].filter((key) => {
+      const pick = parseLeadKey(key);
+      return this.#leadExists(pick) && !this.#leadCovered(pick, covering);
+    });
     // The single pick is dropped FIRST, before anything is highlighted:
     // `#select(null)` un-highlights the part it was on, and that part is very
-    // often IN the set about to be highlighted (a marquee drawn around the
+    // often IN the set about to be highlighted (a band drawn around the
     // selected part, or Select All). Clearing afterwards would silently undo
     // the highlight just applied to it.
-    if (parts.length || wires.length || boards.length) this.select(null);
+    if (parts.length || wires.length || boards.length || leads.length) {
+      this.select(null);
+    }
     for (const id of parts) {
       this.#multi.add(id);
       this.#host.partViews.get(id).setSelected(true);
     }
     for (const id of wires) this.#multiWires.add(id);
     for (const id of boards) this.#multiBoards.add(id);
+    for (const key of leads) this.#multiLeads.add(key);
+    this.refreshLeadRing();
     if (this.#multiWires.size) {
       this.#host.wireLayer.setSelectedMany(this.#multiWires);
     }
     // #select(null) already re-traces the outline, but only when something WAS
-    // selected — refresh unconditionally so a marquee's boards light up.
+    // selected — refresh unconditionally so a band's boards light up.
     this.refreshBoardOutline();
-    this.refreshRidePreview(); // Option may be held over the NEW selection
   }
 
   /**
-   * Select the WHOLE desktop — every board, every component seated on one (and
-   * every desk-level brick), and every wire — as though a marquee had been
-   * drawn around all of it. That is deliberately the same set a marquee
-   * captures, so `⌘A` then `⌘C` copies the entire desk as one design clip.
+   * Select the WHOLE desktop — every board, every desk-level brick, and every
+   * wire — as though a band had been drawn around all of it. The parts seated
+   * on the boards ride as passengers, so `⌘A` then `⌘C` copies the entire desk
+   * as one design clip.
    *
-   * Refused while the circuit runs, for the reason a marquee is: a selection
+   * Refused while the circuit runs, for the reason a band is: a selection
    * applied into the frozen state would be one the user cannot act on.
    *
    * @returns {boolean} whether anything was selected.
@@ -349,30 +429,32 @@ export class DeskSelection {
     this.select(null);
   }
 
-  // ── Additive selection (⌘/Ctrl-click) ───────────────────────────────────
+  // ── Additive selection (⌘/Ctrl-click, and ⌥⌘/Alt+Ctrl for a lead) ───────
   //
-  // The marquee REPLACES a selection; this ADDS one item to it, or takes one
-  // back out. Both build the same three sets, so everything downstream —
-  // Delete, ⌘C's cluster/design clip, the board highlighter — is untouched.
+  // The band REPLACES a selection; this ADDS one item to it, or takes one back
+  // out. Both build the same sets, so everything downstream — Delete, ⌘C's
+  // cluster/design clip, the board highlighter — is untouched. The lead chord
+  // fills the fourth set, which only a drag and Delete read.
   //
-  // Annotations are deliberately absent: they are not one of those three sets
-  // (a marquee cannot take one either), so a modifier-click on a label leaves
-  // the selection exactly as it was rather than silently throwing it away in
-  // exchange for the note. A plain click still selects one.
+  // Annotations, signals and tags are deliberately absent: they are none of
+  // the sets, so a chord on one leaves the selection exactly as it was. A
+  // plain click still selects one.
 
-  /** The selection as the three sets, with the single pick folded in — that
-      pick is what a modifier-click most often EXTENDS, so it has to be part of
-      what is being toggled against. A selected board contributes its whole
-      snapped group, which is the set its highlighter is already drawing. */
+  /** The selection as the four sets, with the single pick folded in — that
+      pick is what a chord most often EXTENDS, so it has to be part of what is
+      being toggled against. A selected board contributes its whole snapped
+      group, which is the set its highlighter is already drawing. */
   #selectionSets() {
     const sets = {
       parts: new Set(this.#multi),
       wires: new Set(this.#multiWires),
       boards: new Set(this.#multiBoards),
+      leads: new Set(this.#multiLeads),
     };
     const sel = this.#selected;
     if (sel?.kind === "part") sets.parts.add(sel.id);
     else if (sel?.kind === "wire") sets.wires.add(sel.id);
+    else if (LEAD_KINDS.has(sel?.kind)) sets.leads.add(leadKey(sel));
     else if (sel?.kind === "board") {
       for (const b of this.#host.doc.groupMembers(sel.id))
         sets.boards.add(b.id);
@@ -384,22 +466,47 @@ export class DeskSelection {
    * Toggle a set of ids of one kind in and out of the selection.
    *
    * Refused while a tool or a drag owns `#mode` (a click is not a select
-   * then — the same guard selectWire/selectBus carry) and while the circuit
-   * runs, for the reason a marquee is: a selection applied into the frozen
-   * state is one the user cannot act on.
+   * then) and while the circuit runs, for the reason a band is: a selection
+   * applied into the frozen state is one the user cannot act on.
    *
-   * @param {"parts"|"wires"|"boards"} kind
+   * A part or wire riding a SELECTED board is a passenger, already carried —
+   * toggling it in would select it twice over, so the chord leaves it alone.
+   * A board coming IN takes its passengers out of the independent sets (in
+   * `setMulti`), and going back out does not restore them.
+   *
+   * A LEAD whose owner is selected or a passenger is covered by it already,
+   * and the chord leaves it alone too.
+   *
+   * @param {"parts"|"wires"|"boards"|"leads"} kind
    * @param {string[]} ids
    */
   #toggle(kind, ids) {
     if (this.#host.mode || this.#host.editingLocked) return;
-    const next = toggleSelection(this.#selectionSets(), kind, ids);
+    const current = this.#selectionSets();
+    if (kind === "parts" && ids.every((id) => this.isPassengerPart(id, current.boards))) return; // prettier-ignore
+    if (kind === "wires" && ids.every((id) => this.isPassengerWire(id, current.boards))) return; // prettier-ignore
+    if (kind === "leads" && ids.every((key) => this.#leadCovered(parseLeadKey(key), current))) return; // prettier-ignore
+    const next = toggleSelection(current, kind, ids);
+    // ONE part or wire collapses to the ordinary single pick (singlePick's own
+    // note). A lone BOARD stays in the set: a single pick of a board stands
+    // for its whole snapped group, and a strip a band picked out on its own
+    // must not silently grow back into its kit.
     const one = singlePick(next);
-    if (one)
-      this.select(one); // collapse — see singlePick's own note
-    else if (next.parts.length || next.wires.length || next.boards.length) {
-      this.setMulti(next.parts, next.wires, next.boards);
+    if (one && one.kind !== "board") this.select(one);
+    else if (
+      next.parts.length ||
+      next.wires.length ||
+      next.boards.length ||
+      next.leads.length
+    ) {
+      this.setMulti(next.parts, next.wires, next.boards, next.leads);
     } else this.deselect();
+  }
+
+  /** Option/Alt+⌘/Ctrl-click a lead — `{kind: "lead"|"wire-end", id, end}`:
+      in or out of the selection. */
+  toggleLeadSelection(pick) {
+    if (this.#leadExists(pick)) this.#toggle("leads", [leadKey(pick)]);
   }
 
   /** ⌘/Ctrl-click a part or brick: in or out of the selection. */
@@ -419,13 +526,62 @@ export class DeskSelection {
     if (members.length) this.#toggle("wires", members);
   }
 
-  /** ⌘/Ctrl-click a board: the WHOLE snapped group goes in or out, which is
-      the set a plain click already selects and the highlighter already
-      outlines — a kit joins a design clip as the assembly it is. */
+  /** ⌘/Ctrl-click a board: the WHOLE snapped group goes in or out — a kit is
+      one board to the hand. (A band can still take a strip on its own, which
+      is how one is peeled off its rails.) */
   toggleBoardSelection(id) {
     if (!this.#host.boardViews.has(id)) return;
     const members = this.#host.doc.groupMembers(id).map((b) => b.id);
     this.#toggle("boards", members.length ? members : [id]);
+  }
+
+  // ── Undo/redo of the selection ──────────────────────────────────────────
+
+  /** The selection as plain data — what the undo history records with each
+      step, and `restore` takes back. */
+  serialize() {
+    return {
+      single: this.#selected ? { ...this.#selected } : null,
+      parts: [...this.#multi],
+      wires: [...this.#multiWires],
+      boards: [...this.#multiBoards],
+      leads: [...this.#multiLeads],
+    };
+  }
+
+  /** Put back a selection `serialize` produced (or nothing, for null). Ids
+      that no longer exist simply aren't selected. */
+  restore(state) {
+    this.deselect();
+    if (!state) return;
+    if (
+      state.parts?.length ||
+      state.wires?.length ||
+      state.boards?.length ||
+      state.leads?.length
+    ) {
+      this.setMulti(
+        state.parts ?? [],
+        state.wires ?? [],
+        state.boards ?? [],
+        state.leads ?? [],
+      );
+      return;
+    }
+    const sel = state.single;
+    if (!sel) return;
+    const doc = this.#host.doc;
+    const exists =
+      (sel.kind === "board" && this.#host.boardViews.has(sel.id)) ||
+      ((sel.kind === "part" || sel.kind === "lead") &&
+        this.#host.partViews.has(sel.id)) ||
+      ((sel.kind === "wire" || sel.kind === "wire-end") &&
+        doc.getWire(sel.id)) ||
+      (sel.kind === "bus" && doc.getBus(sel.id)) ||
+      (sel.kind === "annotation" && doc.getAnnotation(sel.id)) ||
+      (sel.kind === "signal" && doc.getSignal(sel.id)) ||
+      sel.kind === "tag";
+    if (exists) this.select({ ...sel });
   }
 
   /**
@@ -436,6 +592,7 @@ export class DeskSelection {
    */
   forget() {
     this.#selected = null;
+    this.#leadRing.clear();
   }
 
   /**
@@ -443,27 +600,34 @@ export class DeskSelection {
    * (`DeskController#rebuildScene`, on undo/redo and a desktop switch). Same
    * argument as `forget()` one level up: every view the selection names is
    * about to be unmounted, so the sets are dropped rather than un-highlighted,
-   * and the two overlays are cleared because what they were drawing is gone.
+   * and the overlays are cleared because what they were drawing is gone.
    */
   forgetAll() {
     this.#selected = null;
     this.#multi.clear();
     this.#multiWires.clear();
     this.#multiBoards.clear();
+    this.#multiLeads.clear();
     this.#host.wireLayer.setSelected(null);
     this.#host.wireLayer.setSelectedMany([]);
     this.#host.annotationLayer.setSelected(null);
     this.#host.signalLayer.setSelected(null);
     this.#host.integrationLayer?.setSelected(null);
     this.#boardOutline.show([], false);
-    this.refreshRidePreview();
+    this.#leadRing.clear();
   }
 
-  /** Drop the selection if it is this wire (WireTools calls this on remove). */
+  /** Drop the selection if it is this wire, or one of its ends (WireTools
+      calls this on remove). */
   clearIfWire(id) {
-    if (this.#selected?.kind === "wire" && this.#selected.id === id) {
+    for (const end of ["from", "to"]) {
+      this.#multiLeads.delete(leadKey({ kind: "wire-end", id, end }));
+    }
+    const sel = this.#selected;
+    if ((sel?.kind === "wire" || sel?.kind === "wire-end") && sel.id === id) {
       this.#selected = null;
       this.#host.wireLayer.setSelected(null);
+      this.#leadRing.clear();
     }
   }
 

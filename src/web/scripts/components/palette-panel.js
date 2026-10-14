@@ -684,7 +684,11 @@ export class PalettePanel {
     if (!filtering) this.#appendBoards();
 
     const shown = this.#shownFamilies();
-    const matching = PALETTE_DEFS.filter((def) => this.#matches(def));
+    // A RETIRED part (the old single-row digits) is never offered — one on a
+    // desk still loads and runs, it just cannot be added any more.
+    const matching = PALETTE_DEFS.filter(
+      (def) => def.retired !== true && this.#matches(def),
+    );
     const defs = matching.filter(
       (def) => this.#familyShown(def, shown) && this.#engineShown(def),
     );

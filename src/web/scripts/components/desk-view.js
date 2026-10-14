@@ -54,6 +54,17 @@ export class DeskView {
   #wheelLocked = false;
   // Active pan: { pointerId, lastX, lastY, startX, startY, active }.
   #drag = null;
+  // Whether a plain left-drag on EMPTY desk pans. The schematic keeps that;
+  // the breadboard does not — there a drag on the background is the
+  // rubber-band select, and the pan lives on Space-drag and the middle button
+  // (see CLAUDE.md → "Selection").
+  #panOnEmptyDrag = true;
+  // Space is held: a left-drag ANYWHERE pans, ahead of whatever is under the
+  // pointer (set by app.js, which owns the key — it is also Run/Stop).
+  #spaceHeld = false;
+  // A Space-drag pan happened during the current hold, so the Space's release
+  // is not a tap (app.js reads and clears it: a tap runs the circuit).
+  #spacePanned = false;
 
   /**
    * @param {HTMLElement} viewport - the `.desk-viewport` element to own.
@@ -62,11 +73,18 @@ export class DeskView {
    *   values are normalized, so junk falls back to the origin at 100%).
    * @param {(camera: object) => void} [opts.onViewportChange] - constructor
    *   callback fired after every camera change (pan step, zoom, setCamera).
+   * @param {boolean} [opts.panOnEmptyDrag] - a plain left-drag on empty desk
+   *   pans (default). The breadboard passes false: there that drag is the
+   *   rubber-band select, and panning is Space-drag or the middle button.
    */
-  constructor(viewport, { camera, onViewportChange } = {}) {
+  constructor(
+    viewport,
+    { camera, onViewportChange, panOnEmptyDrag = true } = {},
+  ) {
     this.#viewport = viewport;
     this.#camera = normalizeCamera(camera);
     this.#onViewportChange = onViewportChange;
+    this.#panOnEmptyDrag = panOnEmptyDrag;
 
     this.#surface = document.createElement("div");
     this.#surface.className = "desk-surface";
@@ -74,6 +92,10 @@ export class DeskView {
     viewport.prepend(this.#surface);
 
     viewport.addEventListener("pointerdown", this.#onPointerDown);
+    // Space-drag is claimed in the CAPTURE phase, ahead of the part, board and
+    // wire listeners below it: with Space down a press anywhere is a pan, never
+    // a grab of whatever happens to be under the pointer.
+    viewport.addEventListener("pointerdown", this.#onSpacePointerDown, true);
     viewport.addEventListener("wheel", this.#onWheel, { passive: false });
 
     const rect = viewport.getBoundingClientRect();
@@ -141,8 +163,32 @@ export class DeskView {
     this.#zoomAtCenter(ZOOM_MIN);
   }
 
+  /**
+   * Space is down (or up) — pushed in by app.js, which owns the key because a
+   * TAP of it is also Run/Stop. While it is held a left-drag anywhere pans and
+   * the viewport shows the open hand. Dropping it ends no pan already under
+   * way: a drag finishes on its own release.
+   */
+  setSpaceHeld(on) {
+    const next = Boolean(on);
+    if (next === this.#spaceHeld) return;
+    this.#spaceHeld = next;
+    if (next) this.#spacePanned = false;
+    this.#viewport.classList.toggle("desk-viewport--pan-ready", next);
+  }
+
+  /** Did a Space-drag pan happen during the hold just ended? Reading it
+      clears it — app.js asks once, at the Space's release, to tell a tap
+      (Run/Stop) from a hold (pan). */
+  takeSpacePanned() {
+    const panned = this.#spacePanned;
+    this.#spacePanned = false;
+    return panned;
+  }
+
   dispose() {
     this.#endPan();
+    this.#viewport.removeEventListener("pointerdown", this.#onSpacePointerDown, true); // prettier-ignore
     this.#viewport.removeEventListener("pointerdown", this.#onPointerDown);
     this.#viewport.removeEventListener("wheel", this.#onWheel);
     this.#resizeObserver.disconnect();
@@ -151,25 +197,44 @@ export class DeskView {
 
   // ── Pointer pan (capture + 4 px threshold; never HTML5 DnD) ───────────────
 
+  /** Space held + left press, anywhere on the viewport: a pan, claimed
+      before anything under the pointer hears of the press. */
+  #onSpacePointerDown = (e) => {
+    if (!this.#spaceHeld || e.button !== 0 || this.#drag) return;
+    // Only presses on the desk itself — the zoom cluster, padlock and rails
+    // sit inside the viewport too and keep their own clicks.
+    if (!this.#surface.contains(e.target) && e.target !== this.#viewport) {
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    this.#beginPan(e, true);
+  };
+
   #onPointerDown = (e) => {
     if (this.#drag) return;
-    // Shift-left-drag is the controller's marquee selection, never a pan.
-    if (e.button === 0 && e.shiftKey) return;
     const emptyDesk = e.target === this.#viewport || e.target === this.#surface;
-    // Left-drag pans only from empty desk (overlays keep their own clicks);
-    // middle-drag pans from anywhere, immediately (no click meaning to keep).
-    if (e.button === 0 && !emptyDesk) return;
+    // Left-drag pans only from empty desk (overlays keep their own clicks),
+    // and only where that drag means nothing else (the schematic; on the
+    // breadboard it is the rubber band). Middle-drag pans from anywhere,
+    // immediately (no click meaning to keep).
+    if (e.button === 0 && !(emptyDesk && this.#panOnEmptyDrag)) return;
     if (e.button !== 0 && e.button !== 1) return;
     if (e.button === 1) e.preventDefault(); // suppress autoscroll
+    this.#beginPan(e, e.button === 1);
+  };
 
+  /** Start a pan gesture; `immediate` skips the click-vs-drag threshold. */
+  #beginPan(e, immediate) {
     this.#drag = {
       pointerId: e.pointerId,
       lastX: e.clientX,
       lastY: e.clientY,
       startX: e.clientX,
       startY: e.clientY,
-      active: e.button === 1,
+      active: immediate,
     };
+    if (this.#spaceHeld) this.#spacePanned = true;
     if (this.#drag.active) this.#markPanning(true);
     try {
       this.#viewport.setPointerCapture(e.pointerId);
@@ -179,7 +244,7 @@ export class DeskView {
     this.#viewport.addEventListener("pointermove", this.#onPointerMove);
     this.#viewport.addEventListener("pointerup", this.#onPointerUp);
     this.#viewport.addEventListener("pointercancel", this.#onPointerUp);
-  };
+  }
 
   #onPointerMove = (e) => {
     const d = this.#drag;

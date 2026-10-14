@@ -63,6 +63,10 @@ export function buildSegmented({
       // at all. The dataset branch stringifies whatever it is given.
       dataset: { value: opt.value },
       text: opt.label,
+      // An option the caller greys (a TO-220 on a TO-92's bent legs) stays
+      // in the track, saying why on hover.
+      disabled: opt.disabled === true,
+      ...(opt.title ? { title: opt.title } : {}),
       onClick: () => {
         // Compare the OPTIONS, never their rendered attributes: an attribute
         // is a string, and every non-string value has to survive a round trip

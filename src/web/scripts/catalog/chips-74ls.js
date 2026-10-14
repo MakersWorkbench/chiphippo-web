@@ -773,9 +773,10 @@ export const CHIPS_74LS = Object.freeze([
     blurb:
       "Decodes BCD (A–D) to active-low seven-segment drives (a–g) for a " +
       "common-anode display, with lamp-test (LT̄), ripple-blank-in (RBĪ), and " +
-      "a blanking input (BĪ) that forces every segment off. Drive the seg8ca " +
-      "(common-anode) display — tie its pin 9 (A) to VCC; the active-low " +
-      "outputs would light the common-cathode seg8cc inverted. The segment " +
+      "a blanking input (BĪ) that forces every segment off. Drive the seg7ca " +
+      "(common-anode) display — tie its COM (pin 3 or 8) to VCC; the " +
+      "active-low outputs would light the common-cathode seg7cc inverted. " +
+      "The segment " +
       "outputs are open-collector, as on the real part: each sinks its " +
       "segment or lets go, which is all a common-anode display asks.",
     group: "Display driver",

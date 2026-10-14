@@ -175,3 +175,60 @@ test("clear() also thaws a frozen store", () => {
   h.clear(snap(0));
   assert.equal(h.frozen, false);
 });
+
+// ── Selection in the timeline ───────────────────────────────────────────────
+
+test("a change of selection is a step of its own, sharing the document's version", () => {
+  const h = new HistoryStore();
+  const s0 = snap(0);
+  h.clear(s0);
+  const v0 = h.version;
+  h.recordSelection({ single: { kind: "part", id: "c1" } }, 1);
+  assert.equal(h.size, 2);
+  assert.equal(h.version, v0, "the same document");
+  assert.equal(h.present, s0, "and the very same snapshot");
+  assert.deepEqual(h.selection, { single: { kind: "part", id: "c1" } });
+
+  h.record(snap(1), "move", 2, { selection: { single: { kind: "part", id: "c1" } } }); // prettier-ignore
+  assert.equal(h.version, v0 + 1, "an edit moves the version on");
+
+  // Back across the edit: another document, the pick it was made with.
+  assert.deepEqual(h.undo(), snap(0));
+  assert.equal(h.version, v0);
+  assert.deepEqual(h.selection, { single: { kind: "part", id: "c1" } });
+  // Back across the pick alone: the same document, nothing picked.
+  h.undo();
+  assert.equal(h.version, v0);
+  assert.equal(h.selection, null);
+});
+
+test("a selection step drops the redo future like any other step", () => {
+  const h = new HistoryStore();
+  h.clear(snap(0));
+  h.record(snap(1), "a", 1);
+  h.undo();
+  assert.equal(h.canRedo, true);
+  h.recordSelection({ parts: ["c1"] }, 2);
+  assert.equal(h.canRedo, false);
+});
+
+test("recordSelection is a no-op while frozen or empty", () => {
+  const h = new HistoryStore();
+  assert.deepEqual(h.recordSelection({ parts: ["c1"] }), []);
+  assert.equal(h.size, 0);
+  h.clear(snap(0));
+  h.freeze();
+  h.recordSelection({ parts: ["c1"] });
+  assert.equal(h.size, 1);
+});
+
+test("sync reaches the selection steps that share the present's document", () => {
+  const h = new HistoryStore();
+  h.clear(snap(0));
+  h.record(snap(1), "a", 1);
+  h.recordSelection({ parts: ["c1"] }, 2);
+  const synced = { ...snap(1), damaged: true };
+  h.sync(synced);
+  h.undo(); // back to the edit's own entry — same version
+  assert.deepEqual(h.present, synced, "not the copy from before the sync");
+});

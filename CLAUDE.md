@@ -88,6 +88,19 @@ see `.claude/rules/generated-circuits.md` → "Example circuits").
 edges and timer wakes run in batches between frames, one `sim-state` per batch, every
 tick on `chiphippo:sim-tick`; clocks to 1 kHz (dropped to 250 Hz 2026-10-09; 500 Hz and
 1 kHz back 2026-10-10), the timer cap 1 kHz, lamps flat past 25 Hz (see `.claude/rules/simulation.md` → "Batched ticks").
+**Selection & drag model** (2026-10-14, no feature number, from Jason's brief): one
+press rule for every object — a click is a drag that didn't travel; a drag on the
+background (bare desk, or an unselected strip's holes) is the rubber band, selecting by
+full enclosure; ⌘/Ctrl toggles; Option/Alt is pin-targeting (one lead, never additive);
+pan is Space-drag / middle button; a board's parts are unlit passengers; a move carries
+the wiring and drops atomically, reusing the landing it showed; Delete takes the whole
+selection; selection changes are undo steps (see `.claude/rules/desk-editing.md` →
+"Selection" and "Moving parts and clusters").
+**TO-92 free legs & the 7-segment display** (2026-10-14, no feature number): a TO-92
+transistor's legs bend one at a time (Option/Alt-drag; TO-220 greyed while they are out of
+a row — `model/free-legs.js`), and `seg7cc`/`seg7ca`, the real 10-pin digit straddling the
+channel wide, replace the single-row `seg8cc`/`seg8ca` (retired: off the tray, still
+loading) — see `.claude/rules/parts.md`.
 **Landed without a feature number**: capacitors, typed resistor/capacitor values and the
 RC timers — the 555 and the CD4047B/4060B/4098B/4538B (plan
 `features/done/chiphippo-capacitors-555.md`; see "Values, capacitors & timed parts"); the
@@ -288,7 +301,7 @@ means the section of that name in the file below.
 | `.claude/rules/bench-parts.md` | "Bench parts — regulators, relay, load, LM358, ULN2003A, optocouplers" | The bench parts: where they live, the logic engine's regulator supplies, their Spice Lite devices, relay contacts by coil current, thermal shutdown, the solver fixes they forced |
 | `.claude/rules/spice-lite.md` | "Spice Lite — the second engine" | Spice Lite: the second engine — every net a voltage, hooks seam, closed-form RC nodes, devices, loads/supply/sag, real LEDs, spikes, analyzer voltages |
 | `.claude/rules/parts.md` | "Values, capacitors & timed parts" · "The discretes — inductors, diodes, transistors" | Values, capacitors & timed parts (value parser, combo fields, 555/CD4000 timers, rc-trace) + The discretes (inductors, diodes, transistors) |
-| `.claude/rules/desk-editing.md` | "Desk surface & rendering" · "Schematic view" · "Selection" · "Moving parts and clusters" · "The wire gauge & the BOM cutting list" | Desk surface & rendering, Schematic view, Selection, Moving parts and clusters (Option-drag riders), wire gauge & BOM cutting list |
+| `.claude/rules/desk-editing.md` | "Desk surface & rendering" · "Schematic view" · "Selection" · "Moving parts and clusters" · "The wire gauge & the BOM cutting list" | Desk surface & rendering (pan), Schematic view, Selection (the press rule, band, ⌘/Ctrl, Option/Alt pin mode, passengers, selection undo), Moving parts and clusters (riders, group drag, atomic drop), wire gauge & BOM cutting list |
 | `.claude/rules/signals.md` | "External signals" | External signals: signal buttons + flags, keys 1–0, engine drive, clips, schematic stubs |
 | `.claude/rules/i18n.md` | "Language support" | Language support: main-resolved locale, t()/tf()/m(), relabel in place, what stays English, the i18n guards |
 | `.claude/rules/settings.md` | "Settings" | Settings dialog: every setting, font-size scale (one base, derived ramp), ⌘= vs ⌥⌘=, info notes, [hidden] rule |
@@ -431,11 +444,13 @@ in `doc.boards`; a "breadboard" is a **kit** of them placed in one action.
     `#pullGhostToMate`) applies the pull only when the snapped position is still legal —
     **a magnet must never turn a legal drop illegal**. Mismatched sizes never attract; an
     already-flush pair is left alone.
-  - **Breaking a snap** is a modifier on the board grab: plain = the whole group;
-    **Option** = `matedChain(id, "forward")` (the run reachable through below/right edges
-    only); **Option+Shift** = `"backward"`. The walk stays inside the group, so a strip
-    merely resting flush is never dragged along. A partial set commits through
-    `moveBoardsBy`, which tears the group: `#regroupAfterBreak` re-derives BOTH halves
+  - **Breaking a snap is a SELECTION, not a modifier** (the selection & drag model,
+    2026-10-14): band a strip (and so its parts) but not the rail beside it, and drag —
+    the selected set peels away, and every wire into the rail left behind stretches. A
+    ⌘/Ctrl-click takes a strip's whole snapped group; a band takes exactly the strips it
+    wholly encloses. (The old Option / Option+Shift grabs and their `matedChain` walk are
+    gone from the desk; `DeskDoc.matedChain` survives only for its tests.) A partial set
+    commits through `moveBoardsBy`, which tears the group: `#regroupAfterBreak` re-derives BOTH halves
     from what is still mated within each (`matedComponents`), minting a fresh id per run
     of two or more and `null` for a lone strip — fresh on both sides, so the halves can
     never share an id. The set lights up on mouse-down (`board--drag-set`, a wash not a
@@ -444,8 +459,8 @@ in `doc.boards`; a "breadboard" is a **kit** of them placed in one action.
     `BoardOutline` draws ONE path in the overlay from `desk/rect-outline.js`
     (`unionOutline` traces the boundary of a union of rects by coordinate compression +
     edge stitching; `outlinePath` rounds the corners), so flush strips show no seam. It
-    follows the drag live, tracks an Option grab's torn-off run, and reddens on an
-    illegal drop — boards carry no selected/illegal outline of their own.
+    follows the drag live, outlines exactly the strips a group drag carries, and reddens
+    on an illegal drop — boards carry no selected/illegal outline of their own.
 
 ## Document model
 
@@ -586,29 +601,30 @@ in `doc.boards`; a "breadboard" is a **kit** of them placed in one action.
   `porthippo/src/web/scripts/components/card-canvas.js`). The capture is for the MOVE stream
   only, never the sole delivery route for the RELEASE. **Every direct-manipulation desk
   drag** goes through **`components/pointer-gesture.js`** (`beginPointerGesture` → one
-  teardown): the wire/bus/palette gestures and the NINE DeskController owns (board, part,
-  brick, **cluster**, resistor body, resistor end, annotation, **signal flag**, marquee).
+  teardown): the wire/bus/palette gestures and the EIGHT DeskController owns (part, brick,
+  **group** — the whole selection, boards included — resistor body, resistor end,
+  annotation, **signal flag**, marquee).
   - `pointerup`/`pointercancel` listen on `window` in the CAPTURE phase, so a release
     reaches the gesture whether or not the capture held; `lostpointercapture` + window
     `blur` end it too (the only signals for "this pointer isn't yours" with no up/cancel
     behind them). `.desk-viewport` sets `touch-action: none` so the browser can't claim a
     gesture mid-drag and cancel it.
-  - **A drop is resolved from the RELEASE event's own position** (`releaseWorld`), never
-    from the last `pointermove` — coalesced moves lag the cursor, and a stale sample
-    silently lost the drop. **The single-point drags (wire end, lead, a two-terminal
-    part's body carried by its pin 1, flag, tag) are the exception**: they commit what
-    the last move showed and never read the release position at all (see "Document
-    model" → single point).
-  - **The re-resolve is one function per drag, shared by the move and the release**
-    (`#resolveBoardDrag` / `#resolvePartSeat` / `#resolveBrickPos` /
-    `#resolveAnnotationPos` / `#marqueeRect`) — so preview and drop can never disagree. The part drag is why this matters most: its
-    move handler leaves `d.legal` false for an off-board sample while KEEPING `d.seat`, so a
-    fast release silently reverted a legal reseat.
+  - **A drop REUSES the landing the last move showed** whenever that landing was legal,
+    and never recomputes it (the selection & drag model, 2026-10-14) — a seat the screen
+    promised is the seat committed. Only when the last move showed nothing legal does the
+    RELEASE event's own position get a say (`releaseWorld`): coalesced moves lag the
+    cursor, and a stale off-board sample must not revert a good drop. The single-point
+    drags (wire end, lead, a two-terminal part's body carried by its pin 1, flag, tag)
+    never read the release at all (see "Document model" → single point). An annotation
+    and the band have no snap target, so they still land at the release point.
+  - **The resolve is one function per drag, shared by the move and the release**
+    (`#resolveGroupMove` / `#resolvePartSeat` / `#resolveBrickPos` /
+    `#resolveAnnotationPos` / `#marqueeRect`) — so preview and drop can never disagree.
   - Because the listeners outlive the dragged element, **`#rebuildScene` cancels any live
     gesture first** — undo/redo or a tab switch mid-drag would leave a release to commit
-    against unmounted views. `tests/desk-drag-release.test.js` holds all eight to the three
-    cases the old shape could not survive (release point ≠ last move, release off the
-    dragged element, yanked capture).
+    against unmounted views. `tests/desk-drag-release.test.js` holds them to the three
+    cases the old shape could not survive (release point ≠ last move — now: the shown
+    landing wins, release off the dragged element, yanked capture).
   - **"Is a drag in flight?" is DERIVED from the kind's name, never a hand-kept list.**
     `#dragGestureActive` WAS a list and fell silently behind: the wire and bus tools mint
     their own kinds in their own modules, so when routed wires added `drag-wire-point` a

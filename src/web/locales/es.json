@@ -674,6 +674,12 @@
     "seg8ca": {
       "title": "Dígito de 8 segmentos (ánodo común)"
     },
+    "seg7cc": {
+      "title": "Display de 7 segmentos (cátodo común)"
+    },
+    "seg7ca": {
+      "title": "Display de 7 segmentos (ánodo común)"
+    },
     "bar8": {
       "title": "Barra de LED de 8 segmentos"
     },
@@ -1223,14 +1229,6 @@
       "boards": {
         "one": "{count} placa",
         "other": "{count} placas"
-      },
-      "moreParts": {
-        "one": "{count} componente más",
-        "other": "{count} componentes más"
-      },
-      "moreWires": {
-        "one": "{count} cable más",
-        "other": "{count} cables más"
       }
     },
     "menu": {
@@ -1254,9 +1252,7 @@
       "boardMessage": "{id} tiene {what} conectados — al quitar la placa se quitan también.",
       "boardsMessage": "Estas {count} placas unidas tienen {what} conectados — al quitarlas se quitan también.",
       "brickTitle": "¿Quitar {noun}?",
-      "brickMessage": "{id} tiene {what} conectados — al quitarlo se quitan también.",
-      "selectionTitle": "¿Quitar {what}?",
-      "selectionMessage": "{extra} conectados a ellos se quitarán también."
+      "brickMessage": "{id} tiene {what} conectados — al quitarlo se quitan también."
     },
     "paste": {
       "failTitle": "No se pudo pegar el diseño",
@@ -1590,6 +1586,12 @@
       "selectAll": "Seleccionar todo — la mesa entera, o el texto de un campo",
       "toggleSelect": "Añadir / quitar un elemento de la selección",
       "toggleSelectKeys": "{mod}+Clic",
+      "pickLead": "Elegir una sola patilla — un extremo de cable o una pata (nunca se añade)",
+      "pickLeadKeys": "{alt}+Clic",
+      "toggleLead": "Añadir / quitar una patilla — un extremo de cable o una pata",
+      "toggleLeadKeys": "{alt}+{mod}+Clic",
+      "moveBare": "Mover la selección sola — su cableado se queda donde está",
+      "moveBareKeys": "{shift}+Arrastrar",
       "copy": "Copiar el componente seleccionado",
       "paste": "Pegar un duplicado",
       "delete": "Eliminar la selección",
@@ -1603,6 +1605,8 @@
       "palette": "Mostrar u ocultar la paleta de componentes",
       "analyzer": "Mostrar u ocultar el analizador lógico",
       "fit": "Ajustar a la pantalla",
+      "pan": "Desplazar el escritorio",
+      "panKeys": "Espacio+arrastrar o botón central",
       "zoomOut": "Alejar todo lo posible (encontrar un componente perdido)",
       "zoom": "Acercar / alejar / restablecer",
       "fontSize": "Tamaño de fuente del editor: aumentar / reducir / restablecer",
@@ -1785,7 +1789,8 @@
       "adviceLabel": "Sobre este valor"
     },
     "refused": {
-      "bodyHoles": "No hay sitio: el orificio al que pasaría su terminal está ocupado o más allá del final de la placa."
+      "bodyHoles": "No hay sitio: el orificio al que pasaría su terminal está ocupado o más allá del final de la placa.",
+      "case": "Sus patas están dobladas y las de un TO-220 son una fila rígida: colócalas primero en tres orificios seguidos, en orden."
     },
     "hint": {
       "title": "Valores normalizados cercanos:",

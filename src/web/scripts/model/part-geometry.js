@@ -261,16 +261,52 @@ const inRect = (rect, p) =>
   p.y >= rect.minY &&
   p.y <= rect.maxY;
 
-/** Ids of components whose EVERY pin/terminal lies inside the world rect. */
-export function componentsInRect(boards, components, rect) {
+/**
+ * Ids of components lying WHOLLY inside the world rect — the rubber band's
+ * part pick. Enclosure, never a graze (CLAUDE.md → "Selection"): every
+ * pin/terminal must be inside, and so must the drawn BODY — a desk brick's
+ * own box, and a seated part's when `bodyBox` can say where it is
+ * (`components/part-body-box.js`: a box local to the anchor hole, or null to
+ * go by the pins alone). It is an argument because that geometry belongs to
+ * the views, which a model module may not import.
+ *
+ * @param {Array} boards
+ * @param {Array} components
+ * @param {{minX:number, minY:number, maxX:number, maxY:number}} rect
+ * @param {((comp: object) => ({minX:number, minY:number, width:number,
+ *   height:number}|null))|null} [bodyBox]
+ */
+export function componentsInRect(boards, components, rect, bodyBox = null) {
   const ids = [];
   for (const comp of components) {
     const points = componentPoints(boards, comp);
-    if (points.length > 0 && points.every((p) => inRect(rect, p))) {
-      ids.push(comp.id);
-    }
+    if (points.length === 0 || !points.every((p) => inRect(rect, p))) continue;
+    if (!bodyInRect(boards, comp, rect, bodyBox)) continue;
+    ids.push(comp.id);
   }
   return ids;
+}
+
+/** Whether a component's drawn body (where it can be known) is inside. */
+function bodyInRect(boards, comp, rect, bodyBox) {
+  if (comp.board == null) {
+    const size = partDef(comp.ref)?.size;
+    if (!size) return true;
+    return (
+      inRect(rect, { x: comp.x, y: comp.y }) &&
+      inRect(rect, { x: comp.x + size.width, y: comp.y + size.height })
+    );
+  }
+  const box = bodyBox?.(comp);
+  if (!box) return true;
+  const anchor = addressWorld(boards, [], `${comp.board}.${comp.anchor}`);
+  if (!anchor) return true;
+  const x = anchor.x + box.minX;
+  const y = anchor.y + box.minY;
+  return (
+    inRect(rect, { x, y }) &&
+    inRect(rect, { x: x + box.width, y: y + box.height })
+  );
 }
 
 /**
@@ -291,13 +327,15 @@ export function boardsInRect(boards, rect) {
     .map((b) => b.id);
 }
 
-/** Ids of wires with BOTH endpoints inside the world rect. */
+/** Ids of wires lying wholly inside the world rect: BOTH endpoints, and
+    every bend of a routed one. */
 export function wiresInRect(boards, components, wires, rect) {
   return wires
     .filter(
       (w) =>
         inRect(rect, addressWorld(boards, components, w.from)) &&
-        inRect(rect, addressWorld(boards, components, w.to)),
+        inRect(rect, addressWorld(boards, components, w.to)) &&
+        (w.points ?? []).every((p) => inRect(rect, p)),
     )
     .map((w) => w.id);
 }

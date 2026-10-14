@@ -61,6 +61,16 @@ paths:
   rotated group, round the leads and the body's `size` (`{along, across}` per
   `SPAN_BODIES` entry) at the outline's gap and stroke, shown by CSS only while selected
   (red while refused) — the element outline is switched off for those parts.
+- **Pan is Space-drag or the middle button — never a plain drag** on the breadboard
+  (`DeskView`'s `panOnEmptyDrag: false`; the schematic keeps its plain-drag pan, where that
+  drag means nothing else). There a plain drag on the background is the rubber band. Space
+  is ALSO Run/Stop, so app.js tells the two apart by the hold: Space down →
+  `DeskView.setSpaceHeld(true)` (the viewport shows `--pan-ready`'s open hand, and a left
+  press ANYWHERE on the desk is claimed in the CAPTURE phase as a pan, so nothing under
+  it hears it); Space up → `takeSpacePanned()`, and only a hold that did NOT pan toggles
+  the run. So Run/Stop by key now fires on the RELEASE. Both 2D views take the hold
+  (`spacePan` in `bindShortcuts`); the viewport's own chrome (zoom cluster, rails) keeps
+  its clicks. Wheel and two-finger scroll still pan; the padlock still locks the wheel.
 - Pan/zoom must **never** rebuild or re-lay-out surface children (transform only); wires
   re-render only on doc changes or live drags (positions passed as overrides).
 - An `<svg>` with width/height 0 renders NOTHING per spec — zero-size anchors need a
@@ -68,7 +78,7 @@ paths:
 - **The desk padlock locks an INPUT, not the camera** (`components/desk-lock.js` →
   `DeskView.setWheelLocked`, **⌘L**). Top-right of the viewport, transparent background
   (it sits on the desk, not in a card). Shut, the wheel stops reaching the camera;
-  drag-to-pan, the zoom cluster, the keyboard and Fit all still work — it exists for a
+  Space-drag and middle-drag pan, the zoom cluster, the keyboard and Fit all still work — it exists for a
   **Magic Mouse**, whose surface reports a scroll from a resting finger. `#onWheel` calls
   `preventDefault` BEFORE the lock check (a locked desk must not fall through to page
   zoom). The icon changes SHAPE (open vs shut shackle), its label says what a CLICK
@@ -115,50 +125,156 @@ see it — `#applySim` only remembers the levels, and `setVisible(true)` paints 
 
 ## Selection
 
-**The selection is built two ways, and the modifier is the difference**
-(`model/selection-toggle.js`, pure). A **Shift-drag marquee** REPLACES the selection with
-everything a box wholly encloses; a **⌘/Ctrl-click** ADDS one item or takes one out. Both
-fill the same three sets (`#multi` / `#multiWires` / `#multiBoards`), so Delete, ⌘C's
-cluster/design clip and the board highlighter are untouched by the second existing.
+**One press rule for every object** (the selection & drag model, Jason's brief of
+2026-10-13, landed 2026-10-14; `DeskController#press`, the selection in
+`components/desk-selection.js`, the pure chord in `model/selection-toggle.js`). The whole
+model is one idea: **a click is a drag that didn't travel**. Press an object and you have
+picked it up; let go where you pressed and it is set back down on its own hole — a no-op
+move whose one lasting effect is that the object is now the selection. There is no
+"select click" to tell apart from a "drag click", only whether the pointer travelled past
+the ~4 px threshold. Every press on the desk while editing goes through `#press`: boards
+and parts call it from their own pointerdown (and stop the event when it claims), and the
+viewport calls it for the wires, buses and the bare desk (`#hitFromTarget`; `undefined`
+for the viewport's own chrome, which is left alone).
 
+- **Four jobs, one combination** (Shift is no chord of its own — it only makes a part drag
+  BARE; see "Moving parts and clusters"):
+  - **Plain, on the BACKGROUND** — the bare desk, or the bare holes of a strip that is
+    NOT selected — starts the rubber band (`#beginMarquee`; the band only appears after the
+    threshold). A click on bare desk clears the selection; **a click on a strip's holes
+    selects the WHOLE BOARD** — `selectBoard`, the single board pick that stands for the
+    strip's whole snapped group, its parts riding as passengers (Jason, 2026-10-14). Only
+    the DRAG from an unselected strip is a band; the click is the board.
+  - **Plain, on an object** selects just it and the press is its drag. A wire's END CAP and
+    a routed wire's bend knob sit on holes and are no pointer target, so a press there lands
+    on the board beneath — `#press` asks `wireIdNear` / `wirePointNear` first: **the body on
+    top wins** over the board under it. A two-terminal part pressed anywhere — on a leg too —
+    is its BODY. A routed wire's body still BENDS (its knobs move, a press along the run
+    inserts one) — that is a routed wire's move; a bus member's lead only selects.
+  - **⌘/Ctrl-click** toggles the object pressed (body-wins priority, so it is not a way to
+    pick one leg). On bare desk it changes nothing — a miss is not a request to clear. A
+    board toggles its WHOLE snapped group; a bus its member wires.
+  - **Option/Alt is PIN-TARGETING mode**, never additive. app.js pushes the key in
+    (`setPinMode`, keydown/keyup/blur — and the pointermove's own `altKey` mends a missed
+    key): `desk-viewport--pin-mode` makes every body inert (default cursor), and the one
+    hole under the pointer holding an **independently movable lead** — a wire end, a leg
+    of a `rotatable` two-terminal part, or a leg of a TO-92 (`#leadEnds`; parts.md → free
+    legs) — gets the shared ring in RED (`hole-ring--pin`; the
+    selection colour is the picked state). A fixed pin of a rigid package is never a target
+    (it cannot move apart from its chip), nor is a bus member's cap on its own bus's handle
+    (`WireTools.endGrabbable`). `#pinTargetAt` picks the nearest within
+    `WIRE_END_GRAB_RADIUS`. A press on a target REPLACES the selection with that lead alone
+    (`{kind: "lead", id, end: "a"|"b"}` / `{kind: "wire-end", id, end}`, ringed in the
+    selection colour by DeskSelection's `hole-ring--selected` HoleRings, re-aimed after every
+    edit) and is that lead's drag — the existing resistor-end / wire-end gestures. A press on
+    nothing lightable does nothing; labels, flags and tags let an Alt press through.
+    Delete on a picked lead removes what it belongs to.
+  - **Option/Alt + ⌘/Ctrl-click ADDS a lead to the set** (Jason, 2026-10-14) — the one
+    combination, `isLeadToggleEvent`; a solo Option/Alt press still REPLACES the set. The
+    target is `#pinTargetAt`'s; the press toggles it in or out (`#toggleLeadAt`), moves
+    nothing, and on nothing lightable changes nothing. The selection's FOURTH set,
+    `leads`, holds `leadKey` strings (`wire-end:w3:to`, `lead:c2:a` — `selection-toggle.js`
+    owns the key and the toggle; one lead left collapses to the single lead pick,
+    `singlePick`). A lead is COVERED by its owner — its wire or part selected in its own
+    right, or a passenger of a selected board — and is never in the set too: the chord on
+    one is a no-op, and `setMulti` drops a lead whose owner joins. It mixes freely with
+    parts, wires and boards. A band REPLACES it (a band never takes a lead).
+    - **Its rings are members.** With more than one thing selected, a PLAIN press within
+      `WIRE_END_GRAB_RADIUS` of a picked lead's ring (`#selectedLeadNear`) drags the whole
+      selection by that lead — it is checked BEFORE the body-on-top rule, since the ring is
+      what the user is aiming at — and a click there collapses to that lead.
+    - **In a group drag a picked lead is a RIDER of the delta itself**
+      (`cluster-move.js` `mergeLeadRiders` + `leadShift`, the pseudo-members
+      `LEAD_WIRE_END`/`LEAD_LEG` handed to `planClusterRiders` as `presetShifts`). So the
+      riders' machinery does the rest: a wire with one end picked STRETCHES, one whose other
+      end rides a member (or is picked too) travels whole; a part with one leg picked BENDS
+      and with both translates (`planRidingLead`); a routed wire's bends move only when both
+      ends agree; and the one batch check sees every hole. A picked end that would also
+      ride a member follows the PICK. One plugged into something moving by itself (a moving
+      strip, a moving brick) keeps its address; one landing ON something moving is refused.
+      A Shift (bare) drag still carries the picked leads — they were selected.
+    - Delete takes a picked lead's owner, as for the single pick. The rings stand down
+      while a drag carries them and come back where they landed.
+- **A press on a member of a MULTI-object selection drags the whole selection** (`#inGroup`
+  — more than one thing selected, or any board, and the pressed thing selected in its own
+  right; a selected strip is grabbed by its bare holes); a click there COLLAPSES the
+  selection to what was pressed (`#collapseTo`; a switch under the finger still flips, a
+  strip keeps its group's selected strips and becomes the single board pick when that is
+  the whole group). A PASSENGER is not a member: pressing one is a plain press on that
+  object, which then becomes the selection alone.
+- **Enclosure decides membership.** The band takes only what it WHOLLY encloses
+  (`part-geometry.js`): a part when every pin AND its drawn body are inside
+  (`componentsInRect(…, partBodyBox)` — a brick by its own box), a wire when both ends and
+  every bend are, a strip when its whole rect is. Graze selects nothing. A strip partly in
+  the band is not taken, and the parts wholly inside it are taken individually (and lit).
+- **THE PASSENGER INVARIANT.** A selected board carries everything seated on it: a part on
+  it, and a wire whose ends are ALL in its holes, are passengers — they move and delete
+  with it but are not selected in their own right, so they are NOT LIT. A lit part always
+  means "selected in its own right". `setMulti` drops passengers from the part and wire
+  sets the moment their board is in, by band or by chord; a chord on a passenger changes
+  nothing (it is carried already); Select All selects the boards, the bricks and the wires
+  between them, the rest riding. **No selection memory**: taking the board back out does
+  not restore the parts it absorbed.
+- **Undo steps through selection changes** — "I didn't mean that" is ⌘Z, not hidden
+  state. `HistoryStore` entries carry the selection (`serialize()`/`restore()`), and a
+  change of selection ALONE is an entry of its own (`recordSelection`) sharing the
+  present's snapshot and its **version**; `#step` restores the document only when the
+  version moved, so a selection step touches nothing else (no rebuild, no doc-changed, no
+  dirty marker — dirty is signature-based anyway). `#recordSelection` is called at the
+  USER's selection gestures only — a click, a band, a chord, an Alt pick, a collapse,
+  Escape, Select All — and skips a no-change; selections made on the way to an edit ride
+  that edit's own entry (`#emitDocChanged` passes `selection`). `sync`/`syncForward`
+  reach every entry sharing the present's version. A selection step drops the redo future
+  like any step (accepted).
+- **Delete takes the whole selection at once, no questions** (`removeSelectedComponents`
+  over `movingSets()`): parts, wires and boards together, a board taking its passengers,
+  and a wire left with an end on nothing (a deleted board's hole, a deleted brick's
+  terminal) going too — the model's cascades. A wire whose ends are still in holes stays.
+  The context menus' own Delete items keep their confirmations.
 - **⌘ on macOS, Ctrl everywhere else.** **Ctrl cannot be it on a Mac** — there Ctrl-click
   IS the system's secondary click, so admitting it means the press arriving as button 2
-  and raising a `contextmenu` the desk then has to SWALLOW, costing Ctrl-click its
-  context menus everywhere on the desk. Only the PRIMARY button counts, so Ctrl+
-  right-click off a Mac stays a right-click. Shift and Option are excluded rather than
-  ignored — each belongs to a gesture of its own (the marquee; the wiring-carrying part
-  drag / the torn-off board run). The predicate is pure because the app only ever runs
-  one side of its platform branch.
-- **A wire and a bus toggle on the PRESS**, from the viewport's pointerdown, so every
-  kind of item joins at the same moment. Their own click listeners merely STAND DOWN for
-  the chord (the click that follows would replace the selection just toggled).
-- **One item collapses to the ordinary single pick** (`singlePick`) — a one-item
-  multi-selection would look identical and quietly do none of what a single pick does (R,
-  Properties…, the Option ride hint).
+  and raising a `contextmenu` the desk then has to SWALLOW. Only the PRIMARY button counts.
+  Option/Alt is excluded from the chord (pin mode owns the press); Shift neither makes nor
+  unmakes it (it only makes a drag bare). The predicate is pure because the app only ever runs one side of its
+  platform branch.
+- **One part or wire collapses to the ordinary single pick** (`singlePick`) — a one-item
+  multi-selection would quietly do none of what a single pick does (R, Properties…). A
+  lone BOARD stays in the set: a single board pick stands for its whole snapped group, and
+  a strip a band picked out alone must not grow back into its kit.
 - **A toggle is all-or-nothing over the ids it is given**, which lets a BOARD toggle its
   whole snapped group and a BUS toggle its member WIRES (the selection holds no bus of
-  its own). A group only PARTLY selected completes rather than half-clearing — that is an
-  answer the next click can undo.
-- **The single pick is folded in** (`#selectionSets`), since it is what a
-  modifier-click most often extends. Annotations are the one kind left out: they are none
-  of the three sets, so the chord leaves the selection as it was.
-- Refused while `#mode` owns the pointer and while the circuit RUNS (including on a
-  running switch, which the press must not fall through and FLIP). A modifier-press
-  starts NO drag (the wire/bus grabs stand down for it), and landing on empty desk **does
-  not deselect** — an add that found nothing is not a request to clear. A press near a
-  wire's END CAP toggles that WIRE (`WireTools.wireIdNear`), never the board under it: a
-  cap is not a pointer target, so the wire's own click listener never runs for a press the
-  board absorbed.
+  its own). Annotations, signals and tags are none of the sets, so the chord leaves the
+  selection as it was over one.
+- **While RUNNING** the selection is refused (band, chord, Alt) — but a click on a wire
+  still highlights it (WireLayer's click callback, running only), and a press on a wire or
+  bus band over a click-toggling part goes THROUGH to it (`#togglePartUnder`,
+  `#pressWentThrough`).
 
 ## Moving parts and clusters
 
-**Option-dragging a part takes its wiring with it** (`model/part-move.js`, Feature 290).
-A plain part drag re-seats the part alone, which on a WIRED part is a **silent
-rewiring**: rows e/f are free in the new columns so `canPlacePart` has no reason to
-refuse, every wire stays in the hole it was laid in, and the wire that fed pin 1 now
-feeds pin 3. Option is the key the board drag already uses for the same idea — **Option
-changes what this drag takes with it**. Shift could not be (it rubber-bands a marquee,
-which is why `#onPartPointerDown`/`#onBoardPointerDown` bail on `e.shiftKey`).
+**A part drag takes its wiring with it** (`model/part-move.js`, Feature 290 — behind
+Option until the selection & drag model of 2026-10-14 made it the DEFAULT, and gave Option
+to pin-targeting). Re-seating the part alone would be a **silent rewiring** on a WIRED
+part: rows e/f are free in the new columns so `canPlacePart` has no reason to refuse,
+every wire stays in the hole it was laid in, and the wire that fed pin 1 now feeds pin 3.
+So a wire whose ends are both on what moves moves rigidly, and one with an end left behind
+STRETCHES — the moving end follows to its new hole, the other stays, and connectivity is
+never silently broken. One lead alone is an Option/Alt press (see "Selection").
+
+- **SHIFT-drag moves BARE** (Jason, 2026-10-14) — the deliberate rewiring the rule above
+  exists to prevent by default. Held at the PRESS (read there and frozen, like every
+  riding set), it empties the riders of all three part drags — solo footprint, a
+  two-terminal part's body, the whole selection (`#ridersOf`, the one place they are
+  read) — so the selected parts move and every wire end and leg in their nodes STAYS in its
+  hole. Nothing new is needed for legality: with no riders a solo drag is the plain
+  re-seat of a part with nothing attached, and the cluster's `prepareClusterMove` lifts out
+  only the members, so the stationary wiring is ordinary occupancy and a pin landing on one
+  of its holes is refused like any taken hole. What is INTRINSIC still travels, because it
+  is not riding: a selected wire (selected in its own right), a selected board's
+  passengers, a wire on a moving brick's terminal (its address names the brick), the
+  anchored labels. A Shift CLICK is a plain click; a Shift press on the background still
+  bands; Shift+⌘ is still the toggle. No live preview of the connections being broken —
+  the wires simply don't follow.
 
 - **Riding is a NODE rule**: a wire end rides when its hole is in a node (one 5-hole
   column-half, `nodeOf`) that one of the part's pins occupies, keyed per BOARD. For a DIP
@@ -166,23 +282,8 @@ which is why `#onPartPointerDown`/`#onBoardPointerDown` bail on `e.shiftKey`).
   button at `a5` owns `c5L` and `c7L` and has nothing to do with `c6L`. GRID nodes only:
   a rail is one node for its whole length, so counting it would pick up the board's
   entire power distribution.
-- **Holding Option over a selected part rings what would ride**, before any gesture
-  (`setRidePreview(on)` + `#refreshRidePreview`, drawn with the shared pooled
-  `HoleRings`). A wire riding by BOTH ends gets TWO rings — which is the useful part: it
-  shows which ends travel and which stay. It stands down while the drag is in flight (the
-  moving wires answer it better) and while the circuit RUNS. A MULTI-selection rings
-  every member's riders too (deduped — two members can share a node), but only when the
-  press would actually START a drag: a selection holding a BOARD refuses
-  (`#beginClusterDrag`), so ringing would promise a move the app declines. Anything else
-  — no selection, a selected wire, a lone annotation — rings nothing. The state is PUSHED
-  IN from `app.js` rather than read off `handleKeyDown`, whose contract is "did I CONSUME
-  this key" — a modifier must not. Its listeners are keydown/keyup/**blur**: a modifier
-  released outside the window never fires our own keyup, and a ring left behind is a lie.
-  `#refreshRidePreview` re-derives from whatever is true now and is called from every
-  transition that can change the answer (selection, doc edit, drag start/end, run lock,
-  scene rebuild); it costs nothing when Option is up.
-- **The set is read at pointerdown and FROZEN**, as the board drag reads `e.altKey` and
-  walks `matedChain` once. Recomputed per sample it would grow and shrink as the part slid
+- **The set is read at pointerdown and FROZEN**, as the group drag freezes the bends over
+  its boards. Recomputed per sample it would grow and shrink as the part slid
   over other wires' holes, so the drop would depend on the path taken to it.
 - **Pin holes and riding holes are disjoint by construction**, which is why the two
   legality checks compose instead of interfering: a riding end is in a NON-pin row at its
@@ -211,7 +312,7 @@ which is why `#onPartPointerDown`/`#onBoardPointerDown` bail on `e.shiftKey`).
   pinned the user's bend still belongs where they put it). **Net names stay put** — the
   name follows the HOLE, not the signal; no other move gesture re-binds one, and a
   re-seat is not a rename.
-- **ONE mutation, ONE undo step, and ONE rule for both gestures**: a solo Option-drag IS
+- **ONE mutation, ONE undo step, and ONE rule for both gestures**: a solo wired drag IS
   a one-member cluster, so `moveComponentWithWires` is `moveClusterWithWires` with the
   dragged part at the head of the placements, checked by the same `prepareClusterMove`
   predicate (which is what lets a riding LEAD, whose params change, be checked and
@@ -257,10 +358,11 @@ which is why `#onPartPointerDown`/`#onBoardPointerDown` bail on `e.shiftKey`).
   (`drag-resistor`) moves both leads by ONE delta, so the ride rule applies unchanged, and
   the plan is told the FORM the part is landing in (`planPartMove`'s `params`), since a
   body drag rewrites a footprint-form part into the two-free-ends one. An END drag
-  (`drag-resistor-end`) carries nothing: the lead lands at any hole, angle and strip, so
-  there is no column delta to follow — it is a re-bend, not a move. A rot-0 LED is one
-  pitch wide against `WIRE_END_GRAB_RADIUS` 0.6, so it has no body region at all and every
-  press on one is an end grab; stood up (or in a cluster) it behaves like everything else.
+  (`drag-resistor-end`, an Option/Alt press on the leg) carries nothing: the lead lands
+  at any hole, angle and strip, so there is no column delta to follow — it is a re-bend,
+  not a move. A plain press anywhere on the part — on a leg, and on a rot-0 LED that is
+  all legs — is the BODY drag (which used to be unreachable on that LED: its one pitch
+  sat inside both `WIRE_END_GRAB_RADIUS` circles).
   **Pin 1 is looked up twice**: the RAW translated point first (where the part actually
   is, and what the placement GHOST has always used), the rounded one as fallback. Rounding
   assumes a lattice and there is one only horizontally, so a spanned run's 17.52 leaves a
@@ -278,12 +380,38 @@ which is why `#onPartPointerDown`/`#onBoardPointerDown` bail on `e.shiftKey`).
 - **Out of scope by construction**: a PSU/clock brick needs nothing — its wires end at a
   terminal address that already rides it.
 
-**A multi-selection drags as one unit, and Option widens what it carries**
-(`model/cluster-move.js` + `DeskDoc.prepareClusterMove` / `moveClusterWithWires` + the
-controller's `drag-cluster`, Feature 340). Grab any member and every selected component
-travels by one rigid delta; hold Option and everything riding ANY of them travels too —
-the wires, and the LEADS of the two-terminal parts plugged into them (a resistor bridging
-two members travels whole, one bridging a member and a fixed part bends).
+**The WHOLE selection drags as one unit** (`model/cluster-move.js` +
+`DeskDoc.prepareClusterMove` / `moveClusterWithWires` + the controller's `drag-cluster` —
+`#beginGroupDrag` / `#resolveGroupMove` / `#commitGroupMove`, Feature 340 widened by the
+selection & drag model). Grab any member and everything travels by ONE delta: the selected
+BOARDS with their passengers, the independently selected parts with everything riding ANY
+of them — the wires, and the LEADS of the two-terminal parts plugged into them (a resistor
+bridging two members travels whole, one bridging a member and a fixed part bends) — and
+the selected wires. A board in the selection no longer refuses the press.
+
+- **One snap vector, from the grab.** A grabbed part's own resolver decides it (below); a
+  grabbed board (or a passenger-free press on a selected strip's holes) the board lattice
+  — rounded travel plus the magnetic `#pullToMate`; a grabbed wire (or bus) its END
+  nearest the press, snapped to the hole it lands on (raw travel first). The boards take
+  the same delta (`#groupBoardShift`: whole pitches across, the 0.01 grid down — refused if
+  the delta is off that lattice).
+- **Wires follow their ends.** A selected wire moves RIGIDLY (`#groupWireMoves`: an end in
+  a moving board's hole or on a moving brick's terminal keeps its address, every other end
+  is translated to the point it lands on); a rider follows its member's node; a wire with an
+  end on a moving board and the other left behind STRETCHES for free (addresses ride their
+  board). That last case is how a strip is UNSNAPPED: band the strip and its parts but not
+  the rail, drag, and every wire into the rail stretches across the new gap. A selected
+  wire is never also a rider, and a two-terminal part seated on a moving board is that
+  board's passenger, never a rider.
+- **The drop is ATOMIC.** One `legal` for everything: every member and rider seats (the
+  holes the movers vacate count as open — `prepareClusterMove` lifts them all out), every
+  moved or stretched wire end lands on a real free point, no part lands on a strip that is
+  itself moving (`ontoMoving`), and `canMoveBoardsBy` accepts the strips. Any failure
+  reverts the whole selection. The commit is `moveClusterWithWires` then `moveBoardsBy` +
+  `#mateStrips` + the anchored labels (members' and passengers') inside one snapshot
+  (restored if anything throws) — ONE doc-changed, ONE undo step ("move selection").
+  The drop REUSES the last legal move's landing; only a refused last move falls back to
+  the release point.
 
 - **The delta is the grabbed member's own**, resolved by the same three resolvers a solo
   drag uses (`partSeatAt` for a footprint, snap-pin-1-to-a-hole for a lead, whole units
@@ -328,22 +456,17 @@ two members travels whole, one bridging a member and a fixed part bends).
   `moveClusterWithWires` runs the SAME prepared predicate over the whole batch and then
   writes the fields, inside the `pasteDesign` snapshot/restore — ONE mutation, ONE undo
   step.
-- **A board in the selection refuses the press** and starts nothing: a strip has its own
-  drag, carrying everything seated on it under overlap and mating rules a part re-seat
-  knows nothing about. The selection is left intact to narrow or to grab by a board, which
-  a silent collapse would have thrown away.
-- **The collapse moved to the RELEASE.** A press on a member cannot call
-  `selectComponent` (a single pick replaces a marquee), so a sub-threshold CLICK does it
-  instead, and a `CLICK_TOGGLE_REFS` part still flips under the finger. Without that a
-  click inside a selection would do nothing at all.
+- **The collapse is at the RELEASE.** A press on a member cannot select it (a single pick
+  replaces a set), so a sub-threshold CLICK does it instead (`#collapseTo`), and a
+  click-toggling part still flips under the finger.
 - **A cluster keeps a rotatable member's stored form** (a bend is measured FROM the
   anchor, so a rigid translation needs no rewrite) — deliberately different from the solo
   body drag, and the better behaviour. A part riding by ONE leg is the one case that does
   rewrite the form, because it BENDS.
 - The wire layer needed no schema change: `setPartDrag`'s `shifts` map is keyed by WIRE,
-  so N members' riders merge into one map; it gained only a second `overrides` argument,
-  for the one thing an address cannot express (a wire ending on a MOVING brick's
-  terminal). `AnnotationLayer.render`'s shift became an `anchorIds` SET, the shape
+  so N members' riders and the selected wires merge into one map; its `overrides` carry
+  the moving bricks AND the moving boards (one map, distinct ids), and its third argument
+  the routed bends riding those boards (`#pointRide`). `AnnotationLayer.render`'s shift became an `anchorIds` SET, the shape
   `#shiftAnchoredAnnotations` already committed with.
 
 ## The wire gauge & the BOM cutting list

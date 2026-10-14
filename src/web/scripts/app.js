@@ -1124,7 +1124,8 @@ function buildView3dViewport() {
 
 /**
  * Central keyboard shortcuts: desk keys (Esc / Delete via DeskController)
- * first, then Space to toggle Run/Stop (only when no tool is armed), then the
+ * first, then Space — held it pans, tapped it toggles Run/Stop (only when no
+ * tool is armed) — then the
  * one FILE accelerator the native menu doesn't own (⇧⌘O, the recent projects),
  * then the app-chrome accelerators (analyzer / palette / run toggle / desk
  * lock).
@@ -1134,6 +1135,9 @@ function buildView3dViewport() {
  * resizes the chrome, the other zooms the circuit inside it.
  *
  * @param {(step: "in"|"out"|"reset") => void} onFontSize
+ * @param {{setHeld: (on: boolean) => void, takePanned: () => boolean}} spacePan
+ *   - the 2D views' Space-drag pan: told when Space goes down and up, and
+ *   asked at the release whether the hold was used (a tap is Run/Stop).
  */
 function bindShortcuts(
   controller,
@@ -1146,21 +1150,56 @@ function bindShortcuts(
   onToggleLock,
   onOpenRecent,
   onFontSize,
+  spacePan,
 ) {
-  // Option held over a selected part rings the wire ends an Option-drag would
-  // carry (Feature 290). Its own listeners rather than a `handleKeyDown` case,
+  // Option/Alt held puts the desk in PIN-TARGETING mode: bodies go inert and
+  // only a hole holding an independently movable lead (a wire end, a
+  // two-terminal part's leg) lights, red, under the pointer (CLAUDE.md →
+  // "Selection"). Its own listeners rather than a `handleKeyDown` case,
   // because that method's contract is "did I CONSUME this key" and a modifier
-  // must not: Option is still a modifier for everything else while it is down.
-  // Same trio as the Fit button's Shift-held zoom-out preview, blur included —
-  // a modifier released outside the window never fires our own keyup.
-  const ridePreview = (on) => controller.setRidePreview(on);
+  // must not. Same trio as the Fit button's Shift-held zoom-out preview, blur
+  // included — a modifier released outside the window never fires our keyup.
+  const pinMode = (on) => controller.setPinMode(on);
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Alt") ridePreview(true);
+    if (e.key === "Alt") pinMode(true);
   });
   window.addEventListener("keyup", (e) => {
-    if (e.key === "Alt") ridePreview(false);
+    if (e.key === "Alt") pinMode(false);
   });
-  window.addEventListener("blur", () => ridePreview(false));
+  window.addEventListener("blur", () => pinMode(false));
+
+  // SPACE is two things, told apart by what happens while it is down. HELD,
+  // with a drag, it pans the desk from anywhere (a plain drag no longer does —
+  // on the breadboard that is the rubber band). TAPPED, it runs/stops the
+  // circuit — which therefore happens on the RELEASE, since only then is it
+  // known that no pan used the hold. Its keyup and blur are their own
+  // listeners for the signal keys' reason: a Space that went down on the desk
+  // must come up wherever the focus has gone.
+  let spaceDown = false;
+  const typingIn = (e) => {
+    const tag = e.target?.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+  };
+  const releaseSpace = () => {
+    if (!spaceDown) return false;
+    spaceDown = false;
+    spacePan.setHeld(false);
+    return !spacePan.takePanned();
+  };
+  window.addEventListener("keyup", (e) => {
+    if (e.key !== " " && e.code !== "Space") return;
+    if (!releaseSpace()) return; // a hold that panned is not a tap
+    if (PopupManager.isOpen() || typingIn(e)) return;
+    // Not with a part in hand, and not with a wire or bus half laid (Run
+    // would throw it away). An armed wire or bus tool with nothing laid is no
+    // reason to refuse: neither tool uses Space, and Run disarms them both.
+    if (controller.placementArmed || controller.layingInProgress) return;
+    e.preventDefault();
+    sim.toggle();
+  });
+  window.addEventListener("blur", () => {
+    releaseSpace();
+  });
 
   // External signals (Feature 370): 1–9, 0 press the buttons on the right-edge
   // rail, several at once. See model/signal-keys.js for why a BARE digit is
@@ -1223,30 +1262,16 @@ function bindShortcuts(
         return;
       }
     }
-    // Space runs/stops the circuit — but not while typing, not with a part in
-    // hand, and not with a wire or bus half laid (Run would throw it away).
-    // An armed wire or bus tool with nothing laid is no reason to refuse:
-    // neither tool uses Space, and Run disarms them both.
+    // Space goes DOWN here and is acted on as it comes up (the keyup above):
+    // held it is the pan key, tapped it is Run/Stop. Not while typing, and
+    // not as part of a chord.
     if (e.key === " " || e.code === "Space") {
-      const tag = e.target?.tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        e.target?.isContentEditable
-      ) {
-        return;
+      if (typingIn(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault(); // no page scroll, no focused button pressed
+      if (!spaceDown) {
+        spaceDown = true;
+        spacePan.setHeld(true);
       }
-      if (
-        controller.placementArmed ||
-        controller.layingInProgress ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey
-      ) {
-        return;
-      }
-      e.preventDefault();
-      sim.toggle();
       return;
     }
     // A — the logic analyzer, on a BARE key like the desk's other tool
@@ -1748,6 +1773,9 @@ async function init() {
   window.addEventListener("chiphippo:ai-key-changed", () => refreshAiReady());
 
   const deskView = new DeskView(desk, {
+    // A plain drag on the empty breadboard is the rubber band, never a pan —
+    // panning is Space-drag or the middle button (CLAUDE.md → "Selection").
+    panOnEmptyDrag: false,
     camera: settings.viewport,
     onViewportChange: (camera) => {
       zoomControl?.setZoom(camera.zoom);
@@ -2534,6 +2562,18 @@ async function init() {
           detail: { fontSize: next },
         }),
       );
+    },
+    // Space held pans both 2D views (whichever is showing takes the drag);
+    // the tap test asks both whether the hold was used.
+    {
+      setHeld: (on) => {
+        deskView.setSpaceHeld(on);
+        schematicView?.setSpaceHeld(on);
+      },
+      takePanned: () => {
+        const desk = deskView.takeSpacePanned();
+        return schematicView?.takeSpacePanned() || desk;
+      },
     },
   );
 

@@ -94,28 +94,29 @@ the whole wire stretches and re-sags live, riding the move; nothing needs to
 be re-laid. Deleting a board cascades: any wire with an end seated on that
 board is removed along with it.
 
-Moving a **part** is different, because a part's pins can land somewhere its
-wires can't follow: an ordinary part drag leaves every wire in the hole you laid
-it in, which on a wired part quietly rewires the circuit. Hold **Option** as you
-press and the wire ends plugged into it come along instead — for one part, or
-for a whole selection of them. See [Chips &
-Components](components.md#moving-several-parts-at-once) for the rules, and for
-what the Option-held preview rings show you before you commit.
+Moving a **part** works the same way from the wire's point of view: the wire
+ends plugged into its pins' column-halves come along, and each wire's other end
+stays put and stretches — for one part, or for a whole selection of them. See
+[Chips & Components](components.md#moving-several-parts-at-once) for the
+rules.
 
 ## Re-routing & deleting a wire
 
 Grab a wire two different ways:
 
-- **Its end cap** — drag just one endpoint to a new hole or terminal,
-  re-routing that end while the other stays put. The end follows the cursor
-  and snaps onto a free hole once it's within about a hole's reach of one. A
-  hover ring and red/legal tint on the dragged end work exactly like placing
-  a fresh wire. Letting go drops the end on the hole the ring was showing;
-  with no ring, or a red one, the end snaps back to where it started.
-- **Its body** — drag anywhere along the wire itself to translate the whole
-  wire rigidly, keeping its length and orientation and just sliding both ends
-  together onto a new pair of holes. If either landing point isn't free, the
-  wire snaps back on release.
+- **The wire itself** — press anywhere on it, its end caps included, and drag
+  to translate the whole wire rigidly, keeping its length and orientation and
+  just sliding both ends together onto a new pair of holes. If either landing
+  point isn't free, the wire snaps back on release. (A plain click on it just
+  selects it.)
+- **One end, with `Option`** (`Alt` on Windows and Linux) — hold it and the
+  wire's end holes ring red as you hover them; drag one to a new hole or
+  terminal to re-route that end while the other stays put. The end follows the
+  cursor and snaps onto a free hole once it's within about a hole's reach of
+  one. A hover ring and red/legal tint on the dragged end work exactly like
+  placing a fresh wire. Letting go drops the end on the hole the ring was
+  showing; with no ring, or a red one, the end snaps back to where it started.
+  See [Selecting things](the-desk.md#one-leg-at-a-time--option).
 
 To delete a wire, click it to select it, then press `Delete` or `Backspace`
 (the same shortcut removes whatever's currently selected — a part, a board,
@@ -144,12 +145,14 @@ A routed wire starts as a single straight line. To bend it:
 - **Drop a point onto a neighbouring point, or onto either end of the wire,**
   and it merges away — that's how you take a bend back out. The point you are
   dragging turns red as it lands, so you can see the merge before you release.
-- **Drop an end cap onto one of the wire's own points** and that point is
+- **`Option`-drag an end onto one of the wire's own points** and that point is
   absorbed: the wire now reaches where the bend used to be, so the bend has
   nothing left to do.
 
-Because a routed wire's body drag is spoken for, it has no rigid
-whole-wire translate — move it by its end caps instead. Switching a wire back
+Because a routed wire's body drag is spoken for, dragging it on its own never
+slides it whole — move its ends with `Option` instead, or select it together
+with something else (a box, or `Cmd/Ctrl`-click) and drag the selection: as
+part of a selection it moves rigidly, bends and all. Switching a wire back
 to **Direct** deletes every point it carried and redraws it as the plain
 sagging curve; switching to **Routed** straightens it out, ready for points.
 Either way it's one undo step (`Cmd/Ctrl+Z`), as is every individual bend.

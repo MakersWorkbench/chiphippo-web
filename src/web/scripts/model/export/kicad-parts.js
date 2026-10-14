@@ -267,6 +267,18 @@ export const KICAD_PARTS = Object.freeze({
     generic: true,
     value: (comp) => `7-segment CA ${colour(comp)}`.trim(),
   },
+  // The 0.56-in digit on its own footprint: the LTS-6760/6780 has exactly
+  // this pinout (1 e, 2 d, 3 COM, 4 c, 5 dp, 6 b, 7 a, 8 COM, 9 f, 10 g).
+  seg7cc: {
+    footprint: "Display_7Segment:7SegmentLED_LTS6760_LTS6780",
+    shape: "box",
+    value: (comp) => `7-segment CC 0.56in ${colour(comp)}`.trim(),
+  },
+  seg7ca: {
+    footprint: "Display_7Segment:7SegmentLED_LTS6760_LTS6780",
+    shape: "box",
+    value: (comp) => `7-segment CA 0.56in ${colour(comp)}`.trim(),
+  },
   bar8: {
     footprint: HEADER(9),
     shape: "box",

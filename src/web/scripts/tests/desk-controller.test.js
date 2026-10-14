@@ -201,10 +201,12 @@ test("deleting a board set cascades its parts and every wire crossing out", () =
   controller.handleKeyDown(
     new window.KeyboardEvent("keydown", { key: "Delete" }),
   );
-  // Parts/wires cascade, so a confirm is raised — accept it.
-  const confirmBtn = document.querySelector(".popup-confirm .btn--danger");
-  assert.ok(confirmBtn, "a confirm dialog was raised");
-  confirmBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  // The selection is the unit of action: no confirm, undo is the way back.
+  assert.equal(
+    document.querySelector(".popup-confirm"),
+    null,
+    "no question asked",
+  );
 
   assert.deepEqual(
     doc.boards.map((b) => b.id),
@@ -215,7 +217,7 @@ test("deleting a board set cascades its parts and every wire crossing out", () =
   assert.equal(doc.getWire(crossing.id), null, "the crossing wire cascaded");
   assert.ok(doc.getWire(kept.id), "the loose board's own wire survived");
   assert.equal(surface.querySelectorAll(".part-chip").length, 0);
-  assert.equal(changes, 1, "one batched doc-changed after confirm");
+  assert.equal(changes, 1, "one batched doc-changed");
 });
 
 test("selection moves between boards; deselect clears", () => {
@@ -440,7 +442,9 @@ test("Delete/Backspace removes the selected board via handleKeyDown", () => {
   );
 });
 
-/** Shift-drag a marquee across the viewport from one world point to another. */
+/** Drag a rubber band from one world point to another, pressing on `viewport`
+    (or whatever background element is passed). Shift only makes a PART drag
+    bare — it rides along to prove it changes nothing for a band. */
 function marquee(viewport, world, from, to) {
   world.x = from.x;
   world.y = from.y;
@@ -470,7 +474,7 @@ function marquee(viewport, world, from, to) {
   }
 }
 
-test("shift-drag marquee selects only components fully inside the box", () => {
+test("a band selects only components fully inside the box", () => {
   resetDom();
   const doc = new DeskDoc(null);
   doc.addBoard("pins-full", 0, 0);
@@ -501,13 +505,11 @@ test("a component only PARTLY inside the marquee is not selected", () => {
   assert.ok(chip.id);
 });
 
-// ── The Option-drag hint (Feature 290) ──────────────────────────────────────
+// ── Option/Alt: pin-targeting mode ─────────────────────────────────────────
 
-/** Ring centres currently on the desk, as world points, sorted for comparison.
-    The shared hover ring is the same `.hole-ring` class, so it would show up
-    here too — these tests never hover, so it stays hidden. */
-function ringCentres(surface) {
-  return [...surface.querySelectorAll(".hole-ring:not([hidden])")]
+/** Visible rings carrying `cls`, as rounded world points, sorted. */
+function ringsWith(surface, cls) {
+  return [...surface.querySelectorAll(`.hole-ring.${cls}:not([hidden])`)]
     .map((r) => ({
       x: (parseFloat(r.style.left) + RING_RADIUS * PX_PER_UNIT) / PX_PER_UNIT,
       y: (parseFloat(r.style.top) + RING_RADIUS * PX_PER_UNIT) / PX_PER_UNIT,
@@ -521,194 +523,362 @@ const holeAt = (doc, address) =>
     worldOfAddress(doc.boards, address),
   );
 
-/** A chip at e5 with two riders (one end each) and one wire that doesn't ride. */
-function wiredChipDesk() {
+/** A chip (rigid pins), a resistor (two free legs) and a wire (two ends). */
+function pinDesk() {
   const doc = new DeskDoc(null);
   doc.addBoard("pins-full", 0, 0);
   const world = { x: 0, y: 0 };
   const desk = makeDesk(doc, world);
   const chip = desk.controller.addComponentAt("74LS00", "bb1", "e5");
-  doc.addWire({ from: "bb1.a5", to: "bb1.a40" }); // rides by `from`
-  doc.addWire({ from: "bb1.j11", to: "bb1.j40" }); // rides by `from`
-  doc.addWire({ from: "bb1.a20", to: "bb1.a30" }); // outside the chip's nodes
-  return { ...desk, doc, chip };
+  const res = desk.controller.addComponentAt("resistor", "bb1", "a20"); // a20 ── a23
+  const wire = doc.addWire({ from: "bb1.a40", to: "bb1.a50" });
+  window.dispatchEvent(new window.CustomEvent("chiphippo:doc-changed"));
+  return { ...desk, doc, chip, res, wire };
 }
 
-test("Option over a selected part rings the wire ends that would ride", () => {
-  resetDom();
-  const { surface, controller, doc, chip } = wiredChipDesk();
-  controller.selectComponent(chip.id);
-
-  assert.deepEqual(ringCentres(surface), [], "nothing until Option is down");
-  controller.setRidePreview(true);
-  assert.deepEqual(
-    ringCentres(surface),
-    [holeAt(doc, "bb1.a5"), holeAt(doc, "bb1.j11")].sort(),
-    "the two riding ends, and not their far ends",
-  );
-
-  controller.setRidePreview(false);
-  assert.deepEqual(ringCentres(surface), [], "released, and put away");
-});
-
-test("a wire riding by BOTH ends gets two rings — which ends travel, which stay", () => {
-  resetDom();
-  const doc = new DeskDoc(null);
-  doc.addBoard("pins-full", 0, 0);
-  const { surface, controller } = makeDesk(doc);
-  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
-  doc.addWire({ from: "bb1.a5", to: "bb1.d9" }); // both ends in the chip's nodes
-
-  controller.selectComponent(chip.id);
-  controller.setRidePreview(true);
-  assert.deepEqual(
-    ringCentres(surface),
-    [holeAt(doc, "bb1.a5"), holeAt(doc, "bb1.d9")].sort(),
-  );
-});
-
-test("the hint answers only for a part that could actually be Option-dragged", () => {
-  resetDom();
-  const { surface, controller, doc, chip } = wiredChipDesk();
-  controller.deselect(); // addComponentAt selects what it places
-  controller.setRidePreview(true);
-  assert.deepEqual(ringCentres(surface), [], "nothing is selected");
-
-  controller.selectBoard("bb1");
-  assert.deepEqual(ringCentres(surface), [], "a board carries no riders");
-
-  controller.selectComponent(chip.id);
-  assert.equal(ringCentres(surface).length, 2);
-
-  // Topology is frozen while the circuit runs, so the hint must not offer it.
-  controller.setEditingLocked(true);
-  assert.deepEqual(ringCentres(surface), []);
-  controller.setEditingLocked(false);
-  assert.equal(ringCentres(surface).length, 2);
-
-  // And it tracks the document: delete the wire it was ringing.
-  controller.removeWire("w1");
-  assert.deepEqual(ringCentres(surface), [holeAt(doc, "bb1.j11")]);
-});
-
-test("the hint stands down while the drag it describes is in flight", () => {
-  resetDom();
-  const { surface, controller, doc, chip, world } = wiredChipDesk();
-  controller.selectComponent(chip.id);
-  controller.setRidePreview(true);
-  assert.equal(ringCentres(surface).length, 2);
-
-  const el = surface.querySelector(`[data-component-id="${chip.id}"]`);
-  world.x = 8;
-  world.y = 6.5;
-  el.dispatchEvent(
-    new window.PointerEvent("pointerdown", {
+/** Hover the viewport at a world point with Option/Alt held. */
+function altHover(viewport, world, at) {
+  Object.assign(world, at);
+  viewport.dispatchEvent(
+    new window.PointerEvent("pointermove", {
       bubbles: true,
-      button: 0,
-      pointerId: 5,
+      pointerId: 4,
       altKey: true,
       clientX: 0,
       clientY: 0,
     }),
   );
-  // From here the moving wires answer the question themselves; rings sitting on
-  // the holes being vacated would say the opposite.
-  assert.deepEqual(ringCentres(surface), []);
+}
 
-  world.x = 13;
-  for (const type of ["pointermove", "pointerup"]) {
+/** An Option/Alt click (press + release in place) on `el` at a world point. */
+function altClick(el, world, at) {
+  Object.assign(world, at);
+  for (const type of ["pointerdown", "pointerup"]) {
     el.dispatchEvent(
       new window.PointerEvent(type, {
         bubbles: true,
         button: 0,
-        pointerId: 5,
-        clientX: 40,
+        pointerId: 4,
+        altKey: true,
+        clientX: 0,
         clientY: 0,
       }),
     );
   }
-  // Option is still down, so the hint comes back — on the holes the wires
-  // actually landed in.
+}
+
+test("Option/Alt hover rings ONLY an independently movable lead, in red — a chip pin never", () => {
+  resetDom();
+  const { viewport, surface, controller, doc, chip, world } = pinDesk();
+  controller.selectComponent(chip.id);
+  controller.setPinMode(true);
+  assert.ok(viewport.classList.contains("desk-viewport--pin-mode"));
+
+  altHover(viewport, world, { x: 5, y: ROW.e }); // the chip's pin 1
+  assert.deepEqual(ringsWith(surface, "hole-ring--pin"), [], "rigid: inert");
+
+  altHover(viewport, world, { x: 23, y: ROW.a }); // the resistor's pin 2
+  assert.deepEqual(ringsWith(surface, "hole-ring--pin"), [holeAt(doc, "bb1.a23")]); // prettier-ignore
+
+  altHover(viewport, world, { x: 40, y: ROW.a }); // the wire's `from` end
+  assert.deepEqual(ringsWith(surface, "hole-ring--pin"), [holeAt(doc, "bb1.a40")]); // prettier-ignore
+  assert.equal(controller.selectedId, chip.id, "hovering selects nothing");
+
+  controller.setPinMode(false);
+  assert.ok(!viewport.classList.contains("desk-viewport--pin-mode"));
+  assert.deepEqual(ringsWith(surface, "hole-ring--pin"), []);
+});
+
+test("Option/Alt-click picks ONE lead, replacing the whole selection — never additive", () => {
+  resetDom();
+  const { viewport, surface, controller, doc, chip, res, wire, world } =
+    pinDesk();
+  controller.deselect();
+  controller.toggleComponentSelection(chip.id);
+  controller.toggleComponentSelection(res.id);
+  assert.equal(controller.multiSelectedIds.length, 2);
+
+  altClick(viewport, world, { x: 23, y: ROW.a }); // the resistor's pin 2
+  assert.deepEqual(controller.multiSelectedIds, [], "the set is gone");
+  assert.equal(controller.selectedId, res.id, "the lead's part is named…");
+  assert.deepEqual(ringsWith(surface, "hole-ring--selected"), [holeAt(doc, "bb1.a23")]); // prettier-ignore
+  assert.equal(doc.getComponent(res.id).anchor, "a20", "…and nothing moved");
+
+  altClick(viewport, world, { x: 50, y: ROW.a }); // the wire's `to` end
+  assert.equal(controller.selectedId, wire.id, "the next pick replaces it");
+  assert.deepEqual(ringsWith(surface, "hole-ring--selected"), [holeAt(doc, "bb1.a50")]); // prettier-ignore
+});
+
+test("Option/Alt over a body is inert — a press there picks nothing and moves nothing", () => {
+  resetDom();
+  const { surface, controller, doc, chip, world } = pinDesk();
+  controller.selectComponent(chip.id);
+  const el = surface.querySelector(`[data-component-id="${chip.id}"]`);
+  altClick(el, world, { x: 8, y: 6.5 }); // the middle of the chip
+  assert.equal(controller.selectedId, chip.id, "the selection is untouched");
+  assert.equal(doc.getComponent(chip.id).anchor, "e5");
+});
+
+test("Option/Alt-drag moves the one lead; the other stays", () => {
+  resetDom();
+  const { viewport, controller, doc, res, world } = pinDesk();
+  Object.assign(world, { x: 23, y: ROW.a });
+  const send = (type, client) =>
+    viewport.dispatchEvent(
+      new window.PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        pointerId: 4,
+        altKey: true,
+        clientX: client,
+        clientY: 0,
+      }),
+    );
+  send("pointerdown", 0);
+  Object.assign(world, { x: 26, y: ROW.a });
+  send("pointermove", 40);
+  send("pointerup", 40);
+  assert.deepEqual(partPinAddresses(doc, doc.getComponent(res.id)), [
+    { pin: 1, address: "bb1.a20" },
+    { pin: 2, address: "bb1.a26" },
+  ]);
+  assert.equal(controller.selectedId, res.id, "the lead stays picked");
+});
+
+test("Delete with a picked lead removes what it belongs to", () => {
+  resetDom();
+  const { viewport, controller, doc, res, world } = pinDesk();
+  altClick(viewport, world, { x: 20, y: ROW.a });
+  controller.handleKeyDown(new window.KeyboardEvent("keydown", { key: "Delete" })); // prettier-ignore
+  assert.equal(doc.getComponent(res.id), null);
+});
+
+// ── Option/Alt+⌘/Ctrl: a SET of leads ──────────────────────────────────────
+
+/** An Option/Alt+Ctrl click (the lead chord off a Mac — the harness has no
+    platform) at a world point. */
+function leadChordClick(el, world, at) {
+  Object.assign(world, at);
+  for (const type of ["pointerdown", "pointerup"]) {
+    el.dispatchEvent(
+      new window.PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        pointerId: 4,
+        altKey: true,
+        ctrlKey: true,
+        clientX: 0,
+        clientY: 0,
+      }),
+    );
+  }
+}
+
+/** `pinDesk`'s parts, with the wires laid BEFORE the desk mounts so they are
+    in the history's first snapshot (undo then has them to come back to) —
+    plus a `tail` from beside the chip's pin 1 out to a30. */
+function leadDesk() {
+  const doc = new DeskDoc(null);
+  doc.addBoard("pins-full", 0, 0);
+  const wire = doc.addWire({ from: "bb1.a40", to: "bb1.a50" });
+  const tail = doc.addWire({ from: "bb1.a5", to: "bb1.a30" });
+  const world = { x: 0, y: 0 };
+  const desk = makeDesk(doc, world);
+  const chip = desk.controller.addComponentAt("74LS00", "bb1", "e5");
+  const res = desk.controller.addComponentAt("resistor", "bb1", "a20"); // a20 ── a23
+  desk.controller.deselect();
+  return { ...desk, doc, chip, res, wire, tail };
+}
+
+/** A plain press at `from`, a move to `to`, and the release — on the viewport. */
+function plainDrag(viewport, world, from, to, mods = {}, travel = 40) {
+  const send = (type, client) =>
+    viewport.dispatchEvent(
+      new window.PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        pointerId: 6,
+        clientX: client,
+        clientY: 0,
+        ...mods,
+      }),
+    );
+  Object.assign(world, from);
+  send("pointerdown", 0);
+  Object.assign(world, to);
+  send("pointermove", travel);
+  send("pointerup", travel);
+}
+
+test("Option/Alt+Ctrl-click ADDS a lead to the set; Option/Alt alone still replaces it", () => {
+  resetDom();
+  const { viewport, surface, controller, doc, chip, res, wire, world } =
+    pinDesk();
+  controller.deselect();
+  const leg = `lead:${res.id}:b`;
+  const end = `wire-end:${wire.id}:to`;
+
+  leadChordClick(viewport, world, { x: 23, y: ROW.a }); // the resistor's pin 2
+  assert.equal(controller.selectedId, res.id, "one lead is the single pick");
+  leadChordClick(viewport, world, { x: 50, y: ROW.a }); // the wire's `to` end
+  assert.deepEqual(controller.multiSelectedLeads, [leg, end]);
   assert.deepEqual(
-    ringCentres(surface),
-    [holeAt(doc, "bb1.a10"), holeAt(doc, "bb1.j16")].sort(),
+    ringsWith(surface, "hole-ring--selected"),
+    [holeAt(doc, "bb1.a23"), holeAt(doc, "bb1.a50")].sort(),
   );
+  assert.equal(doc.getComponent(res.id).anchor, "a20", "nothing moved");
+
+  // The chord on a picked lead takes it back out…
+  leadChordClick(viewport, world, { x: 23, y: ROW.a });
+  assert.equal(controller.selectedId, wire.id, "…leaving the one other lead");
+  leadChordClick(viewport, world, { x: 23, y: ROW.a });
+  // …it reaches past a chip's rigid pins to nothing at all…
+  leadChordClick(viewport, world, { x: 5, y: ROW.e });
+  assert.deepEqual(controller.multiSelectedLeads, [end, leg]);
+  // …and joins a set of objects too.
+  controller.toggleComponentSelection(chip.id);
+  assert.deepEqual(controller.multiSelectedIds, [chip.id]);
+  assert.deepEqual(controller.multiSelectedLeads, [end, leg]);
+
+  // A plain Option/Alt-click still REPLACES the lot with one lead.
+  altClick(viewport, world, { x: 40, y: ROW.a });
+  assert.deepEqual(controller.multiSelectedLeads, []);
+  assert.deepEqual(controller.multiSelectedIds, []);
+  assert.equal(controller.selectedId, wire.id);
+  assert.deepEqual(ringsWith(surface, "hole-ring--selected"), [holeAt(doc, "bb1.a40")]); // prettier-ignore
 });
 
-test("Option over a MULTI-selection rings every member's riders", () => {
+test("a lead whose wire or part is already selected is covered — the chord leaves it alone", () => {
   resetDom();
-  const doc = new DeskDoc(null);
-  doc.addBoard("pins-full", 0, 0);
-  const { surface, controller } = makeDesk(doc);
-  const chip = controller.addComponentAt("74LS00", "bb1", "e5"); // cols 5–11
-  const btn = controller.addComponentAt("sw-push", "bb1", "a30");
-  doc.addWire({ from: "bb1.a5", to: "bb1.b30" }); // rides BOTH, one end each
-  doc.addWire({ from: "bb1.j11", to: "bb1.j40" }); // rides the chip alone
-  doc.addWire({ from: "bb1.c20", to: "bb1.c25" }); // rides neither
-
+  const { viewport, controller, wire, chip, world } = pinDesk();
   controller.deselect();
+  controller.toggleWireSelection(wire.id);
   controller.toggleComponentSelection(chip.id);
-  controller.toggleComponentSelection(btn.id);
-  controller.setRidePreview(true);
+  leadChordClick(viewport, world, { x: 50, y: ROW.a });
+  assert.deepEqual(controller.multiSelectedLeads, []);
+  // And a wire coming IN takes its picked ends out of the lead set.
+  controller.deselect();
+  leadChordClick(viewport, world, { x: 50, y: ROW.a });
+  controller.toggleComponentSelection(chip.id);
+  controller.toggleWireSelection(wire.id);
+  assert.deepEqual(controller.multiSelectedLeads, []);
+  assert.deepEqual(controller.multiSelectedWireIds, [wire.id]);
+});
+
+test("pressing a picked lead's ring drags the SET: a wire end stretches, a leg bends", () => {
+  resetDom();
+  const { viewport, surface, controller, doc, res, wire, world } = leadDesk();
+  leadChordClick(viewport, world, { x: 23, y: ROW.a }); // resistor pin 2
+  leadChordClick(viewport, world, { x: 50, y: ROW.a }); // wire `to`
+
+  plainDrag(viewport, world, { x: 50, y: ROW.a }, { x: 52, y: ROW.a });
+
+  assert.equal(doc.getWire(wire.id).from, "bb1.a40", "the far end stayed");
+  assert.equal(doc.getWire(wire.id).to, "bb1.a52", "the picked end moved");
+  assert.deepEqual(partPinAddresses(doc, doc.getComponent(res.id)), [
+    { pin: 1, address: "bb1.a20" },
+    { pin: 2, address: "bb1.a25" },
+  ]);
+  assert.equal(controller.multiSelectedLeads.length, 2, "still the set");
   assert.deepEqual(
-    ringCentres(surface),
-    [holeAt(doc, "bb1.a5"), holeAt(doc, "bb1.b30"), holeAt(doc, "bb1.j11")].sort(), // prettier-ignore
-    "both ends of the wire between them, plus the chip's own rider",
+    ringsWith(surface, "hole-ring--selected"),
+    [holeAt(doc, "bb1.a25"), holeAt(doc, "bb1.a52")].sort(),
+    "the rings followed",
   );
+  controller.undo();
+  assert.equal(doc.getWire(wire.id).to, "bb1.a50", "one undo step");
+  assert.equal(doc.getComponent(res.id).params.end, null);
 });
 
-test("the multi-selection hint stays quiet when the press would REFUSE", () => {
+test("a click on a picked lead's ring collapses the set to that lead", () => {
   resetDom();
-  const doc = new DeskDoc(null);
-  doc.addBoard("pins-full", 0, 0);
-  const { surface, controller } = makeDesk(doc);
-  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
-  const btn = controller.addComponentAt("sw-push", "bb1", "a30");
-  doc.addWire({ from: "bb1.a5", to: "bb1.b30" });
-
+  const { viewport, controller, res, wire, world } = pinDesk();
   controller.deselect();
-  controller.toggleComponentSelection(chip.id);
-  controller.toggleComponentSelection(btn.id);
-  controller.setRidePreview(true);
-  assert.equal(ringCentres(surface).length, 2);
-
-  // A board in the set refuses the press, so ringing wires it would carry is a
-  // promise the app will not keep.
-  controller.toggleBoardSelection("bb1");
-  assert.deepEqual(ringCentres(surface), []);
+  leadChordClick(viewport, world, { x: 23, y: ROW.a });
+  leadChordClick(viewport, world, { x: 50, y: ROW.a });
+  plainDrag(viewport, world, { x: 50, y: ROW.a }, { x: 50, y: ROW.a }, {}, 0);
+  assert.deepEqual(controller.multiSelectedLeads, []);
+  assert.equal(controller.selectedId, wire.id);
+  assert.notEqual(controller.selectedId, res.id);
 });
 
-test("a node two members share is ringed ONCE, not twice", () => {
+test("a part dragged with a picked lead takes that end along — bare or not", () => {
   resetDom();
-  const doc = new DeskDoc(null);
-  doc.addBoard("pins-full", 0, 0);
-  const { surface, controller } = makeDesk(doc);
-  // A chip pin at e5 and a button pin at a5 are both in bb1|c5L.
-  const chip = controller.addComponentAt("74LS00", "bb1", "e5");
-  const btn = controller.addComponentAt("sw-push", "bb1", "a5");
-  doc.addWire({ from: "bb1.c5", to: "bb1.c40" });
-
-  controller.deselect();
+  const { viewport, surface, controller, doc, chip, wire, tail, world } =
+    leadDesk();
+  const dragChip = (mods) => {
+    // Re-found each time: an undo re-mounts every part view.
+    const el = surface.querySelector(`[data-component-id="${chip.id}"]`);
+    const send = (type, client) =>
+      el.dispatchEvent(
+        new window.PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          pointerId: 8,
+          clientX: client,
+          clientY: 0,
+          ...mods,
+        }),
+      );
+    Object.assign(world, { x: 8, y: 6.5 });
+    send("pointerdown", 0);
+    Object.assign(world, { x: 13, y: 6.5 }); // five columns right
+    send("pointermove", 40);
+    send("pointerup", 40);
+  };
   controller.toggleComponentSelection(chip.id);
-  controller.toggleComponentSelection(btn.id);
-  controller.setRidePreview(true);
-  assert.deepEqual(ringCentres(surface), [holeAt(doc, "bb1.c5")]);
+  leadChordClick(viewport, world, { x: 30, y: ROW.a }); // the tail's far end
+
+  // Shift: the chip moves bare, the picked end with it, the rider stays.
+  dragChip({ shiftKey: true });
+  assert.equal(doc.getComponent(chip.id).anchor, "e10");
+  assert.equal(doc.getWire(tail.id).from, "bb1.a5", "the rider stayed");
+  assert.equal(doc.getWire(tail.id).to, "bb1.a35", "the picked end came");
+  assert.equal(doc.getWire(wire.id).from, "bb1.a40", "nothing else moved");
+
+  // Plain: the rider comes too, so the whole wire travels.
+  controller.undo();
+  assert.equal(doc.getWire(tail.id).to, "bb1.a30", "one undo step");
+  assert.equal(controller.multiSelectedLeads.length, 1, "the set came back");
+  dragChip({});
+  assert.equal(doc.getWire(tail.id).from, "bb1.a10");
+  assert.equal(doc.getWire(tail.id).to, "bb1.a35");
 });
 
-test("a marquee started ON a part is still a marquee — Shift is selection", () => {
+test("Delete with a SET of leads removes everything they belong to, and ⌘Z brings the set back", () => {
+  resetDom();
+  const { viewport, controller, doc, res, wire, chip, world } = leadDesk();
+  leadChordClick(viewport, world, { x: 23, y: ROW.a });
+  leadChordClick(viewport, world, { x: 50, y: ROW.a });
+  controller.handleKeyDown(new window.KeyboardEvent("keydown", { key: "Delete" })); // prettier-ignore
+  assert.equal(doc.getComponent(res.id), null);
+  assert.equal(doc.getWire(wire.id), null);
+  assert.ok(doc.getComponent(chip.id), "the chip was never picked");
+  controller.undo();
+  assert.deepEqual(controller.multiSelectedLeads, [
+    `lead:${res.id}:b`,
+    `wire-end:${wire.id}:to`,
+  ]);
+});
+
+test("a band can start on the bare HOLES of a board that is not selected", () => {
   resetDom();
   const doc = new DeskDoc(null);
   doc.addBoard("pins-full", 0, 0);
   const world = { x: 0, y: 0 };
   const { surface, controller } = makeDesk(doc, world);
   const chip = controller.addComponentAt("74LS00", "bb1", "e5"); // cols 5–11
+  controller.deselect();
 
-  // The part's pointerdown bails on Shift and lets it bubble to the viewport —
-  // which is why Feature 290's wire-carrying drag took OPTION instead. A press
-  // landing on the chip must not become a part drag.
-  const el = surface.querySelector(`[data-component-id="${chip.id}"]`);
-  marquee(el, world, { x: 4, y: 4 }, { x: 12, y: 9 });
+  // A press on the strip itself — holes, not a part — is background.
+  const board = surface.querySelector('[data-board-id="bb1"]');
+  marquee(board, world, { x: 3, y: 3 }, { x: 13, y: 10 });
   assert.deepEqual(controller.multiSelectedIds, [chip.id]);
+  assert.deepEqual(
+    controller.multiSelectedBoardIds,
+    [],
+    "only wholly enclosed",
+  );
 });
 
 test("selectAll takes the WHOLE desk — boards, parts and wires alike", () => {
@@ -722,10 +892,12 @@ test("selectAll takes the WHOLE desk — boards, parts and wires alike", () => {
   const wire = doc.addWire({ from: "bb1.a1", to: "bb1.a2" });
 
   assert.equal(controller.selectAll(), true);
-  // The same set a marquee round everything would take, which is what makes
-  // ⌘A then ⌘C copy the desktop as one design clip.
-  assert.deepEqual(controller.multiSelectedIds.sort(), [a.id, b.id].sort());
-  assert.deepEqual(controller.multiSelectedWireIds, [wire.id]);
+  // The same set a band round everything would take, which is what makes ⌘A
+  // then ⌘C copy the desktop as one design clip. Everything on a board rides
+  // it as a passenger, so only the boards are selected in their own right.
+  assert.deepEqual(controller.multiSelectedIds, [], "passengers, unlit");
+  assert.deepEqual(controller.multiSelectedWireIds, [], "passengers too");
+  assert.ok(a && b && wire);
   assert.deepEqual(
     controller.multiSelectedBoardIds.sort(),
     doc.boards.map((x) => x.id).sort(),
@@ -764,16 +936,16 @@ test("selectAll replaces a single pick rather than adding to it", () => {
   assert.equal(controller.selectedId, chip.id);
 
   controller.selectAll();
-  assert.equal(controller.selectedId, null, "the marquee owns the selection");
-  assert.deepEqual(controller.multiSelectedIds.sort(), [chip.id, other.id].sort()); // prettier-ignore
-  // Dropping the single pick un-highlights the part it was on, so it has to
-  // happen BEFORE the set is highlighted — otherwise the already-selected
-  // part is the one that comes out looking unselected.
+  assert.equal(controller.selectedId, null, "the set owns the selection");
+  assert.deepEqual(controller.multiSelectedBoardIds, ["bb1"]);
+  // Both chips ride their board, so neither is lit — the previous pick
+  // included: a lit part always means "selected in its own right".
   assert.deepEqual(
     [...surface.querySelectorAll(".layer-parts > .part--selected")].length,
-    2,
-    "every selected part is highlighted, the previous pick included",
+    0,
+    "passengers are not highlighted",
   );
+  assert.ok(other);
 });
 
 test("Delete removes the whole marquee selection in one doc-changed", () => {
@@ -786,8 +958,8 @@ test("Delete removes the whole marquee selection in one doc-changed", () => {
   controller.addComponentAt("resistor", "bb1", "a6"); // a6 ── a9
   assert.equal(doc.components.length, 2);
 
-  // A box enclosing both (rows f..a, columns 4–12).
-  marquee(viewport, world, { x: 4, y: 4 }, { x: 12, y: 13 });
+  // A box wholly enclosing both, bodies included (rows f..a, columns 4–12).
+  marquee(viewport, world, { x: 4, y: 4 }, { x: 12, y: 14 });
   assert.equal(controller.multiSelectedIds.length, 2);
 
   let changes = 0;
@@ -857,25 +1029,25 @@ test("the marquee shows a crosshair for the duration of the drag", () => {
   const world = { x: 0, y: 0 };
   const { viewport } = makeDesk(doc, world);
 
-  const send = (type, shiftKey = true) =>
+  const send = (type, client = 0) =>
     viewport.dispatchEvent(
       new window.PointerEvent(type, {
         bubbles: true,
         button: 0,
         pointerId: 9,
-        shiftKey,
-        clientX: 0,
+        clientX: client,
         clientY: 0,
       }),
     );
 
   send("pointerdown");
+  // A band only exists once the pointer travels — until then it is a click.
+  assert.ok(!viewport.classList.contains("desk-viewport--selecting"));
+
+  send("pointermove", 40);
   assert.ok(viewport.classList.contains("desk-viewport--selecting"));
 
-  send("pointermove");
-  assert.ok(viewport.classList.contains("desk-viewport--selecting"));
-
-  send("pointerup");
+  send("pointerup", 40);
   assert.ok(!viewport.classList.contains("desk-viewport--selecting"), "reset");
 });
 
@@ -1038,7 +1210,9 @@ test("Ctrl-click on empty desk keeps the selection — a plain click clears it",
   toggleClick(viewport);
   assert.deepEqual(controller.multiSelectedIds.sort(), both);
 
+  // A plain click there is a band that never travelled: it picks nothing.
   pointerAt(viewport, "pointerdown", 0, 0);
+  pointerAt(viewport, "pointerup", 0, 0);
   assert.deepEqual(controller.multiSelectedIds, []);
   assert.equal(controller.selectedId, null);
 });
@@ -1226,20 +1400,6 @@ test("a loose strip is highlighted on its own", () => {
   boxNear(outlineBox(surface), expectedBox(doc, ["bb4"]));
 });
 
-test("an Option grab re-traces the highlighter around the torn-off run", () => {
-  resetDom();
-  const doc = new DeskDoc(null);
-  const world = { x: 0, y: 0 };
-  const { surface, controller } = makeDesk(doc, world);
-  controller.addKitAt("full", 0, 0);
-
-  // Mid-gesture: the set is bb2 + bb3, so the top rail is outside the edge.
-  const el = boardEl(surface, "bb2");
-  pointerAt(el, "pointerdown", 0, 0, { altKey: true });
-  boxNear(outlineBox(surface), expectedBox(doc, ["bb2", "bb3"]));
-  pointerAt(el, "pointerup", 0, 0, { altKey: true });
-});
-
 test("a board dropped beside another is pulled flush and mates with it", () => {
   resetDom();
   const doc = new DeskDoc(null);
@@ -1314,71 +1474,54 @@ test("placing a kit flush against a board mates it, exactly as a drop does", () 
   assert.equal(doc.groupMembers("bb1").length, 6);
 });
 
-test("Option-drag takes the run BELOW the grab and tears off the rest", () => {
-  resetDom();
-  const doc = new DeskDoc(null);
-  const world = { x: 0, y: 0 };
-  const { surface, controller } = makeDesk(doc, world);
-  controller.addKitAt("full", 0, 0); // bb1 rail@0 · bb2 pins@3.70 · bb3 @17.72
-
-  const lit = dragBoard(surface, world, "bb2", 0, 30, { altKey: true });
-  assert.deepEqual(lit, ["bb2", "bb3"]); // the top rail is not in the set
-  assert.deepEqual(
-    doc.boards.map((b) => [b.id, b.y]),
-    [
-      ["bb1", 0], // left exactly where it was
-      ["bb2", q(PINS_Y + 30)],
-      ["bb3", q(LOW_RAIL_Y + 30)],
-    ],
-  );
-  // The snap is broken: the pair that travelled is its own unit now, and the
-  // rail left behind is loose.
-  assert.equal(doc.getBoard("bb1").group, null);
-  assert.deepEqual(
-    doc.groupMembers("bb2").map((b) => b.id),
-    ["bb2", "bb3"],
-  );
-});
-
-test("Option+Shift-drag takes the run ABOVE the grab instead", () => {
+test("an unselected board is background: a press on it bands, nothing moves (Shift changes nothing)", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
   const { surface, controller } = makeDesk(doc, world);
   controller.addKitAt("full", 0, 0);
+  controller.deselect();
 
-  const lit = dragBoard(surface, world, "bb2", 0, -30, {
-    altKey: true,
-    shiftKey: true,
-  });
-  assert.deepEqual(lit, ["bb1", "bb2"]);
-  assert.deepEqual(
-    doc.boards.map((b) => [b.id, b.y]),
-    [
-      ["bb1", -30],
-      ["bb2", q(PINS_Y - 30)],
-      ["bb3", LOW_RAIL_Y], // the bottom rail stays put
-    ],
-  );
-  assert.equal(doc.getBoard("bb3").group, null);
+  for (const mods of [{}, { shiftKey: true }]) {
+    const lit = dragBoard(surface, world, "bb2", 0, 30, mods);
+    assert.deepEqual(lit, []); // no drag set — the board was never grabbed
+    assert.deepEqual(
+      doc.boards.map((b) => b.y),
+      [0, PINS_Y, LOW_RAIL_Y], // nothing moved
+    );
+  }
 });
 
-test("Shift alone on a board still falls through to the marquee", () => {
+test("a click anywhere on an unselected board selects the whole board — its snapped group", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
   const { surface, controller } = makeDesk(doc, world);
-  controller.addKitAt("full", 0, 0);
+  controller.addKitAt("full", 0, 0); // bb1 rail · bb2 pins · bb3 rail
+  const chip = controller.addComponentAt("74LS00", "bb2", "e5");
+  assert.equal(controller.selectedId, chip.id);
 
-  const lit = dragBoard(surface, world, "bb2", 0, 30, { shiftKey: true });
-  assert.deepEqual(lit, []); // no drag set — the board was never grabbed
+  // A click on the lower rail's bare holes — not on the chip.
+  pointerAt(boardEl(surface, "bb3"), "pointerdown", 0, 0);
+  pointerAt(boardEl(surface, "bb3"), "pointerup", 0, 0);
+  assert.equal(controller.selectedId, "bb3");
+  assert.deepEqual(controller.multiSelectedIds, [], "the chip rides, unlit");
+
+  // …and that pick is the whole kit: the next drag carries all three strips.
+  const lit = dragBoard(surface, world, "bb1", 0, 30);
+  assert.deepEqual(lit, ["bb1", "bb2", "bb3"]);
   assert.deepEqual(
     doc.boards.map((b) => b.y),
-    [0, PINS_Y, LOW_RAIL_Y], // nothing moved
+    [30, q(PINS_Y + 30), q(LOW_RAIL_Y + 30)],
   );
+
+  // ⌘Z steps the click back as a selection change of its own.
+  controller.undo(); // the move
+  controller.undo(); // the click
+  assert.equal(controller.selectedId, chip.id);
 });
 
-test("an Option-drag that lands illegally reverts and keeps the snap", () => {
+test("a kit dropped illegally reverts and keeps its snap", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const world = { x: 0, y: 0 };
@@ -1386,9 +1529,10 @@ test("an Option-drag that lands illegally reverts and keeps the snap", () => {
   controller.addKitAt("full", 0, 0); // bb1..bb3, spans y 0…21.42
   controller.addKitAt("full", 0, 24); // bb4..bb6, spans y 24…45.42
 
-  // Push the bottom run down onto the second board — no room, so nothing
-  // commits and the group must survive intact.
-  dragBoard(surface, world, "bb2", 0, 8, { altKey: true });
+  // Push the first kit down onto the second — no room, so nothing commits
+  // and both groups must survive intact.
+  controller.selectBoard("bb2");
+  dragBoard(surface, world, "bb2", 0, 8);
   assert.deepEqual(
     doc.boards.map((b) => [b.id, b.y, b.group]),
     [
@@ -1486,7 +1630,7 @@ test("dragging ONE end reaches a NEIGHBOURING strip's rail; the other stays put"
   // never reach, and a hole this part is not even seated on.
   world.x = 13;
   world.y = ROW.a;
-  pointerAt(el, "pointerdown", 0, 0);
+  pointerAt(el, "pointerdown", 0, 0, { altKey: true }); // Option/Alt: one lead
   world.x = 10; // the `-` rail's hole 7 sits in this column
   world.y = railRowY(-RAIL_H, "-");
   pointerAt(el, "pointermove", 40, 40);
@@ -1518,7 +1662,7 @@ test("an end dropped closer than the minimum lead span springs back", () => {
   const el = partEl(surface, r.id);
   world.x = 13; // grab pin 2
   world.y = ROW.a;
-  pointerAt(el, "pointerdown", 0, 0);
+  pointerAt(el, "pointerdown", 0, 0, { altKey: true }); // Option/Alt: one lead
   world.x = 11; // only 1 hole from pin 1 — inside the 3-unit minimum
   world.y = ROW.a;
   pointerAt(el, "pointermove", 40, 0);
@@ -1558,7 +1702,7 @@ test("an LED rotates and drags an end like a resistor", () => {
   const el = partEl(surface, led.id);
   world.x = 10; // grab pin 2 (same column, one row up from a10 → world y 11)
   world.y = ROW.b;
-  pointerAt(el, "pointerdown", 0, 0);
+  pointerAt(el, "pointerdown", 0, 0, { altKey: true }); // Option/Alt: one lead
   world.y = railRowY(-RAIL_H, "-"); // the rail strip's `-` rail
   pointerAt(el, "pointermove", 0, 60);
   pointerAt(el, "pointerup", 0, 60);
@@ -1591,7 +1735,7 @@ test("an LED's legs may sit side by side (no gap required)", () => {
   const el = partEl(surface, led.id);
   world.x = 11;
   world.y = ROW.a;
-  pointerAt(el, "pointerdown", 0, 0);
+  pointerAt(el, "pointerdown", 0, 0, { altKey: true }); // Option/Alt: one lead
   world.x = 10;
   world.y = ROW.b; // b10 — adjacent to the anode at a10
   pointerAt(el, "pointermove", 40, 40);
@@ -1993,7 +2137,7 @@ test("R during a resistor END drag is a no-op, not a rotate-behind-the-drag", ()
   const el = partEl(surface, r.id);
   world.x = 13; // grab pin 2's lead
   world.y = ROW.a;
-  pointerAt(el, "pointerdown", 0, 0);
+  pointerAt(el, "pointerdown", 0, 0, { altKey: true }); // Option/Alt: one lead
   world.x = 16;
   pointerAt(el, "pointermove", 40, 0);
 
@@ -2045,6 +2189,7 @@ test("W during a board drag is inert, and the drag still commits cleanly", () =>
   const board = doc.addBoard("pins-full", 0, 0); // y=0
   const world = { x: 0, y: 0 };
   const { surface, controller } = makeDesk(doc, world);
+  controller.selectBoard(board.id); // a strip is grabbed once selected
 
   const el = boardEl(surface, board.id);
   pointerAt(el, "pointerdown", 0, 0); // grab at world (0,0)
@@ -2311,16 +2456,50 @@ test("a new edit after undo drops the redo future", () => {
   assert.equal(doc.boards.length, 2);
 });
 
-test("undo restores through a full rebuild — selection is cleared", () => {
+test("undo restores through a full rebuild — and the selection that went with the step", () => {
   resetDom();
   const doc = new DeskDoc(null);
   const { surface, controller } = makeDesk(doc);
-  controller.addBoardAt("pins-full", 0, 0);
+  controller.addBoardAt("pins-full", 0, 0); // selects the board
   controller.addComponentAt("74LS00", "bb1", "e5");
   assert.ok(controller.selectedId); // the add selected the new chip
   controller.undo(); // remove the chip
-  assert.equal(controller.selectedId, null);
+  assert.equal(controller.selectedId, "bb1", "the board, as it was then");
   assert.equal(surface.querySelectorAll(".chip").length, 0);
+});
+
+test("a change of selection is its own undo step, and touches nothing else", () => {
+  resetDom();
+  const doc = new DeskDoc(null);
+  const world = { x: 0, y: 0 };
+  const { viewport, surface, controller } = makeDesk(doc, world);
+  controller.addBoardAt("pins-full", 0, 0);
+  const a = controller.addComponentAt("74LS00", "bb1", "e5");
+  const b = controller.addComponentAt("74LS04", "bb1", "e20");
+  assert.equal(controller.selectedId, b.id);
+
+  // A misclick: a plain click on the other chip (a drag that didn't travel).
+  world.x = 8;
+  world.y = 6.5;
+  pointerAt(partEl(surface, a.id), "pointerdown", 0, 0);
+  pointerAt(partEl(surface, a.id), "pointerup", 0, 0);
+  assert.equal(controller.selectedId, a.id);
+
+  let changes = 0;
+  window.addEventListener("chiphippo:doc-changed", () => changes++);
+  assert.equal(controller.undo(), true);
+  assert.equal(controller.selectedId, b.id, "⌘Z takes the misclick back");
+  assert.equal(doc.components.length, 2, "the document is untouched");
+  assert.equal(changes, 0, "and nobody is told it changed");
+  assert.equal(controller.redo(), true);
+  assert.equal(controller.selectedId, a.id);
+
+  // A click on the background is a step too.
+  pointerAt(viewport, "pointerdown", 0, 0);
+  pointerAt(viewport, "pointerup", 0, 0);
+  assert.equal(controller.selectedId, null);
+  controller.undo();
+  assert.equal(controller.selectedId, a.id);
 });
 
 test("running freezes history; stopping restores it", () => {
@@ -2418,7 +2597,8 @@ test("a cluster paste including a DIP-packaged discrete doesn't throw (bar8iso/s
   const chip = controller.addComponentAt("74LS00", "bb1", "e5"); // cols 5–11
   const bank = controller.addComponentAt("sw-dip4", "bb1", "e20"); // cols 20–27
 
-  marquee(viewport, world, { x: 4, y: 4 }, { x: 30, y: 9 });
+  // Wholly round both bodies (a band takes a part only when it encloses it).
+  marquee(viewport, world, { x: 4, y: 3 }, { x: 30, y: 10 });
   assert.equal(controller.multiSelectedIds.length, 2);
 
   assert.equal(accelKey(controller, "c"), true);

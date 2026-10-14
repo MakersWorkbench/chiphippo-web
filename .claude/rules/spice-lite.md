@@ -818,7 +818,13 @@ tiedLow)`: `supplyMaOf` hands a silicon block a `tiedLow(pin)` read off the wiri
 - **The speaker** (2026-10-13, no plan; `catalog/speaker.js`, `spice/speakers.js`,
   `spice/measure.js` `noteTone`/`toneOf`, `components/speaker-audio.js`). A discrete
   (`def.speaker`, COMPONENTS ▸ Audio, footprint [0, 3], `impedance` 8/16/32 Ω +
-  `volume` %) that is a RESISTOR of its impedance to the solve (`weakBridges` third
+  `volume` % + `rot`). **R turns it a quarter lap about its + leg** (`def.turns`,
+  Jason 2026-10-14: its 0.3-in legs are the channel's width, so on end it straddles the
+  trench e↔f): `rot` 90/180/270 stored only when set; occupancy.js `partPinHoles` gives
+  pin 2 as `rotateOffset({dx: 3, dy: 0}, rot)`; seating.js seats it as a can is seated
+  (`rigidSeat`, the span turned — `turnedSpan`); `rotateComponent` steps to the next
+  quarter it can take, pin 1 fixed; the drawing places the body's centre turned and every
+  word upright (`buildSpeaker`, `turnedBox`), and so does 3D that is a RESISTOR of its impedance to the solve (`weakBridges` third
   element — the param is `impedance`, not `ohms`, because `properties.field.ohms` reads
   "Resistance"). Inductance left out. `noteReadouts` (every settle and replayed
   segment) samples `voltsAt(a) − voltsAt(b)` per speaker into `analog.tones` with the

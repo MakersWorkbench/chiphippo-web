@@ -133,6 +133,20 @@ export function partPinHoles(ref, anchor, params) {
     ];
   }
   if (def.footprint) {
+    // A TO-92 whose legs are BENT (model/free-legs.js): pin 1 in ANY hole, a
+    // grid row or a rail, as a turned lead's is; pins 2 and 3 offsets from
+    // it, each resolved against whatever strip lies under it.
+    if (Array.isArray(params?.legs) && def.freeLegs?.(params)) {
+      const legs = params.legs;
+      const real = (v) => v && Number.isFinite(v.dx) && Number.isFinite(v.dy);
+      if (legs.length !== 2 || !legs.every(real)) return null;
+      if (!LEAD_ANCHOR_RE.test(anchor)) return null;
+      return [
+        { pin: def.pins[0].n, hole: anchor },
+        { pin: def.pins[1].n, offset: { dx: legs[0].dx, dy: legs[0].dy } },
+        { pin: def.pins[2].n, offset: { dx: legs[1].dx, dy: legs[1].dy } },
+      ];
+    }
     // Rotated (vertical) two-free-ends form: pin 1 at the anchor hole, pin 2
     // bent to a {dx, dy} offset instead of a footprint offset. The bend may
     // reach off this board entirely, so it stays geometry here. Pin 1 may
@@ -154,6 +168,19 @@ export function partPinHoles(ref, anchor, params) {
         { pin: def.pins[0].n, hole: anchor },
         { pin: def.pins[1].n, offset: { dx: end.dx, dy: end.dy } },
       ];
+    }
+    // A rigid two-legged body turned a quarter lap (or more) about pin 1
+    // (`def.turns` — the speaker): pin 1 seats in its hole, every other pin
+    // is its footprint offset turned the same way, resolved against whatever
+    // strip is under it (as a can's corners are).
+    const turn = ROTATIONS.includes(params?.rot) ? params.rot : 0;
+    if (def.turns && turn !== 0) {
+      if (!GRID_ANCHOR_RE.test(anchor)) return null;
+      return footprintOffsets(def, params).map((dx, i) =>
+        i === 0
+          ? { pin: def.pins[0].n, hole: anchor }
+          : { pin: def.pins[i].n, offset: rotateOffset({ dx, dy: 0 }, turn) },
+      );
     }
     // Linear discrete along one grid row.
     const m = GRID_ANCHOR_RE.exec(anchor);
@@ -612,9 +639,15 @@ export function canPlacePart(
   const pins = partPinAddresses(doc, { ref, board: boardId, anchor, params });
   if (!pins) return false;
   if (pins.some((p) => p.address == null)) return false; // a lead in mid-air
-  // A rotated part's two ends must be DISTINCT holes (a wire could join a
-  // node's own holes; a two-terminal device pinned to one hole is nonsense).
-  if (params?.rot === 90 && pins[0].address === pins[1].address) return false;
+  // A rotated part's two ends — a bent TO-92's three legs — must be DISTINCT
+  // holes (a wire could join a node's own holes; a device with two leads in
+  // one hole is nonsense).
+  if (
+    (params?.rot === 90 || Array.isArray(params?.legs)) &&
+    new Set(pins.map((p) => p.address)).size !== pins.length
+  ) {
+    return false;
+  }
   // Two-terminal parts with a declared minimum lead span (a resistor's body
   // needs room) must keep their ends that far apart — any angle, any distance
   // beyond it, so a lead can reach the far rail.
@@ -622,7 +655,10 @@ export function canPlacePart(
     const pa = worldOfAddress(boards, pins[0].address);
     const pb = worldOfAddress(boards, pins[1].address);
     if (!pa || !pb) return false;
-    if (Math.hypot(pb.x - pa.x, pb.y - pa.y) < def.minSpan) return false;
+    // With a hair to spare: row y's live on a 0.01 grid, which binary floats
+    // do not (3.51 − 1.51 is 1.9999999999999998), so a diode laid exactly its
+    // minimum across rows h→j read as too short.
+    if (Math.hypot(pb.x - pa.x, pb.y - pa.y) < def.minSpan - 1e-6) return false;
   }
   const index = occupancy ?? buildOccupancy(doc);
   const covered = partCoverAddresses(doc, {

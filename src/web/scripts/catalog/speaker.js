@@ -45,6 +45,8 @@ export function speakerParams(raw) {
     volume: Number.isFinite(volume)
       ? Math.min(100, Math.max(0, Math.round(volume)))
       : SPEAKER_VOLUME_DEFAULT,
+    // A quarter turn about its + leg (`turns`), stored only when turned.
+    ...([90, 180, 270].includes(raw?.rot) ? { rot: raw.rot } : {}),
   };
 }
 
@@ -76,6 +78,12 @@ export const SPEAKER_DEF = Object.freeze({
   // Two legs on 0.3 in (KiCad's Buzzer_12x9.5RM7.6), the round body
   // standing back over the rows behind them as a relay's cube does.
   footprint: Object.freeze({ offsets: Object.freeze([0, 3]) }),
+  // R turns it a quarter lap about its + leg (`params.rot`, occupancy.js
+  // `partPinHoles`): its legs are 0.3 in apart, the channel's own width, so
+  // turned on end it stands across the trench, one leg each side — the body
+  // over the channel (Jason, 2026-10-14). A rigid body, so the - leg goes
+  // where the turn puts it and nowhere else.
+  turns: true,
   // The hook every consumer branches on — never an id.
   speaker: true,
   spiceOnly: true,

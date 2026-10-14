@@ -170,8 +170,9 @@ TEST_TIMEOUT ?= 900000
 # Digital (hneemann/Digital, with its lib/ beside it) for the two Digital
 # export checks in export-digital-cli.test.js. It lives in the git-ignored
 # data/ folder, so on a machine without it (CI) this is empty and those two
-# tests SKIP; `make test` runs them when it is there (~6 min more, one java
-# per bench). `make test-fast` leaves them out. Override: DIGITAL_JAR=/path.
+# tests SKIP; `make test` runs them when it is there (~3 min, one headless
+# java per bench — no Dock icon, no stolen focus). `make test-fast` leaves them
+# out. Override: DIGITAL_JAR=/path.
 DIGITAL_JAR ?= $(wildcard $(WORKSPACE)/data/digital/Digital.jar)
 
 # `make test` is the COMPLETE run — the one to trust before calling work done,

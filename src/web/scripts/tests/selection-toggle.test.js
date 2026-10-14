@@ -25,7 +25,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  isLeadToggleEvent,
   isToggleSelectEvent,
+  leadKey,
+  parseLeadKey,
   singlePick,
   toggleSelection,
 } from "../model/selection-toggle.js";
@@ -52,24 +55,24 @@ test("only the PRIMARY button — Ctrl+right-click stays a right-click", () => {
   assert.equal(isToggleSelectEvent({ metaKey: true, button: 1 }, true), false);
 });
 
-test("Shift and Option are excluded — each belongs to another gesture", () => {
-  // Shift-drag rubber-bands the marquee; Option-drag carries a part's wiring
-  // (or tears a board run off its group).
-  assert.equal(
-    isToggleSelectEvent({ ctrlKey: true, shiftKey: true }, false),
-    false,
-  );
+test("Option/Alt is excluded — pin-targeting mode, never additive; Shift changes nothing", () => {
+  // The desk's modifiers do not combine: a press with Option down belongs to
+  // pin-targeting mode. Shift is no modifier of the desk's at all.
   assert.equal(
     isToggleSelectEvent({ ctrlKey: true, altKey: true }, false),
     false,
   );
   assert.equal(
-    isToggleSelectEvent({ metaKey: true, shiftKey: true }, true),
+    isToggleSelectEvent({ metaKey: true, altKey: true }, true),
     false,
   );
   assert.equal(
-    isToggleSelectEvent({ metaKey: true, altKey: true }, true),
-    false,
+    isToggleSelectEvent({ ctrlKey: true, shiftKey: true }, false),
+    true,
+  );
+  assert.equal(
+    isToggleSelectEvent({ metaKey: true, shiftKey: true }, true),
+    true,
   );
 });
 
@@ -82,7 +85,7 @@ test("toggleSelection adds what is absent and removes what is present", () => {
   const empty = { parts: [], wires: [], boards: [] };
 
   const one = toggleSelection(empty, "parts", ["c1"]);
-  assert.deepEqual(one, { parts: ["c1"], wires: [], boards: [] });
+  assert.deepEqual(one, { parts: ["c1"], wires: [], boards: [], leads: [] });
 
   const two = toggleSelection(one, "parts", ["c2"]);
   assert.deepEqual(two.parts, ["c1", "c2"]);
@@ -90,9 +93,9 @@ test("toggleSelection adds what is absent and removes what is present", () => {
   assert.deepEqual(toggleSelection(two, "parts", ["c1"]).parts, ["c2"]);
 });
 
-test("the other two sets are carried through untouched", () => {
+test("the other sets are carried through untouched", () => {
   const next = toggleSelection(
-    { parts: ["c1"], wires: ["w1"], boards: ["bb1"] },
+    { parts: ["c1"], wires: ["w1"], boards: ["bb1"], leads: ["lead:c2:a"] },
     "wires",
     ["w2"],
   );
@@ -100,6 +103,7 @@ test("the other two sets are carried through untouched", () => {
     parts: ["c1"],
     wires: ["w1", "w2"],
     boards: ["bb1"],
+    leads: ["lead:c2:a"],
   });
 });
 
@@ -117,7 +121,7 @@ test("a set of ids toggles ALL-OR-NOTHING, so a partial group completes", () => 
 });
 
 test("an empty id list and an unknown kind change nothing", () => {
-  const cur = { parts: ["c1"], wires: [], boards: [] };
+  const cur = { parts: ["c1"], wires: [], boards: [], leads: [] };
   assert.deepEqual(toggleSelection(cur, "parts", []), cur);
   assert.deepEqual(toggleSelection(cur, "annotations", ["a1"]), cur);
 });
@@ -138,4 +142,45 @@ test("singlePick names the one item, and only when there is exactly one", () => 
   assert.equal(singlePick({ parts: [], wires: [], boards: [] }), null);
   assert.equal(singlePick({ parts: ["c1"], wires: ["w1"], boards: [] }), null);
   assert.equal(singlePick({ parts: [], wires: [], boards: ["a", "b"] }), null);
+});
+
+test("the LEAD chord is Option/Alt plus ⌘ on macOS, plus Ctrl elsewhere", () => {
+  assert.equal(isLeadToggleEvent({ altKey: true, metaKey: true }, true), true);
+  assert.equal(isLeadToggleEvent({ altKey: true, ctrlKey: true }, false), true);
+  // Ctrl on a Mac is the secondary click; ⌘ off one is nobody's chord.
+  assert.equal(isLeadToggleEvent({ altKey: true, ctrlKey: true }, true), false);
+  assert.equal(isLeadToggleEvent({ altKey: true, metaKey: true }, false), false); // prettier-ignore
+  // Option/Alt alone is the REPLACING pick, never this one…
+  assert.equal(isLeadToggleEvent({ altKey: true }, true), false);
+  // …and ⌘/Ctrl alone is the object chord.
+  assert.equal(isLeadToggleEvent({ metaKey: true }, true), false);
+  // The primary button only; Shift changes nothing.
+  assert.equal(isLeadToggleEvent({ altKey: true, metaKey: true, button: 2 }, true), false); // prettier-ignore
+  assert.equal(isLeadToggleEvent({ altKey: true, metaKey: true, shiftKey: true, button: 0 }, true), true); // prettier-ignore
+  // The two chords never both claim a press.
+  assert.equal(isToggleSelectEvent({ altKey: true, metaKey: true }, true), false); // prettier-ignore
+});
+
+test("a lead round-trips through its key; anything else parses to null", () => {
+  for (const pick of [
+    { kind: "lead", id: "c4", end: "b" },
+    { kind: "wire-end", id: "w12", end: "from" },
+  ]) {
+    assert.deepEqual(parseLeadKey(leadKey(pick)), pick);
+  }
+  for (const junk of ["", "part:c1:a", "lead:c1", "lead:c1:a:x", null]) {
+    assert.equal(parseLeadKey(junk), null);
+  }
+});
+
+test("leads toggle like any set, and ONE lead is the single lead pick", () => {
+  const key = leadKey({ kind: "wire-end", id: "w1", end: "to" });
+  const one = toggleSelection({}, "leads", [key]);
+  assert.deepEqual(one.leads, [key]);
+  assert.deepEqual(singlePick(one), { kind: "wire-end", id: "w1", end: "to" });
+  const two = toggleSelection(one, "leads", ["lead:c2:a"]);
+  assert.equal(singlePick(two), null);
+  assert.deepEqual(toggleSelection(two, "leads", [key]).leads, ["lead:c2:a"]);
+  // A lead beside a part is two things, not a single pick.
+  assert.equal(singlePick({ ...one, parts: ["c1"] }), null);
 });

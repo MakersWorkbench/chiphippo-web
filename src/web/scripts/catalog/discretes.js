@@ -366,9 +366,12 @@ function diodeDef({ id, title, blurb, zener }) {
     // — the footprint the KiCad export gives it.
     footprint: Object.freeze({ offsets: Object.freeze([0, 3]) }),
     rotatable: true,
-    // A resistor's reach (see its def): the body is about as long, and 2.5
-    // still lets a lead land on the rail 2.76 away from row a.
-    minSpan: 2.5,
+    // THREE holes, not a resistor's four (Jason, 2026-10-14): a DO-35 body is
+    // under 4 mm, so its leads bend down to 0.2 in (5.08 mm) — two pitches,
+    // a10 → a12. (A DO-41 1N4001's 5.2 mm body is a squeeze there; the part
+    // number is not the seat.) The default seat above stays 0.3 in: a saved
+    // diode's pin 2 is DERIVED from it, so moving it would rewire every desk.
+    minSpan: 2,
     // The data hook every consumer branches on (the drawing, the burn rule,
     // the schematic, the export) — never an id.
     diode: Object.freeze({ zener }),
@@ -483,6 +486,13 @@ const caseField = (cases) =>
     options: Object.freeze(
       cases.map((value) => Object.freeze({ value, label: value })),
     ),
+    // A TO-220 cannot stand on BENT legs (free-legs.js): its option is
+    // greyed, saying this, while a TO-92's legs are out of a row
+    // (desk-controller.js #propertyFieldsFor) — and refused if it is asked
+    // for anyway.
+    refused:
+      "Its legs are bent, and a TO-220's are a rigid row — stand them in " +
+      "three holes in a row, in order, first.",
   });
 
 /**
@@ -670,6 +680,19 @@ export function transistorCase(def, params) {
   return caseAmong(def?.transistor?.cases ?? [], params);
 }
 
+/**
+ * A bent TO-92's `legs` — pins 2 and 3 as `{dx, dy}` pitch offsets from pin
+ * 1's hole, each through the one lead coercion (lead-offset.js) — or null
+ * when there are none, or they are junk, or two legs share a point.
+ */
+export function transistorLegs(raw) {
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  const legs = raw.map(normalizeLeadOffset);
+  if (legs.some((leg) => !leg)) return null;
+  if (legs[0].dx === legs[1].dx && legs[0].dy === legs[1].dy) return null;
+  return Object.freeze(legs);
+}
+
 /** `params.case` when it is one of `cases`, else the first of them. */
 const caseAmong = (cases, params) =>
   cases.includes(params?.case) ? params.case : (cases[0] ?? null);
@@ -681,7 +704,8 @@ const placementNote = (cases) =>
       "in Properties) standing over three holes in a row"
     : `A ${cases[0]} standing over three holes in a row`) +
   "; its pin letters are printed on it, and R with it selected turns it " +
-  "end-for-end. Real pinouts differ by part number, so check yours. In the " +
+  "end-for-end. A TO-92's legs bend: Option/Alt-drag one to any hole. " +
+  "Real pinouts differ by part number, so check yours. In the " +
   "digital sim no gain, threshold, saturation or on-resistance is " +
   "modelled — put a resistor in an LED's leg as you would on a bench. Set " +
   "an optional part number in Properties.";
@@ -729,6 +753,12 @@ function transistorDef({ id, title, blurb, type, onLevel, holds }) {
     // Turns end-for-end in place (params.rot 180), as the resistor array
     // does: the same three holes, the pin order reversed.
     reversible: true,
+    // A TO-92's three legs are wire: each bends to a hole of its own, one at
+    // a time (an Option/Alt drag, as a resistor's leg — Jason, 2026-10-14).
+    // A TO-220's are a rigid row, so it never answers. Bent, the part stores
+    // `params.legs` — where pins 2 and 3 went, as pitch offsets from pin 1's
+    // hole (model/free-legs.js); without it, it is the straight row above.
+    freeLegs: (params) => caseAmong(cases, params) === "TO-92",
     // `cases` are the packages it can be drawn and exported in
     // (transistorCase).
     transistor: Object.freeze({ type, holds, cases }),
@@ -774,7 +804,11 @@ function transistorDef({ id, title, blurb, type, onLevel, holds }) {
       // default, or switching the package away and back silently swapped a
       // grade the user chose for the new package's; with none stored, the
       // grade follows the package.
-      const pkg = caseAmong(cases, raw);
+      // Bent legs (`legs`) are a TO-92's alone — a TO-220 cannot stand on
+      // them — so a part that has them IS a TO-92, whatever else it says,
+      // and the end-for-end turn is in the legs themselves.
+      const legs = transistorLegs(raw?.legs);
+      const pkg = legs ? "TO-92" : caseAmong(cases, raw);
       // A CUSTOM grade keeps its whole figure set — unless the set is its
       // base grade's own, when it IS that grade, and is stored as one (a
       // card reopened never shows a preset over figures that are not it,
@@ -786,8 +820,9 @@ function transistorDef({ id, title, blurb, type, onLevel, holds }) {
         : TRANSISTOR_GRADES[type].some((g) => g.value === raw?.grade) ? raw.grade : null; // prettier-ignore
       return withPartNumber(
         {
-          ...(raw?.rot === 180 ? { rot: 180 } : {}),
+          ...(raw?.rot === 180 && !legs ? { rot: 180 } : {}),
           ...(holds || pkg !== cases[0] ? { case: pkg } : {}),
+          ...(legs ? { legs } : {}),
           ...(custom && !own ? { grade: CUSTOM_GRADE, custom } : {}),
           ...(grade ? { grade } : {}),
         },

@@ -21,6 +21,7 @@
 
 import { partDef } from "../catalog/index.js";
 import { seatsWide } from "../model/footprints.js";
+import { legsBent } from "../model/free-legs.js";
 import { chipBodyBox } from "./chip-view.js";
 import { discreteBox } from "./discrete-view.js";
 
@@ -48,6 +49,7 @@ export function partBodyBox(comp) {
     const def = partDef(comp.ref);
     if (!def) return null;
     if (def.rotatable && comp.params?.rot === 90) return null;
+    if (legsBent(comp)) return null; // a bent TO-92: its legs go anywhere too
     if (comp.kind === "chip") {
       return def.package
         ? chipBodyBox(def.package, comp.anchor, seatsWide(comp.params))

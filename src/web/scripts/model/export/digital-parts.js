@@ -86,6 +86,8 @@ export const DIGITAL_ELEMENTS = Object.freeze([
   "led",
   "bar8",
   "bar8iso",
+  "seg7cc",
+  "seg7ca",
   "seg8cc",
   "seg8ca",
   "sw-slide",

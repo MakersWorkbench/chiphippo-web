@@ -672,6 +672,12 @@
     "seg8ca": {
       "title": "8 段数码管（共阳）"
     },
+    "seg7cc": {
+      "title": "7 段数码管（共阴）"
+    },
+    "seg7ca": {
+      "title": "7 段数码管（共阳）"
+    },
     "bar8": {
       "title": "8 段 LED 条"
     },
@@ -1207,12 +1213,6 @@
       },
       "boards": {
         "other": "{count} 块面包板"
-      },
-      "moreParts": {
-        "other": "另外 {count} 个元件"
-      },
-      "moreWires": {
-        "other": "另外 {count} 根导线"
       }
     },
     "menu": {
@@ -1236,9 +1236,7 @@
       "boardMessage": "{id} 上还连着 {what} — 移除面包板会把它们一起移除。",
       "boardsMessage": "这 {count} 块拼接的面包板上还连着 {what} — 移除它们会把这些一起移除。",
       "brickTitle": "移除{noun}？",
-      "brickMessage": "{id} 上还连着 {what} — 移除它会把它们一起移除。",
-      "selectionTitle": "移除 {what}？",
-      "selectionMessage": "连在它们上的 {extra} 也会被一起移除。"
+      "brickMessage": "{id} 上还连着 {what} — 移除它会把它们一起移除。"
     },
     "paste": {
       "failTitle": "无法粘贴该设计",
@@ -1560,6 +1558,12 @@
       "selectAll": "全选 — 整个工作台，或输入框中的文字",
       "toggleSelect": "将单个项目加入／移出选择",
       "toggleSelectKeys": "{mod}+点击",
+      "pickLead": "只选一根引脚 — 导线端或元件引脚（不会追加）",
+      "pickLeadKeys": "{alt}+点击",
+      "toggleLead": "添加 / 移除一根引脚 — 导线端或元件引脚",
+      "toggleLeadKeys": "{alt}+{mod}+点击",
+      "moveBare": "只移动所选内容 — 连线留在原处",
+      "moveBareKeys": "{shift}+拖动",
       "copy": "复制选中的元件",
       "paste": "粘贴一个副本",
       "delete": "删除所选内容",
@@ -1573,6 +1577,8 @@
       "palette": "显示或隐藏元件库",
       "analyzer": "显示或隐藏逻辑分析仪",
       "fit": "适应窗口",
+      "pan": "平移桌面",
+      "panKeys": "空格+拖动或中键拖动",
       "zoomOut": "缩到最小（找回丢失的元件）",
       "zoom": "放大／缩小／还原",
       "fontSize": "编辑器字体大小 放大／缩小／还原",
@@ -1755,7 +1761,8 @@
       "adviceLabel": "关于此值"
     },
     "refused": {
-      "bodyHoles": "没有空间——引脚要移到的孔已被占用，或超出了面包板末端。"
+      "bodyHoles": "没有空间——引脚要移到的孔已被占用，或超出了面包板末端。",
+      "case": "它的引脚已弯折，而 TO-220 的引脚是固定的一排——请先把它们按顺序插进一排相邻的三个孔。"
     },
     "hint": {
       "title": "相近的标准值：",

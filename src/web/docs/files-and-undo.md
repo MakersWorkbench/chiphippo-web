@@ -113,6 +113,14 @@ chips, and discretes; wiring and unwiring; deleting anything; net names — as
 far back as your session's history allows, and both menu items disable
 themselves automatically when there's nothing left to undo or redo.
 
+**Changes of selection are on the history too.** Each click, box or
+`Cmd/Ctrl`-click that changes what's selected is a step of its own, so a
+misclick that threw away a careful selection is one `Cmd/Ctrl+Z` from coming
+back — and undoing an edit puts back what was selected when you made it. A
+selection step changes nothing in the design, so it never marks the project
+as having unsaved changes (though, like any new step, it does clear the redo
+history).
+
 Undo/redo is **per desktop**: switch away and back, and `Cmd/Ctrl+Z` still
 undoes that desk's last edit, not the other one's. Adding, deleting, renaming
 and importing a desktop are not on any undo stack — they're changes to the

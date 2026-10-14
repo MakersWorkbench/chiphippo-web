@@ -18,7 +18,8 @@
  */
 
 // part-move.js — which wires RIDE a part when it is re-seated, and where they
-// land (Feature 290, the Option-drag). Pure and DOM-free, over a plain document.
+// land (Feature 290 — every part drag, since the selection & drag model).
+// Pure and DOM-free, over a plain document.
 //
 // Re-seating a wired part without its wiring is a SILENT REWIRING: the pins move
 // to different nodes, every wire stays in the hole it was laid in, and the
@@ -50,8 +51,9 @@
 // in the next hole along is, and leaving it behind is the same silent rewiring
 // this module exists to prevent — so a two-terminal part's LEAD rides on the
 // same rule, and the part BENDS around whichever of its legs is staying put.
-// Only a `rotatable` part qualifies, because it is the only kind whose leads
-// move independently: a DIP's pins are fixed to its body, so "carry the chip
+// Only a part whose leads move independently qualifies — a `rotatable` one,
+// and a TO-92 transistor (its three legs bend too: free-legs.js) — because a
+// DIP's pins are fixed to its body, as a TO-220's are, so "carry the chip
 // next door because a wire's worth of copper joins them" would be a different
 // gesture (and one that cascades). Ride by BOTH legs and it translates rigidly
 // instead, keeping whichever form it is stored in.
@@ -79,6 +81,7 @@ import {
   worldOfAddress,
 } from "./occupancy.js";
 import { seatedRows } from "./footprints.js";
+import { hasFreeLegs, legSeat } from "./free-legs.js";
 import { partPinsWorld } from "./part-geometry.js";
 
 /** A refused plan — the caller reddens the drop rather than inventing a hole. */
@@ -175,8 +178,9 @@ export function wiresRidingPart(doc, compId) {
  * winning a shared node). `moving` is the set that is already being dragged in
  * its own right — a member rides as a member, never as its own neighbour's lead.
  *
- * Only a `rotatable` part is offered: see the module note on why a DIP's pins
- * are not leads. Frozen at pointerdown with everything else.
+ * Only a part whose leads move on their own is offered — a `rotatable` one or
+ * a TO-92 (`hasFreeLegs`): see the module note on why a DIP's pins are not
+ * leads. Frozen at pointerdown with everything else.
  *
  * @param {{ boards: Array, components: Array }} doc
  * @param {Map<string, string>} owners - node key → moving component id
@@ -187,7 +191,7 @@ export function leadsRiding(doc, owners, moving = new Set()) {
   const riding = [];
   for (const comp of doc?.components ?? []) {
     if (!comp || moving.has(comp.id) || comp.board == null) continue;
-    if (!partDef(comp.ref)?.rotatable) continue;
+    if (!partDef(comp.ref)?.rotatable && !hasFreeLegs(comp)) continue;
     const pins = partPinAddresses(doc, comp);
     if (!pins) continue;
     const legs = [];
@@ -221,11 +225,28 @@ export function partsRidingPart(doc, compId) {
  *
  * @param {{ boards: Array, components: Array }} doc
  * @param {object} comp - the rider, as the document has it
+ * A TO-92's three legs take the same rule through `legSeat`: the legs that ride
+ * land, the rest stay, and the part comes out straight or bent by where they
+ * all are (free-legs.js).
+ *
  * @param {Array<{pin:number, shift:Function}>} riding - a `partRideShift` per leg
  */
 export function planRidingLead(doc, comp, riding) {
   const boards = doc?.boards ?? [];
   const def = partDef(comp?.ref);
+  if (hasFreeLegs(comp)) {
+    const now = partPinAddresses(doc, comp);
+    if (!now) return null;
+    const landed = new Map();
+    for (const { pin, shift } of riding ?? []) {
+      const address = now.find((p) => p.pin === pin)?.address;
+      const to = address == null ? null : shift(address);
+      if (!to) return null; // nowhere for this leg to go
+      landed.set(pin, to);
+    }
+    if (landed.size === 0) return null;
+    return legSeat(doc, comp, landed);
+  }
   const pins = partPinsWorld(boards, comp);
   if (!def?.rotatable || !pins || pins.length !== 2) return null;
 

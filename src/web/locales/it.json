@@ -674,6 +674,12 @@
     "seg8ca": {
       "title": "Cifra a 8 segmenti (anodo comune)"
     },
+    "seg7cc": {
+      "title": "Display a 7 segmenti (catodo comune)"
+    },
+    "seg7ca": {
+      "title": "Display a 7 segmenti (anodo comune)"
+    },
     "bar8": {
       "title": "Barra LED a 8 segmenti"
     },
@@ -1223,14 +1229,6 @@
       "boards": {
         "one": "{count} breadboard",
         "other": "{count} breadboard"
-      },
-      "moreParts": {
-        "one": "{count} componente in più",
-        "other": "{count} componenti in più"
-      },
-      "moreWires": {
-        "one": "{count} filo in più",
-        "other": "{count} fili in più"
       }
     },
     "menu": {
@@ -1254,9 +1252,7 @@
       "boardMessage": "Su {id} ci sono {what} — rimuovendo la breadboard vanno via anche loro.",
       "boardsMessage": "Su queste {count} breadboard unite ci sono {what} — rimuovendole vanno via anche loro.",
       "brickTitle": "Rimuovere {noun}?",
-      "brickMessage": "Su {id} ci sono {what} — rimuovendolo vanno via anche loro.",
-      "selectionTitle": "Rimuovere {what}?",
-      "selectionMessage": "Verranno rimossi anche {extra} collegati a loro."
+      "brickMessage": "Su {id} ci sono {what} — rimuovendolo vanno via anche loro."
     },
     "paste": {
       "failTitle": "Non è stato possibile incollare il progetto",
@@ -1590,6 +1586,12 @@
       "selectAll": "Seleziona tutto — l'intero piano di lavoro, o il testo di un campo",
       "toggleSelect": "Aggiungi / togli un singolo elemento dalla selezione",
       "toggleSelectKeys": "{mod}+Clic",
+      "pickLead": "Scegli un solo terminale — un capo di filo o un piedino (mai in aggiunta)",
+      "pickLeadKeys": "{alt}+Clic",
+      "toggleLead": "Aggiungi / togli un terminale — un capo di filo o un piedino",
+      "toggleLeadKeys": "{alt}+{mod}+Clic",
+      "moveBare": "Sposta la selezione da sola — i suoi collegamenti restano dove sono",
+      "moveBareKeys": "{shift}+Trascina",
       "copy": "Copia il componente selezionato",
       "paste": "Incolla un duplicato",
       "delete": "Elimina la selezione",
@@ -1603,6 +1605,8 @@
       "palette": "Mostra o nascondi la tavolozza dei componenti",
       "analyzer": "Mostra o nascondi l'analizzatore logico",
       "fit": "Adatta alla finestra",
+      "pan": "Sposta il banco",
+      "panKeys": "Spazio+trascina o tasto centrale",
       "zoomOut": "Riduci al massimo (ritrova un componente perduto)",
       "zoom": "Ingrandisci / riduci / ripristina",
       "fontSize": "Dimensione del carattere dell'editor: aumenta / riduci / ripristina",
@@ -1785,7 +1789,8 @@
       "adviceLabel": "Su questo valore"
     },
     "refused": {
-      "bodyHoles": "Non c'è spazio: il foro in cui andrebbe il suo terminale è occupato o oltre la fine della basetta."
+      "bodyHoles": "Non c'è spazio: il foro in cui andrebbe il suo terminale è occupato o oltre la fine della basetta.",
+      "case": "I suoi piedini sono piegati, e quelli di un TO-220 sono una fila rigida: mettili prima in tre fori in fila, in ordine."
     },
     "hint": {
       "title": "Valori standard vicini:",

@@ -34,7 +34,7 @@
 
 import { el, svgEl } from "../dom.js";
 import { PX_PER_UNIT } from "../desk/desk-geometry.js";
-import { holePosition, rotateOffset } from "../model/breadboard.js";
+import { ROTATIONS, holePosition, rotateOffset } from "../model/breadboard.js";
 import { footprintOffsets, partDef } from "../catalog/index.js";
 import { packageSpec } from "../model/footprints.js";
 import { formatOhms } from "../model/ohm-format.js";
@@ -48,6 +48,7 @@ import {
   transistorCase,
 } from "../catalog/discretes.js";
 import { hzLabel } from "../catalog/parts.js";
+import { legsBent } from "../model/free-legs.js";
 import { relayCoilVolts } from "../catalog/bench-parts.js";
 import { formatNumber, t } from "../i18n.js";
 import { chipBox } from "./chip-view.js";
@@ -110,6 +111,12 @@ const BOXES = Object.freeze({
   // The common-anode digit is the same physical block as seg8cc.
   seg8ca: Object.freeze({ minX: -0.7, minY: -7.7, width: 9.4, height: 8.3 }),
   bar8: Object.freeze({ minX: -0.7, minY: -4.7, width: 9.4, height: 5.3 }),
+  // The 0.56-in 7-segment display (seg7cc/seg7ca), a 600-mil DIP-10 always
+  // in a wide seat: legs at x 0…4 on rows 0 and -6, its 12.6 × 19 mm body
+  // (SEVEN_SEG) centred on them — and this box centred too, so a half-lap
+  // turn covers the same rectangle.
+  seg7cc: Object.freeze({ minX: -0.6, minY: -6.85, width: 5.2, height: 7.7 }),
+  seg7ca: Object.freeze({ minX: -0.6, minY: -6.85, width: 5.2, height: 7.7 }),
   // A 16-pin DIP straddling the trench (row e ↔ row f, 3 pitches): the body
   // (see buildBarArrayDisplay) overhangs its own 8-column leg span by half a
   // pitch on every side — enough to read as its own package without
@@ -174,6 +181,27 @@ function canBox(def, rot) {
   };
 }
 
+/** A box turned `rot` about the local origin (pin 1's hole): its four corners
+    through `rotateOffset`, so the drawn box and the turned pins agree. */
+function turnedBox(box, rot) {
+  const corners = [
+    { dx: box.minX, dy: box.minY },
+    { dx: box.minX + box.width, dy: box.minY },
+    { dx: box.minX + box.width, dy: box.minY + box.height },
+    { dx: box.minX, dy: box.minY + box.height },
+  ].map((c) => rotateOffset(c, rot));
+  const xs = corners.map((c) => c.dx);
+  const ys = corners.map((c) => c.dy);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return {
+    minX,
+    minY,
+    width: Math.max(...xs) - minX,
+    height: Math.max(...ys) - minY,
+  };
+}
+
 /**
  * Footprint box for a discrete ref (positioning + ghost sizing). `rot` only
  * matters for a `def.can` part (an oscillator can) — every fixed BOXES entry
@@ -198,6 +226,11 @@ export function discreteBox(ref, rot = 0, params = null) {
 function unturnedBox(ref, rot, params) {
   const def = partDef(ref);
   if (def?.can) return canBox(def, rot);
+  // A rigid body turned about pin 1 (`def.turns` — the speaker): its box
+  // turned with it, by the primitive its pins turn by.
+  if (def?.turns && ROTATIONS.includes(rot) && rot !== 0) {
+    return turnedBox(BOXES[ref], rot);
+  }
   if (def?.transistor && transistorCase(def, params) === "TO-220") {
     return TO220_BOX;
   }
@@ -820,12 +853,104 @@ function buildDigitDisplay(svg, color) {
   );
 }
 
+/**
+ * The 0.56-in 7-segment display (seg7cc/seg7ca) in pitch units, origin at
+ * pin 1's hole: its body is 12.6 × 19 mm (4.96 × 7.48 pitch) centred on its
+ * ten legs (x 0…4, rows 0 and -6 — 15.24 mm apart); the digit 14.2 mm (5.59)
+ * tall, 1.45 mm (0.57) below the body's top edge, leaning 8° as the real one
+ * does, its decimal point at the bottom right. Its datasheet, Jason's
+ * 2026-10-14 drawing.
+ */
+export const SEVEN_SEG = Object.freeze({
+  left: -0.48,
+  right: 4.48,
+  top: -6.74,
+  bottom: 0.74,
+  digitTop: -6.17,
+  digitBottom: -0.58,
+  // tan 8° — how far right each pitch of height leans the digit.
+  lean: 0.1405,
+});
+
+/**
+ * The 7-segment display: the black block over its legs (hidden under it, as
+ * a chip's are), seven segments a–g and the decimal point, each carrying
+ * `data-seg` so the view can light it, the whole block coloured by an
+ * inherited --wire-color. Turned end for end (`rot` 180) the digit stands on
+ * its head, as the real part would, about the middle of its legs.
+ */
+function buildSevenSegment(svg, params) {
+  svg.style.setProperty("--wire-color", `var(--color-wire-${params.color})`);
+  const { left, right, top, bottom, digitTop, digitBottom, lean } = SEVEN_SEG;
+  const g = svgEl("g");
+  g.append(
+    svgEl("rect", {
+      class: "part-display-body",
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+      rx: 0.2,
+    }),
+  );
+  // The digit, drawn upright and then leaned about its own baseline.
+  const t = 0.42;
+  const cx = 1.75;
+  const hw = 1.2; // the verticals sit ±hw off centre
+  const yT = digitTop + t / 2;
+  const yB = digitBottom - t / 2;
+  const yM = (yT + yB) / 2;
+  const lh = 2.0;
+  const lv = yM - yT - 0.12;
+  const digit = svgEl("g", {
+    transform: `translate(0 ${digitBottom}) skewX(${(-Math.atan(lean) * 180) / Math.PI}) translate(0 ${-digitBottom})`,
+  });
+  for (const [id, points] of [
+    ["a", hSegPoints(cx, yT, lh, t)],
+    ["b", vSegPoints(cx + hw, (yT + yM) / 2, lv, t)],
+    ["c", vSegPoints(cx + hw, (yM + yB) / 2, lv, t)],
+    ["d", hSegPoints(cx, yB, lh, t)],
+    ["e", vSegPoints(cx - hw, (yM + yB) / 2, lv, t)],
+    ["f", vSegPoints(cx - hw, (yT + yM) / 2, lv, t)],
+    ["g", hSegPoints(cx, yM, lh, t)],
+  ]) {
+    digit.append(svgEl("polygon", { class: "part-seg", "data-seg": id, points })); // prettier-ignore
+  }
+  g.append(
+    digit,
+    svgEl("circle", {
+      class: "part-seg",
+      "data-seg": "dp",
+      cx: cx + hw + 0.75,
+      cy: yB,
+      r: 0.26,
+    }),
+    // Body-only hit target: the block drags, the holes round it stay clickable.
+    svgEl("rect", {
+      class: "part-display-hit",
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    }),
+  );
+  if (params.rot === 180) g.setAttribute("transform", "rotate(180 2 -3)");
+  // The burn cue outside the turn — smoke rises whichever way up it stands —
+  // centred on the middle of the legs, which a half lap leaves where it is.
+  svg.append(g, buildBurnOverlay(2, -3, 0.9));
+}
+
 /** The 8-segment LED bar graph (eight bars over holes 0…7), common cathode. */
-function buildBarDisplay(svg, color) {
+function buildBarDisplay(svg, color, turned = false) {
   svg.style.setProperty("--wire-color", `var(--color-wire-${color})`);
   const bodyY = -4.4;
   const edgeY = -0.6;
-  svg.append(
+  // Turned end for end (`rot` 180) the whole block swings round its middle
+  // hole to the other side of the row, bar 1 to the right — all but the burn
+  // cue, which stays upright (smoke rises) and moves with the block.
+  const into = turned ? svgEl("g", { transform: "rotate(180 4 0)" }) : svg;
+  if (turned) svg.append(into);
+  into.append(
     svgEl("rect", {
       class: "part-display-body",
       x: -0.45,
@@ -835,9 +960,9 @@ function buildBarDisplay(svg, color) {
       rx: 0.35,
     }),
   );
-  appendDisplayLegs(svg, edgeY);
+  appendDisplayLegs(into, edgeY);
   for (let i = 0; i < 8; i++) {
-    svg.append(
+    into.append(
       svgEl("rect", {
         class: "part-seg",
         "data-seg": `s${i + 1}`,
@@ -849,8 +974,8 @@ function buildBarDisplay(svg, color) {
       }),
     );
   }
-  svg.append(buildBurnOverlay(4, -2.4, 0.7));
-  svg.append(
+  svg.append(buildBurnOverlay(4, turned ? 2.4 : -2.4, 0.7));
+  into.append(
     svgEl("rect", {
       class: "part-display-hit",
       x: -0.45,
@@ -874,13 +999,19 @@ function buildBarDisplay(svg, color) {
  * 8-column leg span by half a pitch a side (BODY_WIDTH below) — any more and
  * a neighbour seated flush against it would visibly overlap.
  */
-function buildBarArrayDisplay(svg, color) {
+function buildBarArrayDisplay(svg, color, turned = false) {
   svg.style.setProperty("--wire-color", `var(--color-wire-${color})`);
   const bodyTop = -3.4; // 0.4 past the row-f holes (y -3)
   const bodyBottom = 0.4; // 0.4 past the row-e holes (y 0)
   const BODY_WIDTH = 8; // half a pitch past the leg span (columns 0…7) a side
   const bodyX = 3.5 - BODY_WIDTH / 2; // centred over legs at columns 0…7
-  svg.append(
+  // Turned end for end (`rot` 180, a chip's half lap) it maps onto its own
+  // holes, so only the bars' order — bar 1 now top right — and the pin-1 dot
+  // say so: the drawing turns about the middle of its legs, the burn cue
+  // (centred there) left upright outside it.
+  const into = turned ? svgEl("g", { transform: "rotate(180 3.5 -1.5)" }) : svg;
+  if (turned) svg.append(into);
+  into.append(
     svgEl("rect", {
       class: "part-display-body",
       x: bodyX,
@@ -889,11 +1020,19 @@ function buildBarArrayDisplay(svg, color) {
       height: bodyBottom - bodyTop,
       rx: 0.3,
     }),
+    // Pin 1's mark, in the corner over it — what a real bar graph's chamfer
+    // or dot says, and what shows a turned one is turned.
+    svgEl("circle", {
+      class: "part-display-pin1",
+      cx: bodyX + 0.22,
+      cy: bodyBottom - 0.22,
+      r: 0.1,
+    }),
   );
   // Eight vertical bars, one per column: bar s(c+1) over the anode at column
   // c, inset 0.4 from the body's top/bottom edges — the same inset bar8 uses.
   for (let c = 0; c <= 7; c++) {
-    svg.append(
+    into.append(
       svgEl("rect", {
         class: "part-seg",
         "data-seg": `s${c + 1}`,
@@ -1106,7 +1245,8 @@ function turnsHalfLap(def, params) {
     (Boolean(def.transistor) ||
       Boolean(def.regulator) ||
       Boolean(def.contacts) ||
-      def.id === "pot")
+      def.id === "pot" ||
+      def.id === "bar8")
   );
 }
 
@@ -1221,36 +1361,139 @@ function transistorLampAndHit(lamp, hitRect) {
  * pins plugs into stay clear.
  */
 function buildTo92(svg, def, params) {
-  const cx = 1;
-  const cy = -0.02;
-  const r = 0.72;
-  const flat = 0.4;
-  const half = Math.sqrt(r * r - (flat - cy) ** 2);
+  const { exits } = TO92;
   // The outer legs, from their holes in under the moulding (the middle one is
   // beneath it).
-  for (const x of [0, 2]) {
+  for (const [i, x] of [0, 2].entries()) {
+    const exit = exits[i * 2];
     svg.append(
       svgEl("line", {
         class: "part-span-lead",
         x1: x,
         y1: 0,
-        x2: x === 0 ? cx - half + 0.05 : cx + half - 0.05,
-        y2: 0.12,
+        x2: 1 + exit,
+        y2: TO92.exitY,
       }),
     );
   }
-  svg.append(
+  svg.append(...to92Body(def, params, 1, 0));
+}
+
+/** A TO-92's moulding, pitch units about the middle of its legs' row. */
+const TO92 = (() => {
+  const cy = -0.02;
+  const r = 0.72;
+  const flat = 0.4;
+  const half = Math.sqrt(r * r - (flat - cy) ** 2);
+  return Object.freeze({
+    cy,
+    r,
+    flat,
+    half,
+    // Where each leg leaves the moulding, across from its middle, pin 1's
+    // first; and how far in front of the row.
+    exits: Object.freeze([-(half - 0.05), 0, half - 0.05]),
+    exitY: 0.12,
+  });
+})();
+
+/** The moulding, its printing, lamp and hit target, centred across on `cx`
+    with its legs' row at `y`. */
+function to92Body(def, params, cx, y) {
+  const { cy: dy, r, flat: dflat, half } = TO92;
+  const cy = y + dy;
+  const flat = y + dflat;
+  return [
     svgEl("path", {
       class: "part-to92-body",
       d: `M ${cx - half} ${flat} A ${r} ${r} 0 1 1 ${cx + half} ${flat} Z`,
     }),
-    ...pinLetterTexts(def, params, [cx - 0.38, cx, cx + 0.38], 0.3),
-    transistorLabel(def, params, { x: cx, y: -0.08, size: 0.36, room: 1.3 }),
+    ...pinLetterTexts(def, params, [cx - 0.38, cx, cx + 0.38], y + 0.3),
+    transistorLabel(def, params, {
+      x: cx,
+      y: y - 0.08,
+      size: 0.36,
+      room: 1.3,
+    }),
     ...transistorLampAndHit(
-      { cx, cy: -0.46 },
+      { cx, cy: y - 0.46 },
       { x: cx - r, y: cy - r, width: 2 * r, height: flat - (cy - r) },
     ),
-  );
+  ];
+}
+
+/** Room left round a bent TO-92's legs and moulding, pitch units. */
+const LEGS_PAD = 0.35;
+
+/**
+ * The drawn box of a bent TO-92 (model/free-legs.js) — `rel` is each pin's
+ * point, pin 1's first, relative to pin 1's hole: its legs' holes and the
+ * moulding standing over them (legsBody).
+ */
+export function legsBox(rel) {
+  const { cx, y } = legsBody(rel);
+  const xs = [...rel.map((p) => p.x), cx - TO92.r, cx + TO92.r];
+  const ys = [...rel.map((p) => p.y), y - TO92.r - 0.05, y + TO92.r + 0.05];
+  const minX = Math.min(...xs) - LEGS_PAD;
+  const minY = Math.min(...ys) - LEGS_PAD;
+  return {
+    minX,
+    minY,
+    width: Math.max(...xs) + LEGS_PAD - minX,
+    height: Math.max(...ys) + LEGS_PAD - minY,
+  };
+}
+
+/** Where a bent TO-92's moulding stands: centred on the MIDDLE of its three
+    legs, both ways — not on any one leg (Jason, 2026-10-14) — and turned a
+    half lap when pin 1 is right of pin 3, as the straight part turned end for
+    end is. `y` is the row its legs would leave from (to92Body's frame), set
+    so the moulding's own middle lands on the legs' middle. */
+function legsBody(rel) {
+  const mean = (k) => rel.reduce((sum, p) => sum + p[k], 0) / rel.length;
+  const turned = rel[0].x > rel[2].x;
+  // The moulding's middle, down from its legs' row (TO92's frame); a half
+  // lap mirrors it to the other side of the row.
+  const mid = (TO92.cy - TO92.r + TO92.flat) / 2;
+  return { cx: mean("x"), y: mean("y") - (turned ? -mid : mid), turned };
+}
+
+/**
+ * A TO-92 whose legs are BENT (model/free-legs.js): `rel` as `legsBox`. The
+ * moulding stands over the legs (legsBody) and each leg runs from under it,
+ * where the straight part's leaves it, to its own hole — wire, as the real
+ * legs are. Turned, every word is turned back upright (turnHalfLap). The body
+ * alone takes the pointer, so the holes round it stay clickable.
+ */
+export function buildLegsSvg(ref, rel, rawParams = {}) {
+  const def = partDef(ref);
+  const params = def?.normalizeParams?.(rawParams) ?? rawParams;
+  const box = legsBox(rel);
+  const svg = svgEl("svg", {
+    class: `part-discrete-svg part-discrete-svg--${ref} part-discrete-svg--legs`,
+    viewBox: `${box.minX} ${box.minY} ${box.width} ${box.height}`,
+    width: box.width * PX_PER_UNIT,
+    height: box.height * PX_PER_UNIT,
+    "aria-hidden": "true",
+  });
+  const { cx, y, turned } = legsBody(rel);
+  // Turned a half lap about (cx, y), a leg's exit is mirrored through it.
+  const exit = (i) => {
+    const ex = cx + TO92.exits[i];
+    const ey = y + TO92.exitY;
+    return turned ? { x: 2 * cx - ex, y: 2 * y - ey } : { x: ex, y: ey };
+  };
+  for (const [i, p] of rel.entries()) {
+    const e = exit(i);
+    svg.append(
+      svgEl("line", { class: "part-span-lead", x1: p.x, y1: p.y, x2: e.x, y2: e.y }), // prettier-ignore
+    );
+  }
+  const body = svgEl("g");
+  body.append(...to92Body(def, params, cx, y));
+  if (turned) turnHalfLap(body, { x: cx, y });
+  svg.append(body);
+  return svg;
 }
 
 /**
@@ -1420,7 +1663,15 @@ export const SPEAKER_BODY = Object.freeze({ x: 1.5, y: -1.75, r: 2.36 });
  * pointer.
  */
 function buildSpeaker(svg, params) {
-  const { x, y, r } = SPEAKER_BODY;
+  // Turned about its + leg (`params.rot` — the speaker `turns`), the body's
+  // centre turns with it; every word stays upright, where it reads.
+  const rot = params.rot ?? 0;
+  const { dx: x, dy: y } = rotateOffset(
+    { dx: SPEAKER_BODY.x, dy: SPEAKER_BODY.y },
+    rot,
+  );
+  const plus = rotateOffset({ dx: 0.05, dy: -0.15 }, rot);
+  const { r } = SPEAKER_BODY;
   const text = (cls, tx, ty, value) => {
     const node = svgEl("text", { class: cls, x: tx, y: ty, "text-anchor": "middle" }); // prettier-ignore
     node.textContent = value;
@@ -1432,7 +1683,7 @@ function buildSpeaker(svg, params) {
     svgEl("circle", { class: "part-speaker-cone", cx: x, cy: y, r: r - 0.66 }),
     svgEl("circle", { class: "part-speaker-cap", cx: x, cy: y, r: 0.55 }),
     text("part-speaker-label", x, y + r - 0.06, `${params.impedance}Ω`),
-    text("part-speaker-label", 0.05, -0.15, "+"),
+    text("part-speaker-label", plus.dx, plus.dy, "+"),
     text("part-speaker-hz", x, y + 1.15, ""),
   );
   const hit = svgEl("g", { class: "part-speaker-hit" });
@@ -2048,10 +2299,12 @@ export function buildDiscreteSvg(ref, params = {}) {
     if (turnsHalfLap(def, normalized)) turnHalfLap(svg, halfLapPivot(def, normalized)); // prettier-ignore
   } else if (ref === "seg8cc" || ref === "seg8ca") {
     buildDigitDisplay(svg, normalized.color);
+  } else if (ref === "seg7cc" || ref === "seg7ca") {
+    buildSevenSegment(svg, normalized);
   } else if (ref === "bar8") {
-    buildBarDisplay(svg, normalized.color);
+    buildBarDisplay(svg, normalized.color, normalized.rot === 180);
   } else if (ref === "bar8iso") {
-    buildBarArrayDisplay(svg, normalized.color);
+    buildBarArrayDisplay(svg, normalized.color, normalized.rot === 180);
   } else if (ref === "osc-full" || ref === "osc-half") {
     buildOscillatorCan(svg, def, normalized);
   } else if (def.characterDisplay) {
@@ -2095,6 +2348,7 @@ export class DiscreteView {
   #rotated = false; // a two-free-ends part — rendered/placed as a span
   #params = {}; // latest params (the span body needs LED colour/flip)
   #spanKey = null; // the span (and params) the drawn span body was built for
+  #bent = false; // a TO-92 on bent legs — rendered/placed by updateLegsWorld
   // What `setStatus` last drew — undefined until it has, and again whenever
   // the SVG (and the hint inside it) is rebuilt — so the status that arrives
   // unchanged with every tick touches nothing.
@@ -2117,6 +2371,7 @@ export class DiscreteView {
     // updateSpanWorld.
     this.#rotated = Boolean(partDef(component.ref)?.rotatable);
     this.#params = component.params ?? {};
+    this.#bent = legsBent(component);
     this.#el = el("div", {
       // A span part draws its own selection frame (spanFrame), in place of
       // the element outline every other part takes.
@@ -2125,7 +2380,7 @@ export class DiscreteView {
     });
     // A rotated resistor's SVG needs desk geometry (both end positions), so the
     // controller renders it via updateSpanWorld right after construction.
-    if (!this.#rotated) this.updateParams(component.params);
+    if (!this.#rotated && !this.#bent) this.updateParams(component.params);
     this.#el.addEventListener("pointerdown", (e) =>
       onPointerDown?.(this.#id, e),
     );
@@ -2153,7 +2408,8 @@ export class DiscreteView {
     this.#params = params ?? {};
     this.#spanKey = null; // the next updateSpanWorld draws afresh
     this.#rotated = Boolean(partDef(this.#ref)?.rotatable);
-    if (this.#rotated) return;
+    this.#bent = legsBent({ ref: this.#ref, params: this.#params });
+    if (this.#rotated || this.#bent) return;
     this.#el.querySelector("svg")?.remove();
     this.#el.prepend(buildDiscreteSvg(this.#ref, params));
     this.#rebuilt();
@@ -2193,6 +2449,37 @@ export class DiscreteView {
     const minY = Math.min(0, dy) - pad;
     this.#el.style.left = `${(p1.x + minX) * PX_PER_UNIT}px`;
     this.#el.style.top = `${(p1.y + minY) * PX_PER_UNIT}px`;
+  }
+
+  /**
+   * Render + position a TO-92 on BENT legs (model/free-legs.js) from its pins'
+   * ABSOLUTE world points, pin 1's first — pure geometry, like a span, so it
+   * draws the same mid-drag, with a leg over bare desk, or anywhere else.
+   */
+  updateLegsWorld(points) {
+    const rel = points.map((p) => ({
+      x: p.x - points[0].x,
+      y: p.y - points[0].y,
+    }));
+    const key = `legs|${JSON.stringify(rel)}|${JSON.stringify(this.#params)}`;
+    if (key !== this.#spanKey || !this.#el.querySelector("svg")) {
+      this.#spanKey = key;
+      this.#el.querySelector("svg")?.remove();
+      this.#el.prepend(buildLegsSvg(this.#ref, rel, this.#params));
+      this.#rebuilt();
+    }
+    const box = legsBox(rel);
+    this.#el.style.left = `${(points[0].x + box.minX) * PX_PER_UNIT}px`;
+    this.#el.style.top = `${(points[0].y + box.minY) * PX_PER_UNIT}px`;
+  }
+
+  /** Draw a TO-92 STRAIGHT for `params` — after its bent drawing, or for the
+      straight form a drag is previewing — rebuilding only when what it shows
+      changes; `updatePlacement` then seats it. */
+  showStraight(params) {
+    const same = JSON.stringify(params ?? {}) === JSON.stringify(this.#params);
+    if (same && !this.#bent && this.#el.querySelector("svg")) return;
+    this.updateParams(params);
   }
 
   /** The momentary press gesture lives here — transient view state only. */

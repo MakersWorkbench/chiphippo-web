@@ -185,7 +185,9 @@ export class IntegrationTools {
   onTagPointerDown(elementId, key, e, { fromCard = false } = {}) {
     const h = this.#host;
     if (e.button !== 0) return;
-    if (e.shiftKey) return; // the viewport's marquee
+    // A planted tag is inert in Option/Alt's pin-targeting mode — the press
+    // goes on to the viewport (CLAUDE.md → "Selection").
+    if (e.altKey && !fromCard) return;
     if (h.mode || h.probeArmed || h.editingLocked) return;
     if (isToggleSelectEvent(e, IS_MAC)) {
       e.stopPropagation();

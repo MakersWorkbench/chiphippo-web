@@ -551,9 +551,11 @@ function drawPart(part, ctx) {
       }
       return d;
     }
+    case "seg7cc":
+    case "seg7ca":
     case "seg8cc":
     case "seg8ca": {
-      const anode = def.id === "seg8ca";
+      const anode = def.id === "seg8ca" || def.id === "seg7ca";
       d.elements.push(
         element(
           "Seven-Seg",

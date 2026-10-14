@@ -36,6 +36,15 @@
 // same-label, same-flag records inside the time window collapses into one
 // entry, so a burst of rapid param nudges is one undo step while genuinely
 // distinct edits (each add / delete / paste / drag) always stand alone.
+//
+// SELECTION IS PART OF THE TIMELINE. Every entry carries the selection as it
+// stood (an opaque, JSON-shaped value the caller owns), and a change of
+// selection alone is an entry of its own (`recordSelection`) that shares the
+// present's snapshot and its VERSION — so ⌘Z steps back through what was
+// picked as well as through what was edited, and "I didn't mean that click"
+// is an undo rather than a piece of hidden selection memory. The version is
+// how a caller tells the two apart on the way back: an undo that lands on the
+// same version changed only the selection and must not touch the document.
 
 /** Default cap on history depth; the oldest entry is dropped past it. */
 const DEFAULT_LIMIT = 100;
@@ -44,7 +53,7 @@ const DEFAULT_LIMIT = 100;
 const DEFAULT_COALESCE_MS = 400;
 
 export class HistoryStore {
-  #entries = []; // { snapshot, label, time, coalesce }
+  #entries = []; // { snapshot, label, time, coalesce, selection, version }
   #index = -1; // cursor at the present entry; -1 when empty
   #limit;
   #coalesceMs;
@@ -83,6 +92,18 @@ export class HistoryStore {
     return this.#index >= 0 ? this.#entries[this.#index].label : null;
   }
 
+  /** The selection recorded with the present entry (null when none was). */
+  get selection() {
+    return this.#entries[this.#index]?.selection ?? null;
+  }
+
+  /** The present entry's DOCUMENT version: it moves on every document record
+      and never on a selection-only one, so two entries with the same version
+      hold the same document. -1 while empty. */
+  get version() {
+    return this.#entries[this.#index]?.version ?? -1;
+  }
+
   /** While frozen, `record` is a no-op (history is paused during a run). */
   get frozen() {
     return this.#frozen;
@@ -117,7 +138,8 @@ export class HistoryStore {
    * @param {object} snapshot - a plain, already-cloned document (kept as-is).
    * @param {string} [label] - drives coalescing + a future history UI.
    * @param {number} [time] - caller-stamped monotonic time (no Date here).
-   * @param {{coalesce?: boolean}} [opts]
+   * @param {{coalesce?: boolean, selection?: any}} [opts] - `selection` is
+   *   the selection to restore along with this snapshot (kept as given).
    * @returns {object[]} snapshots permanently dropped by this call (the
    *   truncated redo future, and/or the oldest entries evicted past the
    *   depth limit) — never returned to the caller by undo/redo again. A
@@ -125,7 +147,12 @@ export class HistoryStore {
    *   ROM chip's backing file, keyed by its GUID) can release one once it no
    *   longer appears in any snapshot `snapshots()` still retains.
    */
-  record(snapshot, label = "edit", time = 0, { coalesce = false } = {}) {
+  record(
+    snapshot,
+    label = "edit",
+    time = 0,
+    { coalesce = false, selection = null } = {},
+  ) {
     if (this.#frozen) return [];
     const present = this.#entries[this.#index];
     const canMerge =
@@ -138,15 +165,47 @@ export class HistoryStore {
     if (canMerge) {
       present.snapshot = snapshot;
       present.time = time;
+      present.selection = selection;
       return [];
     }
+    const version = (present?.version ?? -1) + 1;
+    return this.#push({ snapshot, label, time, coalesce, selection, version });
+  }
+
+  /**
+   * Push a change of SELECTION alone as the new present — the same document
+   * (snapshot and version both shared with the present entry), a different
+   * pick. A genuine step like any other, so it drops the redo future; a no-op
+   * while frozen or empty.
+   *
+   * @param {any} selection
+   * @param {number} [time]
+   * @returns {object[]} snapshots permanently dropped (see `record`)
+   */
+  recordSelection(selection, time = 0) {
+    if (this.#frozen) return [];
+    const present = this.#entries[this.#index];
+    if (!present) return [];
+    return this.#push({
+      snapshot: present.snapshot,
+      label: "select",
+      time,
+      coalesce: false,
+      selection,
+      version: present.version,
+    });
+  }
+
+  /** Append an entry as the present, truncating the redo future and the
+      oldest entries past the limit; returns the snapshots dropped. */
+  #push(entry) {
     let dropped = [];
-    // A genuine new edit invalidates the redo future.
+    // A genuine new step invalidates the redo future.
     if (this.#index < this.#entries.length - 1) {
       dropped = this.#entries.slice(this.#index + 1).map((e) => e.snapshot);
       this.#entries.length = this.#index + 1;
     }
-    this.#entries.push({ snapshot, label, time, coalesce });
+    this.#entries.push(entry);
     this.#index = this.#entries.length - 1;
     // Enforce the depth bound by dropping the oldest entries.
     if (this.#entries.length > this.#limit) {
@@ -174,7 +233,9 @@ export class HistoryStore {
    */
   syncForward(fn) {
     if (this.#index < 0) return;
-    for (let i = this.#index; i < this.#entries.length; i++) {
+    // From the first entry holding the present's document: a selection step
+    // just behind it shares that document, and must not hand back the old one.
+    for (let i = this.#sameVersionStart(); i < this.#entries.length; i++) {
       const next = fn(this.#entries[i].snapshot);
       if (next) this.#entries[i].snapshot = next;
     }
@@ -207,6 +268,19 @@ export class HistoryStore {
    */
   sync(snapshot) {
     if (this.#index < 0) return;
-    this.#entries[this.#index].snapshot = snapshot;
+    const version = this.#entries[this.#index].version;
+    // Every entry holding the present's document — the selection steps
+    // around it share it, and a redo onto one must not restore the old copy.
+    for (const entry of this.#entries) {
+      if (entry.version === version) entry.snapshot = snapshot;
+    }
+  }
+
+  /** The index of the earliest entry sharing the present's version. */
+  #sameVersionStart() {
+    const version = this.#entries[this.#index].version;
+    let i = this.#index;
+    while (i > 0 && this.#entries[i - 1].version === version) i -= 1;
+    return i;
   }
 }

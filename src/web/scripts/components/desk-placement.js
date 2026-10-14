@@ -71,7 +71,15 @@ import { buildClockSvg } from "./clock-view.js";
 import { buildLoadSvg } from "./load-view.js";
 import { buildBoardSvg, applyBoardRotation } from "./breadboard-view.js";
 import { buildChipSvg, chipBox } from "./chip-view.js";
-import { buildDiscreteSvg, buildSpanSvg, discreteBox, spanPad } from "./discrete-view.js"; // prettier-ignore
+import {
+  buildDiscreteSvg,
+  buildLegsSvg,
+  buildSpanSvg,
+  discreteBox,
+  legsBox,
+  spanPad,
+} from "./discrete-view.js";
+import { legsRel } from "../model/free-legs.js";
 
 /**
  * The end-to-end vector of a rotatable part's ghost after `turns` quarter
@@ -367,6 +375,9 @@ export class DeskPlacement {
       params.rot = 0;
       params.end = null;
     }
+    // A bent TO-92 pastes straight, for the reason a turned lead's bend is
+    // not carried: its legs' vectors only fit where the source's holes did.
+    delete params.legs;
     this.armPartPlacement(buf.ref, params);
     if (turned && this.#host.mode?.kind === "place-part") {
       this.#host.mode.turns = 1; // truthy → the turned two-free-ends tracking
@@ -418,6 +429,8 @@ export class DeskPlacement {
     switch (memberForm(m.ref, m.params)) {
       case "turned":
         return buildSpanSvg(m.ref, m.params.end.dx, m.params.end.dy, m.params);
+      case "legs":
+        return buildLegsSvg(m.ref, legsRel(m.params), m.params);
       case "brick":
         return brickSvg(def.kind, m.params);
       default:
@@ -478,6 +491,10 @@ export class DeskPlacement {
         const pad = spanPad(member.ref);
         const { dx, dy } = member.params.end;
         return { x: ax + Math.min(0, dx) - pad, y: ay + Math.min(0, dy) - pad };
+      }
+      case "legs": {
+        const box = legsBox(legsRel(member.params));
+        return { x: ax + box.minX, y: ay + box.minY };
       }
       case "brick":
         // Drawn where it will LAND: a brick seats on whole pitches, so the

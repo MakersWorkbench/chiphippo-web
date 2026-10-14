@@ -50,6 +50,7 @@ export const RING_RADIUS = 0.55;
  * @param {boolean} [legal] - false paints it the danger colour.
  */
 export function aimRing(ring, point, legal = true) {
+  ring.classList.remove("hole-ring--pin"); // the Option/Alt hover's colour
   if (!point) {
     ring.hidden = true;
     ring.classList.remove("hole-ring--illegal");
@@ -64,11 +65,17 @@ export function aimRing(ring, point, legal = true) {
 
 export class HoleRings {
   #layer;
+  #modifier;
   #pool = [];
 
-  /** @param {HTMLElement} layer - the desk's overlay layer (pointer-inert). */
-  constructor(layer) {
+  /**
+   * @param {HTMLElement} layer - the desk's overlay layer (pointer-inert).
+   * @param {string|null} [modifier] - a `hole-ring--*` class every ring of
+   *   this set carries (the picked lead's ring is `hole-ring--selected`).
+   */
+  constructor(layer, modifier = null) {
     this.#layer = layer;
+    this.#modifier = modifier;
   }
 
   /**
@@ -101,7 +108,8 @@ export class HoleRings {
 
   #ringAt(i) {
     if (!this.#pool[i]) {
-      const ring = el("div", { class: "hole-ring", hidden: true });
+      const cls = this.#modifier ? `hole-ring ${this.#modifier}` : "hole-ring";
+      const ring = el("div", { class: cls, hidden: true });
       this.#pool[i] = ring;
       this.#layer.append(ring);
     }

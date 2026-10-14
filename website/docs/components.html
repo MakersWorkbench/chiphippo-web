@@ -193,19 +193,30 @@ another part&#39;s lead; wire to each pin from the rows outside it instead. A
 dragged chip moves from one seat to the next as the pointer travels, wherever
 you took hold of it. A desk saved before wide chips seated this way keeps them
 in rows e and f just as they were; move one on its own and it takes its true
-width, bringing the wires you carry with <strong>Option</strong> out from under its body.</p>
+width, bringing the wires plugged into it out from under its body.</p>
 <p>Because a chip&#39;s footprint is the same two rows no matter how it&#39;s turned,
 placing one is a matter of picking the column — there&#39;s no click-to-rotate
 step while placing a chip the way there is for a rail or a resistor; instead,
 rotation happens afterward (see below).</p>
 <h2 id="placing-a-discrete">Placing a discrete</h2>
 <p>Most discretes — slide switches, push buttons, toggle buttons, LEDs (in
-their default horizontal form), single-digit 7/8-segment displays, and LED
-bars (bar8) — are <strong>linear</strong>: they seat along a run of adjacent holes in any
+their default horizontal form) and LED bars (bar8) — are <strong>linear</strong>: they seat along a run of adjacent holes in any
 single grid row (any of <code>a</code>–<code>j</code>), not just rows e/f. Drop one anywhere its
 footprint fits and every free hole underneath it is available.</p>
 <p>A few parts don&#39;t fit that linear model:</p>
 <ul>
+<li><strong>7-segment displays</strong> (<strong>seg7cc</strong>, common cathode; <strong>seg7ca</strong>, common
+anode) are the real single-digit 0.56-in part: ten legs, five along the top
+and five along the bottom, 0.6 in apart, so each straddles the trench like a
+wide (600-mil) chip — five legs in row <code>d</code>, five in row <code>h</code> (or <code>b</code>/<code>f</code>,
+<code>c</code>/<code>g</code>, <code>e</code>/<code>i</code>), its body over the rows between. Pin 1 is bottom-left,
+counting round anticlockwise: 1 e, 2 d, 3 COM, 4 c, 5 dp, 6 b, 7 a, 8 COM,
+9 f, 10 g — the common comes out twice, joined inside, so wire either. Common
+cathode: COM to ground, drive a segment HIGH (a CD4511B&#39;s way); common
+anode: COM to +V, pull a segment LOW (a 74LS47&#39;s). Give each segment its own
+resistor. <code>R</code> turns it end for end. The older single-row <strong>8-segment
+digits</strong> (seg8cc, seg8ca) are retired: they are gone from the tray, but a
+desk that has one still loads and runs it.</li>
 <li><strong>bar8iso</strong> — the isolated 8-segment LED bar — is packaged as a 16-pin
 DIP, so it straddles the trench exactly like a chip: anodes A1–A8 in row
 e, cathodes K1–K8 in row f.</li>
@@ -456,7 +467,9 @@ across the rails is a short, exactly as a wire would be. Under
 inductor, and its card gains a <strong>Winding</strong> choice.</p>
 <p><strong>Diodes</strong> (<strong>COMPONENTS ▸ Diodes</strong>) are the <strong>Diode</strong> and the <strong>Zener
 diode</strong>. Pin 1 is the anode; pin 2, the cathode, is the end the band marks. A
-diode is <strong>one-way</strong>: a HIGH on its anode passes to its cathode, and nothing
+diode is placed across four holes, like a resistor, but its body is shorter,
+so its leads bend down to <strong>three</strong> (<code>a10</code> to <code>a12</code>) — drag a leg in with
+<code>Option</code>. A diode is <strong>one-way</strong>: a HIGH on its anode passes to its cathode, and nothing
 ever passes back. A LOW or undriven anode leaves the cathode to whatever else
 is on it — so two diodes into one net, with a pull-down resistor there, make a
 <strong>diode-OR</strong>. The HIGH passes at the strength it arrived with: from a rail or a
@@ -480,7 +493,17 @@ exported; on the standard engine it is never how it behaves (under
 Picking a part number from the list sets its package (and, under Spice Lite,
 its grade) to match. Real pinouts differ by part number
 (a 2N2222 is E·B·C, a BC547 C·B·E, an IRLZ44N G·D·S), so select one and press
-<code>R</code> to turn it end-for-end. In the simulation each is a <strong>switch</strong>:</p>
+<code>R</code> to turn it end-for-end.</p>
+<p>A <strong>TO-92&#39;s legs bend</strong>, as the real ones do: hold <strong><code>Option</code></strong> (<code>Alt</code>) and
+drag one leg to any free hole — the other two stay where they are, and the
+body stands over the middle of its legs. Drag the transistor by its body and it
+moves whole, every leg keeping its bend; <code>R</code> still turns it end-for-end (pins 1
+and 3 trade holes); a leg plugged in beside a chip you drag bends after it, as
+a resistor&#39;s does. Put the three legs back in three holes in a row, in order,
+and it is the straight part again. A <strong>TO-220&#39;s</strong> legs are a rigid row, so
+they never bend — and while a TO-92&#39;s legs are bent, <strong>TO-220</strong> is greyed under
+<strong>Package</strong> (hover it for why) until they stand in a row again.</p>
+<p>In the simulation each transistor is a <strong>switch</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -577,7 +600,10 @@ instrument rather than part of the circuit.</p>
 <p>The <strong>speaker</strong> (<strong>COMPONENTS ▸ Audio</strong>, shown while
 <a href="spice-lite.html#speakers">Spice Lite</a> is on) is a small 12 mm PCB speaker on
 two legs 0.3 in apart, its round body standing over the rows behind them.
-Put a tone across it and you hear it: a 555 astable, a counter&#39;s output, a
+Press <code>R</code> (while placing it, or with it selected) to turn it a quarter turn
+about its <code>+</code> leg: 0.3 in is the channel&#39;s own width, so stood on end it
+straddles the trench — one leg in row <code>e</code>, the other in row <code>f</code>, the body
+over the channel. Put a tone across it and you hear it: a 555 astable, a counter&#39;s output, a
 clock brick. Its coil is only 8 Ω, so feed it through a resistor and a
 capacitor (47 Ω and 100 µF from a 555&#39;s OUT), or from a transistor. Its
 <strong>Impedance</strong> is 8, 16 or 32 Ω, and its <strong>Volume</strong> (0–100 %) sets how loud
@@ -621,13 +647,14 @@ reverses which physical pin sits where; the chip never has to move. Select a
 placed chip and press <code>R</code> to flip it 180° in place, or press <code>R</code> while
 mid-drag to flip it before you drop it. Either way its pin-assignments
 window updates to show the new numbering.</p>
-<p><strong>bar8iso and DIP switch banks (<code>R</code> while selected).</strong> The isolated LED bar
-and every DIP switch bank are DIP-packaged, so they flip exactly like a
-chip: <code>R</code> turns the part 180° in place, the same holes, only the pin
-numbering per position reverses (a switch bank&#39;s own position states don&#39;t
-move — position 1 is still position 1, just wired to the opposite pins now).
-Neither has the turn-in-hand behavior of a plain LED — treat them as chips
-for rotation purposes.</p>
+<p><strong>bar8iso, the 7-segment displays and DIP switch banks (<code>R</code> while selected or
+while placing).</strong> These are DIP-packaged, so they flip exactly like a chip:
+<code>R</code> turns the part 180° in place, the same holes, only the pin numbering
+reverses (a switch bank&#39;s own position states don&#39;t move — position 1 is
+still position 1, just wired to the opposite pins now). The drawing turns
+with it: bar8iso&#39;s bar 1 and its pin-1 dot move to the far corner, a digit
+stands on its head. None has the turn-in-hand behavior of a plain LED —
+treat them as chips for rotation purposes.</p>
 <p><strong>Resistor, capacitor, inductor, diode and LED (<code>R</code>, both while placing and once placed).</strong> These
 two-lead parts start in a horizontal <strong>footprint</strong> form (pin 1 and pin 2 a
 fixed span apart along one row). Press <code>R</code> while the ghost is armed to turn
@@ -638,13 +665,17 @@ power rail. Each <code>R</code> press while placing steps the ghost a further qu
 turn, cycling through all four compass directions before repeating. Once the
 part is placed, select it and press <code>R</code> to rotate it 90° at a time — pin 1
 stays put and pin 2&#39;s lead swings around it, hunting for the next free hole
-to land in.</p>
-<p><strong>Transistors, regulators, potentiometers and relays (<code>R</code> while selected, or
-while placing).</strong> These turn end-for-end in place, as the bussed resistor array
-does: the same holes, with the pin order reversed (<code>E B C</code> becomes <code>C B E</code>).
+to land in. Where its own length has no hole that way (a part a row or two
+from the channel or the board&#39;s edge), the lead takes the nearest length that
+does — never shorter than the part&#39;s body allows (a diode&#39;s three holes, a
+resistor&#39;s four) — and goes back to its own length on the next turn that has
+room.</p>
+<p><strong>Transistors, regulators, potentiometers, relays and the bar graph (bar8)
+(<code>R</code> while selected, or while placing).</strong> These turn end-for-end in place, as
+the bussed resistor array does: the same holes, with the pin order reversed (<code>E B C</code> becomes <code>C B E</code>).
 The body turns with them — a TO-92&#39;s flat face, a TO-220&#39;s tab, a trimmer&#39;s
-screw and a relay&#39;s cube all swing to the other side of the row — while the
-printing on it stays the right way up.</p>
+screw, a relay&#39;s cube and the bar graph&#39;s block all swing to the other side
+of the row — while the printing on it stays the right way up.</p>
 <p><strong>Oscillator cans (<code>R</code>, but the exact step differs by state).</strong> A can spins
 around its own centre, not around one pin, and the step size changes
 depending on whether you&#39;re still placing it:</p>
@@ -661,20 +692,14 @@ the same two footprints it already swept through while placing).</li>
 <p><strong>LED polarity (<code>F</code>, while placing only).</strong> Independent of rotation, press
 <code>F</code> while an LED&#39;s placement ghost is armed to flip which lead is the anode
 and which is the cathode, before you click it down.</p>
-<h2 id="moving-a-seated-part--with-or-without-its-wiring">Moving a seated part — with or without its wiring</h2>
-<p>Dragging a placed part re-seats the part and <strong>leaves every wire where it
-was</strong>. That is often what you want while a circuit is still bare, but once
-it&#39;s wired it quietly changes the circuit: the pins land on different
-column-halves, the wires stay in the holes you laid them in, and what was
-pin 1&#39;s input is now pin 3&#39;s.</p>
-<p>So, exactly as with pulling a mated strip out of a board group, hold a
-modifier while you start the drag:</p>
-<ul>
-<li><strong>Option-drag</strong> — moves the part <strong>and everything plugged into it</strong>. Every
-wire end sitting in a column-half one of the part&#39;s pins occupies comes
-along, keeping its own row and its offset from the part, so the circuit
-after the move is the circuit before it. The far end of each wire stays put.</li>
-</ul>
+<h2 id="moving-a-seated-part--and-its-wiring">Moving a seated part — and its wiring</h2>
+<p>Drag a placed part and it moves <strong>with everything plugged into it</strong>. Every
+wire end sitting in a column-half one of the part&#39;s pins occupies comes along,
+keeping its own row and its offset from the part, so the circuit after the
+move is the circuit before it. A wire with its other end somewhere else
+<strong>stretches</strong> — that end stays put — so nothing is quietly disconnected.
+(Moving the part alone would leave the wires in the holes you laid them in,
+and what was pin 1&#39;s input would now be pin 3&#39;s.)</p>
 <p><strong>A resistor or LED plugged into the part comes too — by the leg that is
 connected to it.</strong> A leg in one of the part&#39;s column-halves is attached to it
 exactly as a jumper in the next hole along is, so it travels; the other leg
@@ -688,30 +713,37 @@ two holes three columns apart, not the one between them) is left alone,
 because it was never connected to it. And nothing chases further than one
 step: what travels lands in the same column-half its pin lands in, so a rider
 never leaves anything of its own stranded behind it.</p>
-<p><strong>To see what would come, hold Option.</strong> With a part selected, holding Option
-rings every wire end and every leg that would travel with it, and releasing
-Option puts the rings away — so you can check before you commit to the drag
-rather than discover it during one. Something connected at <em>both</em> ends gets
-two rings, so a resistor that will travel whole reads differently from one
-that will bend; something connected at one end gets one ring, on the end that
-moves. A part with nothing attached simply shows nothing.</p>
 <p>The drop is <strong>all or nothing</strong>. If any of those has nowhere to go — its hole
 is taken by something that isn&#39;t moving, it would run off the end of the
 strip, or the bend would squeeze a resistor&#39;s legs closer than its body is
 long — the part <em>and</em> everything it would have carried turn red, and releasing
 puts everything back. Half a move would silently cut the connections it left
-behind, which is the very thing the gesture exists to avoid.</p>
-<p>A resistor or LED is dragged by its two ends rather than by a footprint, and
-that makes one distinction: dragging its <strong>body</strong> moves both legs together, so
-Option carries its wiring exactly as for any other part; dragging <strong>one leg</strong>
-is a re-bend, and carries nothing — that leg can land in any hole, at any
-angle, on any strip, so there is nothing for a wire to follow. (An LED lying
-flat is only one hole wide, so there is no body to grab between its legs;
-stand it up with <code>R</code>, or move it as part of a selection.)</p>
+behind. The holes the part and its wiring are leaving count as free, so
+sliding a chip one column along is fine even though its new pins overlap its
+old ones. And where the part is drawn when you let go is where it lands: a
+seat it showed you in green is the seat it takes.</p>
+<p>A resistor or LED moves by its <strong>body</strong> whatever part of it you press — a leg
+included — both legs together, carrying its wiring like any other part. To
+move <strong>one leg</strong> on its own, hold <strong><code>Option</code></strong> (<code>Alt</code>) and drag that leg (see
+<a href="the-desk.html#one-leg-at-a-time--option">Selecting things</a>): it&#39;s a re-bend,
+and carries nothing — that leg can land in any hole, at any angle, on any
+strip, so there is nothing for a wire to follow.</p>
+<h3 id="moving-a-part-bare--shift">Moving a part bare — <code>Shift</code></h3>
+<p>Sometimes leaving the wiring behind <em>is</em> the point — you want to shuffle a
+chip along and rewire it yourself. <strong>Hold <code>Shift</code> as you press</strong>, then drag:
+the part moves on its own and every wire end and resistor or LED leg plugged
+into its columns <strong>stays in its hole</strong>. Whatever the part&#39;s pins land on is
+checked as usual, so a pin can&#39;t land in a hole a wire is still sitting in.
+It&#39;s still one undo step.</p>
+<p><code>Shift</code> works on a whole selection too (see below): only the selected parts
+move. A selected wire still moves — it was selected — and a selected board
+still carries everything seated on it. A wire plugged into a power or clock
+brick always travels with the brick, because it is plugged into the brick
+itself.</p>
 <p>Two details worth knowing:</p>
 <ul>
-<li>Whether the wiring comes is decided when you <strong>press</strong>, not when you let
-go. Once the part is in hand, the set is fixed.</li>
+<li>What comes along is decided when you <strong>press</strong>, not when you let go. Once
+the part is in hand, the set is fixed.</li>
 <li>Moving <strong>across the trench</strong> takes the wiring over with it, keeping the
 arrangement. Rows <code>a</code>–<code>e</code> and <code>f</code>–<code>j</code> are separate nodes, so a wire that
 stayed in its row would be left in the half its pin had just left — it
@@ -725,39 +757,31 @@ it is. While the part is over the gap between two boards there is nowhere for
 it to land, so the wiring sits where it really is and turns red until the
 part is over holes again.</li>
 </ul>
-<p><code>Shift</code> is not this modifier: Shift-drag always rubber-bands a selection,
-including when the press lands on top of a part.</p>
 <h3 id="moving-several-parts-at-once">Moving several parts at once</h3>
-<p>A selection drags as one unit. Marquee a group of parts (Shift-drag), or add
-them one at a time with <code>Cmd</code>/<code>Ctrl</code>-click, then drag any one of them: every
-selected part travels by the same amount, keeping the arrangement exactly as
-you built it. Power and clock bricks count as parts here, and come too.</p>
+<p>A selection drags as one unit. Draw a box around a group of parts, or add them
+one at a time with <code>Cmd</code>/<code>Ctrl</code>-click, then drag any one of them: everything
+selected travels by the same amount, keeping the arrangement exactly as you
+built it. Power and clock bricks count as parts here, and come too; so do
+selected <strong>wires</strong> (moved rigidly, both ends) and selected <strong>boards</strong> (with
+everything seated on them).</p>
 <p>Everything above applies unchanged, just to the whole group:</p>
 <ul>
-<li><strong>Option</strong> takes the wiring with it — every wire, and every resistor or LED
-leg, riding <em>any</em> member. A wire between two selected parts travels at both
-ends; one that leaves the group keeps its far end where it is; a resistor
-plugged into a member bends after it exactly as above.</li>
-<li>Holding Option <strong>rings</strong> every end and leg that would travel, across all of
-them.</li>
-<li>The drop is <strong>all or nothing</strong>. If one part, or one wire end, or one leg has
-nowhere to land, every member and everything riding it turns red and
-releasing puts the lot back — a group that dropped some of its members would
-be a rearrangement you never asked for.</li>
+<li>The wiring comes with it — every wire, and every resistor or LED leg,
+riding <em>any</em> member. A wire between two selected parts travels at both ends;
+one that leaves the group stretches, keeping its far end where it is; a
+resistor plugged into a member bends after it exactly as above.</li>
+<li>The thing under your pointer snaps to the hole grid, and everything else
+moves by exactly the same step.</li>
+<li>The drop is <strong>all or nothing</strong>. If one part, one wire end, one leg or one
+board has nowhere to land, everything turns red and releasing puts the lot
+back — a group that dropped some of its members would be a rearrangement you
+never asked for.</li>
 <li>The whole move is <strong>one undo step</strong>.</li>
+<li><strong>Hold <code>Shift</code></strong> as you press to move the selection <strong>bare</strong>: only what you
+selected moves, and the wiring plugged into it stays where it is.</li>
 </ul>
-<p>A <strong>board</strong> in the selection is the one case that declines: strips have their
-own drag, which carries everything seated on them under rules a part re-seat
-knows nothing about. Pressing a part then does nothing and leaves the
-selection alone — <code>Cmd</code>/<code>Ctrl</code>-click the board back out and drag the parts, or
-grab the board itself, which drags its own snapped group with everything seated
-on it and replaces the selection the way any plain click does. And a plain
-click inside a selection narrows it to the part you clicked, exactly as
+<p>A plain click inside a selection narrows it to what you clicked, exactly as
 clicking a part outside one does.</p>
-<p>One thing a selection does <strong>not</strong> carry: a <strong>wire</strong> you selected that isn&#39;t
-plugged into any of the parts moving. Wires travel because they ride a pin, not
-because they are highlighted — so a wire selected on its own (to delete or
-recolor it) stays exactly where it is while the parts move around it.</p>
 <h2 id="occupancy--one-hole-one-lead">Occupancy — one hole, one lead</h2>
 <p>Every hole on a breadboard — and every terminal on a power/clock brick —
 holds <strong>at most one lead</strong>, whether that&#39;s a chip pin or a wire end. Placing

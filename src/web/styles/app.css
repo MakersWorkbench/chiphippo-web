@@ -745,14 +745,28 @@
   display: none;
 }
 
+/* Each leaf folder's list is ONE two-column grid — the name column as wide as
+   that folder's longest ID — and each row joins it as a subgrid, so every
+   description in a folder starts at the same x. Subgrid, not
+   `display: contents`: the row must keep its own box for the hover wash, the
+   focus ring and its place in the accessibility tree. The column gap is stated
+   here once; the rows inherit it. */
+.palette-group-items,
+.palette-boards-items {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--space-2);
+}
+
 .palette-item,
 .palette-board-item,
 .palette-annotation-item,
 .palette-signal-item,
 .palette-custom-new {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
-  gap: var(--space-2);
   width: 100%;
   text-align: left;
   padding: var(--space-2);
@@ -827,23 +841,26 @@
   color: var(--color-text);
 }
 
-.palette-boards-items {
-  display: flex;
-  flex-direction: column;
-}
-
 .palette-boards-items[hidden] {
   display: none;
 }
 
+/* An ID never breaks (`sw-slide` used to wrap at its hyphen). `start`, not
+   the grid's stretch, so a custom chip's plastic badge stays its own width. */
 .palette-item-id {
+  justify-self: start;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
+/* The description wraps inside its column; a word too long for it (a narrow
+   tray beside `cap-electrolytic`) breaks rather than scrolling the list
+   sideways. */
 .palette-item-title {
-  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
   font-size: var(--font-size-sm);
   color: var(--color-subtext);
 }
@@ -931,6 +948,26 @@
   cursor: grabbing;
 }
 
+/* Space held: a drag anywhere pans, so the whole desk shows the open hand —
+   forced on every descendant, since parts, wires and flags carry cursors of
+   their own and none of them is what a press would grab now. */
+.desk-viewport--pan-ready,
+.desk-viewport--pan-ready * {
+  cursor: grab !important;
+}
+
+.desk-viewport--pan-ready.desk-viewport--panning,
+.desk-viewport--pan-ready.desk-viewport--panning * {
+  cursor: grabbing !important;
+}
+
+/* Option/Alt held — pin-targeting mode: bodies are inert, so nothing on the
+   desk offers a grab cursor; only the red ring says what a click would pick. */
+.desk-viewport--pin-mode,
+.desk-viewport--pin-mode * {
+  cursor: default !important;
+}
+
 /* Something grabbed and being moved: a board, part, brick, annotation, signal
    flag or Output/Input tag (`--dragging`), or a wire or bus end
    (`--wire-dragging`) — the closed hand, as a pan shows. It is forced on every
@@ -961,8 +998,9 @@
   cursor: crosshair;
 }
 
-/* Shift-drag rubber band — crosshair, the conventional marquee cursor. Boards
-   and parts set no cursor of their own, so it inherits across the whole desk. */
+/* The rubber band (a drag from the background) — crosshair, the conventional
+   marquee cursor. Boards and parts set no cursor of their own, so it inherits
+   across the whole desk. */
 .desk-viewport--selecting {
   cursor: crosshair;
 }
@@ -1009,8 +1047,8 @@
   pointer-events: none; /* ghosts/rings/tooltips never intercept the desk */
 }
 
-/* Shift-drag rubber band. Lives in the overlay layer, so it's pointer-inert
-   and rides the camera transform with everything else. */
+/* The rubber band. Lives in the overlay layer, so it's pointer-inert and
+   rides the camera transform with everything else. */
 .marquee {
   position: absolute;
   border: 1px solid var(--color-accent);
@@ -1070,6 +1108,9 @@
 
 .board-outline--illegal .board-outline-path {
   stroke: var(--color-danger);
+  /* A red rim alone is lost beside the orange selection rims — the whole
+     set a refused drop would put back is washed red as well. */
+  fill: color-mix(in srgb, var(--color-danger) 25%, transparent);
 }
 
 /* SVG board parts — all colors from the theme tokens. */
@@ -1201,6 +1242,19 @@
   outline: 2px solid var(--color-danger);
   outline-offset: 1px;
   border-radius: 4px;
+}
+
+/* …and filled, as the refused board outline is: the wash is what reads at a
+   glance beside orange selection rims. ::before because a part's ::after is
+   its underpowered dot. A span part washes its own frame instead (below) —
+   its element box is padded for the body at any angle. */
+.part--illegal::before {
+  content: "";
+  position: absolute;
+  inset: -1px; /* out to the outline's inner edge (outline-offset) */
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--color-danger) 25%, transparent);
+  pointer-events: none;
 }
 
 .part-chip-body {
@@ -1471,11 +1525,16 @@
 .part--illegal .part-span-frame {
   visibility: visible;
   stroke: var(--color-danger);
+  fill: color-mix(in srgb, var(--color-danger) 25%, transparent);
 }
 
 .part-discrete--span.part--selected,
 .part-discrete--span.part--illegal {
   outline: none;
+}
+
+.part-discrete--span.part--illegal::before {
+  content: none;
 }
 
 /* ── Part fault symbols (built by part-symbols.js, shared by LEDs + chips) ── */
@@ -1535,6 +1594,11 @@
   fill: var(--color-chip-body);
   stroke: var(--color-part-inset);
   stroke-width: 0.08;
+}
+
+/* A DIP-bodied display's pin-1 mark (the bar array's), a can's dot. */
+.part-display-pin1 {
+  fill: var(--color-part-inset);
 }
 
 /* Unlit segment: a dim tint of the display's colour until the sim drives it. */
@@ -2812,6 +2876,20 @@
 
 .hole-ring--illegal {
   border-color: var(--color-danger);
+}
+
+/* Option/Alt held — pin-targeting mode: the one hole under the pointer that
+   holds an independently movable lead (a wire end, a two-terminal part's leg).
+   RED rather than the selection colour, so a candidate reads differently from
+   what is already picked; a little heavier, since it is the only thing lit. */
+.hole-ring--pin {
+  border: 2px solid var(--color-danger);
+}
+
+/* The lead an Option/Alt-click picked — in the selection colour, like every
+   other selected thing. */
+.hole-ring--selected {
+  border: 2px solid var(--color-selection, var(--color-accent));
 }
 
 /* ── Connectivity inspector (Feature 70) ─────────────────────────────────── */
@@ -4355,6 +4433,15 @@ textarea.annotation-editor {
 .segmented-option--active:hover {
   background: var(--color-surface-1);
   color: var(--color-text);
+}
+
+/* An option the caller greys (a TO-220 on a TO-92's bent legs): there, but
+   not offered — its title says why. */
+.segmented-option:disabled,
+.segmented-option:disabled:hover {
+  background: transparent;
+  color: var(--color-overlay);
+  cursor: not-allowed;
 }
 
 /* The shared color picker (components/color-swatches.js): clickable circle

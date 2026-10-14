@@ -10,32 +10,34 @@ are noted alongside the shortcut.
 
 | Shortcut | Action |
 |---|---|
-| `Space` | Run / Stop the simulation (not while typing, or while a placement/wire/bus tool is armed) |
+| `Space` (tap) | Run / Stop the simulation (not while typing, or while a placement/wire/bus tool is armed) — it acts as the key comes up |
+| `Space` (hold) + drag | Pan the desk, from anywhere — over a board or a part too |
 | `Cmd+R` | Run / Stop the simulation |
 | `1`–`9`, `0` | Press signal buttons 1–10, top to bottom (`0` is the tenth) — **only while the circuit runs**, and several at once (see [External signals](power-and-clocks.md#external-signals)) |
 | `Tab` | Switch between the Breadboard and Schematic views (not while typing); from the [3D view](3d-view.md), to the Schematic |
 | `Escape` | Abandon a drag in flight, then unpin a probed net, then disarm the probe, then cancel a pending wire/bus, then cancel a placement in hand, then deselect — whichever applies first |
-| `Delete` / `Backspace` | Remove the current selection (a part, wire, bus, annotation, board, or a whole multi-selection); a selected [Output or Input tag](arduino.md#outputs-and-inputs) is unplugged back onto its card instead |
+| `Delete` / `Backspace` | Remove the whole current selection in one step, no questions (a part, wire, bus, annotation, board with everything on it, a picked leg's part, or a whole multi-selection); a selected [Output or Input tag](arduino.md#outputs-and-inputs) is unplugged back onto its card instead |
 
 ## Selecting & moving
 
 These are mouse chords rather than keystrokes, but they are the modifiers the
-desk answers to. [The Desk](the-desk.md#selecting-things) covers building a
-selection; [Chips & Components](components.md#moving-several-parts-at-once)
-covers moving one.
+desk answers to — four jobs, and they never combine. A click is just a drag
+that didn't move: it selects what you pressed. [The
+Desk](the-desk.md#selecting-things) covers building a selection; [Chips &
+Components](components.md#moving-several-parts-at-once) covers moving one.
 
 | Chord | Action |
 |---|---|
-| `Shift`-drag | Rubber-band a selection — it replaces whatever was selected |
-| `Cmd`-click | Add one item to the selection, or take it back out (`Ctrl`-click on Windows/Linux; on a Mac `Ctrl`-click stays the context menu) |
-| drag a part | Re-seat that part alone, leaving every wire where it was |
-| `Option`-drag a part | Move it **with everything plugged into it** — the wire ends, and the legs of the resistors and LEDs, in the column-halves its pins occupy |
-| drag any member of a selection | Move the whole selection as one rigid unit |
-| `Option`-drag a member of a selection | The same, carrying everything riding any member of it |
-| hold `Option` over a selection | Ring every hole an `Option`-drag would carry, before committing to the drag (a selected part, or a whole multi-selection) |
-| `Option`-drag a board | Tear off the run of mated strips reachable forward (below/right) from the one you grabbed |
-| `Option`+`Shift`-drag a board | The same, running backward (above/left) |
-
+| click / drag a thing | Select just that thing; dragging moves it — **with its wiring** (wires on what moves come along; one with an end left behind stretches) |
+| drag empty desk | Draw a selection box (a drag can start on a board's bare holes too) — it replaces the selection with everything it encloses **completely**; a click on empty desk clears the selection |
+| click a board | Select the whole board — every strip snapped to it, its parts riding along |
+| `Cmd`-click | Add one item to the selection, or take it back out (`Ctrl`-click on Windows/Linux; on a Mac `Ctrl`-click stays the context menu). On empty desk it does nothing |
+| drag any member of a selection | Move the whole selection as one unit — boards, parts and wires — all or nothing |
+| hold `Option` | Pin targeting: only a lead that can move on its own (a wire end, a resistor's or LED's leg, a TO-92 transistor's leg) reacts, its hole ringed red |
+| `Shift`-drag a part or selection | Move it **bare** — the selected parts move, every wire and leg plugged into them stays in its hole |
+| `Option`-click / -drag a lead | Pick just that lead (never added to the selection) / move it to another hole, the other end staying put |
+| `Option+Cmd`-click a lead | Add that lead to the selection, or take it back out (`Alt+Ctrl`-click on Windows/Linux); drag the selection and every picked lead moves with it |
+| `Space`-drag, middle-drag | Pan the desk |
 ## Tools
 
 | Shortcut | Action |

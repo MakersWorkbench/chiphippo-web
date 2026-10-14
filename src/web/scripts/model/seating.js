@@ -45,6 +45,7 @@ import {
   clampColumn,
   columnAt,
   holePosition,
+  ROTATIONS,
   rotateOffset,
   rowNear,
   rowOffsetBy,
@@ -192,15 +193,18 @@ export function partSeatAt(
   for (const board of boards ?? []) {
     const local = localPoint(board, world);
     if (!local) continue;
+    const turn = def.turns && ROTATIONS.includes(params?.rot) ? params.rot : 0;
     const seat = def.can
       ? canSeat(board, def, local, grabOffsetCols, params?.rot ?? 0)
-      : def.package
-        ? chipSeat(board, def.package, local, grabOffsetCols, {
-            chipRow,
-            wide: seatsWide(params),
-            grabDy,
-          })
-        : discreteSeat(board, def, local, grabOffsetCols, params);
+      : turn !== 0
+        ? rigidSeat(board, turnedSpan(def, params, turn), local, grabOffsetCols)
+        : def.package
+          ? chipSeat(board, def.package, local, grabOffsetCols, {
+              chipRow,
+              wide: seatsWide(params),
+              grabDy,
+            })
+          : discreteSeat(board, def, local, grabOffsetCols, params);
     if (seat) return seat;
   }
   return null;
@@ -284,7 +288,26 @@ function canSeat(board, def, local, grabOffsetCols, rot) {
   const { width, height } = def.can;
   // Pin 1 (the anchor) → the corner diagonally opposite it, at this rotation
   // — the same rotated offset model/occupancy.js's `def.can` branch uses.
-  const diag = rotateOffset({ dx: width, dy: -height }, rot);
+  return rigidSeat(
+    board,
+    rotateOffset({ dx: width, dy: -height }, rot),
+    local,
+    grabOffsetCols,
+  );
+}
+
+/** A `def.turns` part turned off its row (the speaker): pin 1 → its far leg,
+    the footprint's span turned as occupancy.js turns it. */
+function turnedSpan(def, params, rot) {
+  return rotateOffset({ dx: footprintOffsets(def, params).at(-1), dy: 0 }, rot);
+}
+
+/**
+ * A rigid shape seated by pin 1 and the far corner `diag` from it (a can's
+ * diagonal, a turned speaker's span): pin 1 in any grid row, the far corner
+ * on a real row too, and the SHAPE centred on the cursor while placing.
+ */
+function rigidSeat(board, diag, local, grabOffsetCols) {
   // Ghost: centre the SHAPE on the cursor (pin 1 sits half the diagonal back
   // from the centre) — the two-axis generalization of discreteSeat's
   // `cursorCol - span / 2`. Dragging keeps the grabbed point under the

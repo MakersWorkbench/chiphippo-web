@@ -37,7 +37,7 @@ const { PalettePanel } = await import("../components/palette-panel.js");
 // …and Spice Lite is off, so the parts only it simulates (the speaker, the
 // electronic load) are hidden too.
 const SHOWN_DEFS = PALETTE_DEFS.filter(
-  (d) => d.family !== "CD4000" && d.spiceOnly !== true,
+  (d) => d.family !== "CD4000" && d.spiceOnly !== true && d.retired !== true,
 );
 // …and the chips the CHIPS folder holds.
 const SHOWN_CHIPS = CHIP_DEFS.filter((d) => d.family !== "CD4000");
@@ -904,6 +904,66 @@ test("every section-header class the palette renders has a CSS rule behind it", 
   }
 });
 
+/** The tray's row classes — the buttons that join a folder's two columns. */
+const ROW_CLASSES = [
+  "palette-item",
+  "palette-board-item",
+  "palette-annotation-item",
+  "palette-signal-item",
+  "palette-custom-new",
+];
+
+test("a folder's descriptions start in one column, and IDs never wrap", () => {
+  // Each leaf list is a two-column grid sized to ITS longest ID, and each row
+  // joins it as a subgrid — so a row cannot size its own name column again.
+  const rules = cssRules();
+  const lists = rules.get(".palette-group-items, .palette-boards-items");
+  assert.ok(lists, "the leaf lists share one grid rule");
+  assert.equal(lists.get("display"), "grid");
+  assert.equal(lists.get("grid-template-columns"), "max-content 1fr");
+  assert.equal(lists.get("column-gap"), "var(--space-2)");
+
+  const row = rules.get(ROW_CLASSES.map((c) => `.${c}`).join(", "));
+  assert.ok(row, "every row class shares one rule");
+  assert.equal(row.get("display"), "grid");
+  assert.equal(row.get("grid-column"), "1 / -1");
+  assert.equal(row.get("grid-template-columns"), "subgrid");
+  assert.equal(rules.get(".palette-item-id").get("white-space"), "nowrap");
+});
+
+test("a leaf list holds nothing but rows, filtered or not", () => {
+  // Anything else in the grid would take a cell of its own and push every
+  // row after it out of step with the columns.
+  resetDom();
+  setCustomChips([{ ...newCustomChip([]), name: "MYNAND" }]);
+  try {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const panel = new PalettePanel(host, {});
+    panel.setFamilyMode("combined");
+    const check = () => {
+      const lists = host.querySelectorAll(
+        ".palette-group-items, .palette-boards-items",
+      );
+      assert.ok(lists.length > 0);
+      for (const list of lists) {
+        for (const child of list.children) {
+          assert.ok(
+            ROW_CLASSES.some((c) => child.classList.contains(c)),
+            `a <${child.tagName.toLowerCase()} class="${child.className}"> ` +
+              "sits in a folder's grid",
+          );
+        }
+      }
+    };
+    check();
+    typeFilter(host, "74LS");
+    check();
+  } finally {
+    setCustomChips([]);
+  }
+});
+
 // ── Logic families (Feature 400) ───────────────────────────────────────────
 
 /** The chip groups that belong to no family (shown in every mode). */
@@ -1347,4 +1407,17 @@ test("the CUSTOM folder offers New chip…, then each designed chip by its part 
   } finally {
     setCustomChips([]);
   }
+});
+
+test("a RETIRED part is never offered, filtered for or not — the new digit is", () => {
+  resetDom();
+  const host = document.createElement("div");
+  document.body.append(host);
+  const panel = new PalettePanel(host);
+  const ids = () =>
+    [...host.querySelectorAll(".palette-item")].map((i) => i.dataset.ref);
+  assert.ok(!ids().includes("seg8cc") && !ids().includes("seg8ca"));
+  assert.ok(ids().includes("seg7cc") && ids().includes("seg7ca"));
+  typeFilter(panel.element, "seg8");
+  assert.deepEqual(ids(), []);
 });

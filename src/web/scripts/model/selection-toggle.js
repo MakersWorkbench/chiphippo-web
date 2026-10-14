@@ -19,7 +19,8 @@
 
 // selection-toggle.js — the pure half of the ADDITIVE selection gesture: the
 // modifier-click that adds ONE item to the selection, or takes one back out,
-// beside the shift-drag marquee that REPLACES the whole thing.
+// beside the rubber band (a drag from the background) that REPLACES the whole
+// thing. See CLAUDE.md → "Selection".
 //
 // It lives out here for the reason part-move.js does — the two halves that are
 // easy to get wrong are pure, and one of them is a PLATFORM branch, i.e. a
@@ -39,10 +40,11 @@
  * it — so Ctrl-click would stop opening any context menu on the desk. ⌘ costs
  * none of that and is what every other list on the platform answers to.
  *
- * Shift and Option are excluded rather than merely ignored. Shift-drag
- * rubber-bands a marquee and Option-drag carries a part's wiring (or tears a
- * board run off its group), so a chord carrying either belongs to that
- * gesture — a modifier-click must never quietly claim the press first.
+ * Option/Alt is excluded rather than merely ignored: a press with Option down
+ * belongs to pin-targeting mode, so this chord must never quietly claim it
+ * first — Option/Alt WITH this modifier is the lead chord
+ * (`isLeadToggleEvent`). Shift only makes a drag bare, so it neither makes nor
+ * unmakes the chord.
  *
  * @param {{metaKey?:boolean, ctrlKey?:boolean, shiftKey?:boolean,
  *          altKey?:boolean, button?:number}|null} e
@@ -50,14 +52,53 @@
  * @returns {boolean}
  */
 export function isToggleSelectEvent(e, isMac) {
-  if (!e || e.shiftKey || e.altKey) return false;
+  if (!e || e.altKey) return false;
   if (!(isMac ? e.metaKey : e.ctrlKey)) return false;
   // The PRIMARY button, so Ctrl+right-click off a Mac stays a right-click. An
   // event carrying no button at all is judged on its modifiers alone.
   return e.button == null || e.button === 0;
 }
 
-const KINDS = ["parts", "wires", "boards"];
+/**
+ * Is this pointer event the add-a-LEAD chord — Option/Alt plus the platform's
+ * additive modifier (⌥⌘ on macOS, Alt+Ctrl elsewhere)?
+ *
+ * Option/Alt alone picks one lead and REPLACES the selection, never adding to
+ * it (pin-targeting mode); this chord is the one way a lead joins a set, so a
+ * handful of wire ends and legs can be picked and dragged together. Same
+ * platform split and primary-button rule as `isToggleSelectEvent`, and for
+ * the same reasons; Shift neither makes nor unmakes it.
+ *
+ * @param {{metaKey?:boolean, ctrlKey?:boolean, altKey?:boolean,
+ *          button?:number}|null} e
+ * @param {boolean} isMac
+ * @returns {boolean}
+ */
+export function isLeadToggleEvent(e, isMac) {
+  if (!e?.altKey) return false;
+  if (!(isMac ? e.metaKey : e.ctrlKey)) return false;
+  return e.button == null || e.button === 0;
+}
+
+/**
+ * A picked lead — `{kind: "lead", id, end}` (a two-terminal part's leg) or
+ * `{kind: "wire-end", id, end}` — as the one string the `leads` set holds,
+ * and back. Ids and ends never contain a colon.
+ *
+ * @param {{kind:string, id:string, end:string}} pick
+ */
+export function leadKey(pick) {
+  return `${pick.kind}:${pick.id}:${pick.end}`;
+}
+
+/** The pick a `leadKey` names, or null for anything else. */
+export function parseLeadKey(key) {
+  const [kind, id, end, ...rest] = String(key ?? "").split(":");
+  if (rest.length || !id || !end) return null;
+  return kind === "lead" || kind === "wire-end" ? { kind, id, end } : null;
+}
+
+const KINDS = ["parts", "wires", "boards", "leads"];
 
 /**
  * Toggle `ids` of one kind in a selection, returning the whole new selection.
@@ -68,21 +109,23 @@ const KINDS = ["parts", "wires", "boards"];
  * selected (a marquee that caught two strips of three) completes rather than
  * half-clearing, which is an answer the next click can undo.
  *
- * The three sets are kept apart because that is how the desk's selection is
- * held: parts, wires and boards each drive their own highlight, and a design
- * clip reads boards and parts separately.
+ * The sets are kept apart because that is how the desk's selection is held:
+ * parts, wires and boards each drive their own highlight, and a design clip
+ * reads boards and parts separately. `leads` holds `leadKey` strings — the
+ * wire ends and legs an Option/Alt+⌘/Ctrl-click picked.
  *
  * @param {{parts?:Iterable<string>, wires?:Iterable<string>,
- *          boards?:Iterable<string>}|null} current
- * @param {"parts"|"wires"|"boards"} kind
+ *          boards?:Iterable<string>, leads?:Iterable<string>}|null} current
+ * @param {"parts"|"wires"|"boards"|"leads"} kind
  * @param {Iterable<string>} ids
- * @returns {{parts:string[], wires:string[], boards:string[]}}
+ * @returns {{parts:string[], wires:string[], boards:string[], leads:string[]}}
  */
 export function toggleSelection(current, kind, ids) {
   const next = {
     parts: new Set(current?.parts ?? []),
     wires: new Set(current?.wires ?? []),
     boards: new Set(current?.boards ?? []),
+    leads: new Set(current?.leads ?? []),
   };
   const targets = [...(ids ?? [])];
   if (KINDS.includes(kind) && targets.length > 0) {
@@ -97,6 +140,7 @@ export function toggleSelection(current, kind, ids) {
     parts: [...next.parts],
     wires: [...next.wires],
     boards: [...next.boards],
+    leads: [...next.leads],
   };
 }
 
@@ -106,17 +150,22 @@ export function toggleSelection(current, kind, ids) {
  *
  * A modifier-click that lands on exactly one item COLLAPSES to the desk's
  * ordinary single pick, so an item selected this way behaves exactly as one
- * selected by a plain click: R rotates it, its Properties dialog opens, the
- * Option ride hint rings its wires. A one-item multi-selection would look
- * identical and quietly do none of that.
+ * selected by a plain click: R rotates it, its Properties dialog opens. A
+ * one-item multi-selection would look identical and quietly do none of that.
  *
- * @param {{parts:string[], wires:string[], boards:string[]}} sel
- * @returns {{kind:"part"|"wire"|"board", id:string}|null}
+ * One lead left is the ordinary single lead pick, for the same reason.
+ *
+ * @param {{parts:string[], wires:string[], boards:string[],
+ *          leads?:string[]}} sel
+ * @returns {{kind:string, id:string, end?:string}|null}
  */
 export function singlePick(sel) {
-  const total = sel.parts.length + sel.wires.length + sel.boards.length;
+  const leads = sel.leads ?? [];
+  const total =
+    sel.parts.length + sel.wires.length + sel.boards.length + leads.length;
   if (total !== 1) return null;
   if (sel.parts.length) return { kind: "part", id: sel.parts[0] };
   if (sel.wires.length) return { kind: "wire", id: sel.wires[0] };
+  if (leads.length) return parseLeadKey(leads[0]);
   return { kind: "board", id: sel.boards[0] };
 }

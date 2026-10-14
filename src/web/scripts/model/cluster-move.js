@@ -42,7 +42,9 @@
 import { partDef } from "../catalog/index.js";
 import { formatAddress, parseAddress } from "./breadboard.js";
 import { addressAtWorld, holeAtWorld, worldOfAddress } from "./occupancy.js";
+import { legsBent, pinOfEnd } from "./free-legs.js";
 import { memberAnchorWorld } from "./paste-cluster.js";
+import { addressWorld, connectionPointAt } from "./part-geometry.js";
 import {
   leadsRiding,
   partNodeKeys,
@@ -75,6 +77,7 @@ export function memberDragForm(comp) {
   if (!def) return null;
   if (comp.board == null) return "brick"; // desk-level (PSU, clock)
   if (def.rotatable) return "lead"; // pin 1 seats, pin 2 is a bend from it
+  if (legsBent(comp)) return "lead"; // a bent TO-92: pin 1 seats, 2 and 3 bends
   return "footprint";
 }
 
@@ -365,7 +368,7 @@ export function partsRidingCluster(doc, ids) {
  */
 export function planClusterRiders(
   doc,
-  { members, targets, riding, ridingParts },
+  { members, targets, riding, ridingParts, presetShifts = null },
 ) {
   const list = riding ?? [];
   const legs = ridingParts ?? [];
@@ -378,6 +381,9 @@ export function planClusterRiders(
 
   // One ride lookup per member, built once for the whole batch.
   const shifts = new Map();
+  // A PICKED LEAD's end rides a preset shift of its own (`LEAD_WIRE_END` /
+  // `LEAD_LEG`, see `mergeLeadRiders`) rather than a member's.
+  for (const [id, shift] of presetShifts ?? []) shifts.set(id, shift);
   const shiftFor = (memberId) => {
     if (shifts.has(memberId)) return shifts.get(memberId);
     const member = byId.get(memberId);
@@ -431,4 +437,79 @@ export function planClusterRiders(
     parts.push(seat);
   }
   return { moves, points, parts, resolved: true };
+}
+
+/** The pseudo-members a PICKED LEAD rides in a cluster plan — a wire end, and
+    a two-terminal part's leg. Not component ids (those never start "@"). */
+export const LEAD_WIRE_END = "@wire-end";
+export const LEAD_LEG = "@leg";
+
+/**
+ * Fold the leads picked into a selection (Option/Alt+⌘/Ctrl-click) into the
+ * cluster's frozen riding sets, so ONE plan carries them: a picked wire end is
+ * one more riding end, a picked leg one more riding leg, each following the
+ * group's own delta (`leadShift`) rather than a member's node. Everything
+ * downstream is then the riders' own machinery — a wire with ONE end moving
+ * stretches, a wire whose other end rides a member (or is picked too) moves
+ * whole, a part with ONE leg moving BENDS and with both translates
+ * (`planRidingLead`), the bends of a routed wire travel only when both ends
+ * agree (`ridePointShift`), and the batch check sees every hole.
+ *
+ * A picked end that ALSO rides a member follows the pick: the user said where
+ * that end goes. Returns new arrays; the inputs are not touched.
+ *
+ * @param {Array<{wireId:string, ends:Array<{end:string, memberId:string}>}>} riding
+ * @param {Array<{id:string, pins:Array<{pin:number, memberId:string}>}>} ridingParts
+ * @param {Array<{kind:"lead"|"wire-end", id:string, end:string}>} leads
+ */
+export function mergeLeadRiders(riding, ridingParts, leads) {
+  const wires = (riding ?? []).map((r) => ({ ...r, ends: [...r.ends] }));
+  const parts = (ridingParts ?? []).map((r) => ({ ...r, pins: [...r.pins] }));
+  for (const lead of leads ?? []) {
+    if (lead.kind === "wire-end") {
+      let entry = wires.find((r) => r.wireId === lead.id);
+      if (!entry) wires.push((entry = { wireId: lead.id, ends: [] }));
+      entry.ends = entry.ends.filter((e) => e.end !== lead.end);
+      entry.ends.push({ end: lead.end, memberId: LEAD_WIRE_END });
+    } else if (lead.kind === "lead") {
+      const pin = pinOfEnd(lead.end); // a TO-92's third leg is "c"
+      if (pin == null) continue;
+      let entry = parts.find((r) => r.id === lead.id);
+      if (!entry) parts.push((entry = { id: lead.id, pins: [] }));
+      entry.pins = entry.pins.filter((p) => p.pin !== pin);
+      entry.pins.push({ pin, memberId: LEAD_LEG });
+    }
+  }
+  return { riding: wires, ridingParts: parts };
+}
+
+/**
+ * The ride rule for a PICKED lead: its address under the group's `delta` — the
+ * connection point (a wire end may land on a brick's terminal) or, for a
+ * `holesOnly` leg, the hole its moved position lands on. An end plugged into
+ * something that is itself moving (`moving`: board and brick ids) keeps its
+ * address — it travels with that for free — and one that would land ON
+ * something moving is refused (null), as a member landing on a moving strip
+ * is: that hole is about to leave.
+ *
+ * @param {{boards:Array, components:Array}} doc
+ * @param {{dx:number, dy:number}} delta
+ * @param {Set<string>} moving
+ * @param {{holesOnly?: boolean}} [opts]
+ * @returns {(address:string) => string|null}
+ */
+export function leadShift(doc, delta, moving, { holesOnly = false } = {}) {
+  const boards = doc?.boards ?? [];
+  const components = doc?.components ?? [];
+  return (address) => {
+    if (moving.has(parseAddress(address)?.boardId)) return address;
+    const at = addressWorld(boards, components, address);
+    if (!at) return null;
+    const point = connectionPointAt(boards, holesOnly ? [] : components, {
+      x: at.x + delta.dx,
+      y: at.y + delta.dy,
+    });
+    if (!point || moving.has(parseAddress(point.address)?.boardId)) return null;
+    return point.address;
+  };
 }

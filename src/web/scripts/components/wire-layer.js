@@ -932,7 +932,7 @@ export class WireLayer {
   }
 
   /**
-   * Live-preview the wires RIDING a part drag (Feature 290's Option-drag): each
+   * Live-preview the wires RIDING a part drag (Feature 290): each
    * entry restates the end(s) that move as the ADDRESS they are landing on, plus
    * a desk-unit `points` shift for a routed wire riding by both ends. One
    * `legal` covers the lot, because the drop is all-or-nothing — the same red
@@ -953,12 +953,15 @@ export class WireLayer {
    * @param {{shifts: Map<string, {from?:string, to?:string,
    *   points?:{dx:number,dy:number}}>, legal?:boolean}|null} spec
    * @param {Map<string, {x:number,y:number}>|null} [overrides] - live positions
+   *   (of moving bricks, and of moving BOARDS in a group drag)
+   * @param {{points: Map<string, number[]>, dx:number, dy:number}|null}
+   *   [pointRide] - the routed bends riding those boards (see render)
    */
-  setPartDrag(spec, overrides = null) {
+  setPartDrag(spec, overrides = null, pointRide = null) {
     // idle → idle: nothing to redraw
     if (!spec && !this.#partDrag && !overrides) return;
     this.#partDrag = spec;
-    this.render(overrides ?? undefined);
+    this.render(overrides ?? undefined, pointRide ?? undefined);
   }
 
   /** Are wires drawn as fading stubs? */

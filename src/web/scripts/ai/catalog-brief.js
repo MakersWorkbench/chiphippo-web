@@ -83,7 +83,11 @@ export const BUILDABLE_DEFS = Object.freeze(
       !d.transistorArray &&
       !isTimed(d) &&
       !hasKnob(d) &&
-      !isBenchPart(d),
+      !isBenchPart(d) &&
+      // The 7-segment display always takes a WIDE seat across the channel,
+      // which the compiler — every DIP in rows e/f — does not lay out yet;
+      // the builder keeps the retired single-row digits until it does.
+      d.alwaysWide !== true,
   ),
 );
 

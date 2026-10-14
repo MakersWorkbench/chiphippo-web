@@ -170,26 +170,27 @@ drag a board that a wire is attached to, the wire&#39;s other end stays put and
 the whole wire stretches and re-sags live, riding the move; nothing needs to
 be re-laid. Deleting a board cascades: any wire with an end seated on that
 board is removed along with it.</p>
-<p>Moving a <strong>part</strong> is different, because a part&#39;s pins can land somewhere its
-wires can&#39;t follow: an ordinary part drag leaves every wire in the hole you laid
-it in, which on a wired part quietly rewires the circuit. Hold <strong>Option</strong> as you
-press and the wire ends plugged into it come along instead — for one part, or
-for a whole selection of them. See <a href="components.html#moving-several-parts-at-once">Chips &amp;
-Components</a> for the rules, and for
-what the Option-held preview rings show you before you commit.</p>
+<p>Moving a <strong>part</strong> works the same way from the wire&#39;s point of view: the wire
+ends plugged into its pins&#39; column-halves come along, and each wire&#39;s other end
+stays put and stretches — for one part, or for a whole selection of them. See
+<a href="components.html#moving-several-parts-at-once">Chips &amp; Components</a> for the
+rules.</p>
 <h2 id="re-routing--deleting-a-wire">Re-routing &amp; deleting a wire</h2>
 <p>Grab a wire two different ways:</p>
 <ul>
-<li><strong>Its end cap</strong> — drag just one endpoint to a new hole or terminal,
-re-routing that end while the other stays put. The end follows the cursor
-and snaps onto a free hole once it&#39;s within about a hole&#39;s reach of one. A
-hover ring and red/legal tint on the dragged end work exactly like placing
-a fresh wire. Letting go drops the end on the hole the ring was showing;
-with no ring, or a red one, the end snaps back to where it started.</li>
-<li><strong>Its body</strong> — drag anywhere along the wire itself to translate the whole
-wire rigidly, keeping its length and orientation and just sliding both ends
-together onto a new pair of holes. If either landing point isn&#39;t free, the
-wire snaps back on release.</li>
+<li><strong>The wire itself</strong> — press anywhere on it, its end caps included, and drag
+to translate the whole wire rigidly, keeping its length and orientation and
+just sliding both ends together onto a new pair of holes. If either landing
+point isn&#39;t free, the wire snaps back on release. (A plain click on it just
+selects it.)</li>
+<li><strong>One end, with <code>Option</code></strong> (<code>Alt</code> on Windows and Linux) — hold it and the
+wire&#39;s end holes ring red as you hover them; drag one to a new hole or
+terminal to re-route that end while the other stays put. The end follows the
+cursor and snaps onto a free hole once it&#39;s within about a hole&#39;s reach of
+one. A hover ring and red/legal tint on the dragged end work exactly like
+placing a fresh wire. Letting go drops the end on the hole the ring was
+showing; with no ring, or a red one, the end snaps back to where it started.
+See <a href="the-desk.html#one-leg-at-a-time--option">Selecting things</a>.</li>
 </ul>
 <p>To delete a wire, click it to select it, then press <code>Delete</code> or <code>Backspace</code>
 (the same shortcut removes whatever&#39;s currently selected — a part, a board,
@@ -216,12 +217,14 @@ bend somewhere else.</li>
 <li><strong>Drop a point onto a neighbouring point, or onto either end of the wire,</strong>
 and it merges away — that&#39;s how you take a bend back out. The point you are
 dragging turns red as it lands, so you can see the merge before you release.</li>
-<li><strong>Drop an end cap onto one of the wire&#39;s own points</strong> and that point is
+<li><strong><code>Option</code>-drag an end onto one of the wire&#39;s own points</strong> and that point is
 absorbed: the wire now reaches where the bend used to be, so the bend has
 nothing left to do.</li>
 </ul>
-<p>Because a routed wire&#39;s body drag is spoken for, it has no rigid
-whole-wire translate — move it by its end caps instead. Switching a wire back
+<p>Because a routed wire&#39;s body drag is spoken for, dragging it on its own never
+slides it whole — move its ends with <code>Option</code> instead, or select it together
+with something else (a box, or <code>Cmd/Ctrl</code>-click) and drag the selection: as
+part of a selection it moves rigidly, bends and all. Switching a wire back
 to <strong>Direct</strong> deletes every point it carried and redraws it as the plain
 sagging curve; switching to <strong>Routed</strong> straightens it out, ready for points.
 Either way it&#39;s one undo step (<code>Cmd/Ctrl+Z</code>), as is every individual bend.</p>

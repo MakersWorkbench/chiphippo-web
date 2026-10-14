@@ -673,6 +673,12 @@
     "seg8ca": {
       "title": "8-segment digit (common anode)"
     },
+    "seg7cc": {
+      "title": "7-segment display (common cathode)"
+    },
+    "seg7ca": {
+      "title": "7-segment display (common anode)"
+    },
     "bar8": {
       "title": "8-segment LED bar"
     },
@@ -1222,14 +1228,6 @@
       "boards": {
         "one": "{count} board",
         "other": "{count} boards"
-      },
-      "moreParts": {
-        "one": "{count} more part",
-        "other": "{count} more parts"
-      },
-      "moreWires": {
-        "one": "{count} more wire",
-        "other": "{count} more wires"
       }
     },
     "menu": {
@@ -1253,9 +1251,7 @@
       "boardMessage": "{id} has {what} attached — removing the board removes them too.",
       "boardsMessage": "These {count} joined boards have {what} attached — removing them removes those too.",
       "brickTitle": "Remove {noun}?",
-      "brickMessage": "{id} has {what} attached — removing it removes them too.",
-      "selectionTitle": "Remove {what}?",
-      "selectionMessage": "{extra} attached to them will be removed too."
+      "brickMessage": "{id} has {what} attached — removing it removes them too."
     },
     "paste": {
       "failTitle": "Could not paste the design",
@@ -1587,6 +1583,12 @@
       "selectAll": "Select all — the whole desk, or a text field's text",
       "toggleSelect": "Add / remove one item from the selection",
       "toggleSelectKeys": "{mod}+Click",
+      "pickLead": "Pick one lead — a wire end or a leg (never additive)",
+      "pickLeadKeys": "{alt}+Click",
+      "toggleLead": "Add / remove one lead — a wire end or a leg",
+      "toggleLeadKeys": "{alt}+{mod}+Click",
+      "moveBare": "Move the selection bare — its wiring stays put",
+      "moveBareKeys": "{shift}+Drag",
       "copy": "Copy the selected component",
       "paste": "Paste a duplicate",
       "delete": "Delete the selection",
@@ -1600,6 +1602,8 @@
       "palette": "Toggle the parts palette",
       "analyzer": "Toggle the logic analyzer",
       "fit": "Fit to screen",
+      "pan": "Pan the desk",
+      "panKeys": "Space+drag or middle-drag",
       "zoomOut": "Zoom all the way out (find a lost part)",
       "zoom": "Zoom in / out / reset",
       "fontSize": "Editor font size in / out / reset",
@@ -1782,7 +1786,8 @@
       "adviceLabel": "About this value"
     },
     "refused": {
-      "bodyHoles": "No room — the hole its lead would move to is taken, or past the end of the board."
+      "bodyHoles": "No room — the hole its lead would move to is taken, or past the end of the board.",
+      "case": "Its legs are bent, and a TO-220's are a rigid row — stand them in three holes in a row, in order, first."
     },
     "hint": {
       "title": "Standard values close to this:",

@@ -189,7 +189,10 @@ test("the dropped design becomes the selection, ready to be moved or copied on",
   clickAt(viewport, world, 8, 40);
 
   assert.deepEqual(controller.multiSelectedBoardIds, [doc.boards[1].id]);
-  assert.deepEqual(controller.multiSelectedIds, [doc.components[1].id]);
+  // The pasted part rides its pasted board — a passenger, so not selected in
+  // its own right (CLAUDE.md → "Selection").
+  assert.deepEqual(controller.multiSelectedIds, []);
+  assert.equal(doc.components[1].board, doc.boards[1].id);
 });
 
 test("a click where the design does not fit is ignored — it stays armed", () => {

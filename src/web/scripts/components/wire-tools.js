@@ -20,8 +20,10 @@
 // wire-tools.js — everything about jumper wires the user drives: the
 // click-click wire TOOL (anchor a free point, click a second to lay a wire;
 // the colour STAYS put between wires — change it via the toolbar swatch),
-// grabbing a wire's END cap to re-route it, grabbing its BODY to translate it
-// rigidly — or, on a ROUTED wire, to BEND it — and the per-wire context menu —
+// grabbing a wire's BODY to translate it rigidly — or, on a ROUTED wire, to
+// BEND it — dragging one END cap to re-route it (an Option/Alt press: in the
+// desk's pin-targeting mode a wire end is a lead like a resistor's leg; see
+// CLAUDE.md → "Selection"), and the per-wire context menu —
 // the SAME uniform shape every
 // part/board menu has (Pin Assignment / Properties… / Delete Component; see
 // desk-controller.js's #onPartContextMenu), with Pin Assignment and
@@ -306,53 +308,65 @@ export class WireTools {
     });
   }
 
-  // ── Grabbing a placed wire (endpoint re-route / whole-wire translate) ──────
+  // ── Grabbing a placed wire (whole-wire translate / bend / one end) ────────
 
   /**
-   * A viewport press with no mode: try to grab a wire's end cap (re-route) or
-   * its body (translate). Returns true when a drag started.
-   *
-   * A bus member's cap re-routes exactly like any wire's EXCEPT right where
-   * it would be confused with that bus's own end-handle: the handle's collar
-   * sits at a fixed offset from the bus's CENTROID, not from any particular
-   * member's hole, so almost every member's cap is nowhere near it — but the
-   * one that happens to coincide (measured, not hypothetical: an 8-bit bus
-   * parked a collar within a couple of screen px of one member's own cap)
-   * would otherwise flip a coin between "grab the handle" and "re-route this
-   * one wire" every time. `#nearOwnBusHandle` excludes ONLY that overlap, at
-   * that one end — the far end of the SAME wire, and every other member,
-   * drag freely. Whole-body translate stays off for every member regardless
-   * (a ~16px lead has little to translate, and it was never actually the
-   * source of the ambiguity — DOM z-order already puts the handle on top).
+   * A plain press on a wire's BODY (the controller has already decided it is
+   * this wire's — CLAUDE.md → "Selection"): select it, and start the drag that
+   * moves it. A direct wire translates rigidly; a ROUTED one's run BENDS (see
+   * the header) — a press on one of its existing waypoints moves that bend, a
+   * press along the run inserts one where it landed. A bus member's own lead
+   * has no rigid translate (its middle belongs to the ribbon), so the press
+   * only selects it. Returns true when a drag started.
    */
-  tryBeginDrag(e, world) {
+  beginBodyDrag(wireId, e, world) {
     const doc = this.#host.doc;
-    const grab = wireEndNear(doc.boards, doc.components, doc.wires, world);
-    if (grab && !this.#nearOwnBusHandle(grab.wireId, world)) {
-      this.#beginEndpointDrag(grab, e);
-      return true;
+    const wire = doc.getWire(wireId);
+    if (!wire) return false;
+    if (doc.busOfWire(wireId)) {
+      this.#host.selectWire(wireId);
+      return false;
     }
-    // An existing bend, before the body it sits on: a waypoint is the smaller,
-    // more specific target, so grabbing one moves it rather than laying
-    // another one beside it.
-    const point = wirePointNear(doc.wires, world);
-    if (point && !doc.busOfWire(point.wireId)) {
-      this.#beginPointDrag(point.wireId, point.index, false, e);
-      return true;
-    }
-    const wireId = e.target?.closest?.(".wire")?.dataset.wireId;
-    if (wireId && !doc.busOfWire(wireId)) {
-      // A ROUTED wire's body drag BENDS it (see the header) — the rigid
-      // whole-wire translate belongs to a direct wire, whose shape is not the
-      // user's to place.
-      if (doc.getWire(wireId)?.layout === "routed") {
-        this.#beginBodyBend(wireId, world, e);
+    if (wire.layout === "routed") {
+      // An existing bend, before the body it sits on: a waypoint is the
+      // smaller, more specific target, so grabbing one moves it rather than
+      // laying another one beside it.
+      const point = wirePointNear([wire], world);
+      if (point) {
+        this.#beginPointDrag(wireId, point.index, false, e);
         return true;
       }
-      this.#beginWholeDrag(wireId, e);
-      return true;
+      this.#beginBodyBend(wireId, world, e);
+      return this.#host.mode?.kind === "drag-wire-point";
     }
-    return false;
+    this.#beginWholeDrag(wireId, e);
+    return this.#host.mode?.kind === "drag-wire";
+  }
+
+  /**
+   * An Option/Alt press on a wire END (pin-targeting mode — the controller has
+   * already picked the end and made it the selection): drag that one end to a
+   * new hole. `grab` is `{ wireId, end, origin }` (part-geometry's
+   * wireEndNear). Selects nothing itself — the pick is the controller's.
+   */
+  beginEndDrag(grab, e) {
+    if (!this.#host.doc.getWire(grab?.wireId)) return false;
+    this.#beginEndpointDrag(grab, e);
+    return true;
+  }
+
+  /**
+   * May a press at `world` grab `wireId`'s cap there as a LEAD? Everywhere
+   * except right where it would be confused with that bus's own end-handle:
+   * the handle's collar sits at a fixed offset from the bus's CENTROID, not
+   * from any particular member's hole, so almost every member's cap is nowhere
+   * near it — but the one that happens to coincide (measured, not
+   * hypothetical: an 8-bit bus parked a collar within a couple of screen px of
+   * one member's own cap) would otherwise flip a coin between "grab the
+   * handle" and "re-route this one wire" every time.
+   */
+  endGrabbable(wireId, world) {
+    return !this.#nearOwnBusHandle(wireId, world);
   }
 
   /**
@@ -557,21 +571,10 @@ export class WireTools {
     else if (m?.kind === "drag-wire-point") this.#onPointUp(fake);
   }
 
-  /**
-   * Is `world` on/near ANY wire's end cap, bus member or not? A cap sits
-   * directly on a board hole, so a press there lands on the board SVG
-   * beneath (caps are pointer-events:none) — `#onBoardPointerDown` uses this
-   * to absorb the press instead of falling through to a board drag, even for
-   * a bus member whose own `tryBeginDrag` deliberately declines to grab it.
-   */
-  capNear(world) {
-    return Boolean(this.wireIdNear(world));
-  }
-
-  /** The wire whose end cap `world` is on/near, or null — `capNear` with the
-      answer kept. A modifier-click there toggles THAT wire's selection, since
-      the cap is not a pointer target and the wire's own click listener never
-      runs for a press that landed on the board beneath it. */
+  /** The wire whose end cap `world` is on/near, or null. A cap sits ON a
+      board hole and is not a pointer target, so a press there lands on the
+      board beneath — the controller asks this so the press is the WIRE's
+      (body wins over the board under it), plain or ⌘/Ctrl. */
   wireIdNear(world) {
     const doc = this.#host.doc;
     return (
@@ -581,7 +584,6 @@ export class WireTools {
 
   #beginEndpointDrag(grab, e) {
     this.#host.hideHover();
-    this.#host.selectWire(grab.wireId); // select on press (mode still null here)
     const mode = {
       kind: "drag-wire-end",
       wireId: grab.wireId,
@@ -718,6 +720,7 @@ export class WireTools {
       to0,
       fromOrigin: wire.from, // revert / no-op detection
       toOrigin: wire.to,
+      shown: null, // the legal landing the last move showed (#onWholeMove)
       startWorld: this.#host.deskView.worldFromEvent(e),
       pointerId: e.pointerId,
       startClientX: e.clientX,
@@ -751,8 +754,8 @@ export class WireTools {
     // both ends together, so length and orientation never change. When the
     // raw delta doesn't land legally, #resolveWholeDragDelta looks for the
     // closest ADJUSTED delta that does — still rigid, never snapping just
-    // one end independently of the other. What this finds is ONLY the preview;
-    // the drop itself re-resolves at the release point (#onWholeUp).
+    // one end independently of the other. What this finds is what the drop
+    // commits (#onWholeUp) whenever it found anything.
     const { rawDx, rawDy } = this.#wholeDelta(m, world);
     const resolved = this.#resolveWholeDragDelta(m, rawDx, rawDy);
     // Snap the rendered ends onto the resolved holes when legal, else float
@@ -762,6 +765,8 @@ export class WireTools {
       y: m.from0.y + rawDy,
     };
     const b = resolved?.toHit ?? { x: m.to0.x + rawDx, y: m.to0.y + rawDy };
+    // What the screen now SHOWS — the drop reuses it (#onWholeUp).
+    m.shown = resolved;
     this.#host.wireLayer.setWholeDrag({
       wireId: m.wireId,
       from: { x: a.x * PX_PER_UNIT, y: a.y * PX_PER_UNIT },
@@ -825,11 +830,16 @@ export class WireTools {
     if (!m.active) return; // plain click — the wire is already selected
     if (this.#aborted(e)) return; // aborted — never commit
 
-    // Resolve at the RELEASE point rather than trusting the last pointermove's
-    // preview — see pointer-gesture.js's releaseWorld.
-    const world = releaseWorld(this.#host.deskView, e, m.lastWorld);
-    const { rawDx, rawDy } = this.#wholeDelta(m, world);
-    const resolved = this.#resolveWholeDragDelta(m, rawDx, rawDy);
+    // The drop is the landing the last move SHOWED, snapped and legal —
+    // never re-resolved (CLAUDE.md → "Selection": a shown target is reused).
+    // Only when nothing legal was showing does the release point get a say,
+    // through the very same resolver (pointer-gesture.js's releaseWorld).
+    let resolved = m.shown ?? null;
+    if (!resolved) {
+      const world = releaseWorld(this.#host.deskView, e, m.lastWorld);
+      const { rawDx, rawDy } = this.#wholeDelta(m, world);
+      resolved = this.#resolveWholeDragDelta(m, rawDx, rawDy);
+    }
     // Commit only when BOTH ends landed on real free points (a legal, moved
     // target); an invalid release cancels the drag-drop and the wire snaps back.
     const from = resolved?.fromHit.address;

@@ -101,6 +101,7 @@ export function memberForm(ref, params) {
   if (def.kind === "psu" || def.kind === "clock" || def.kind === "load")
     return "brick"; // desk-level
   if (def.rotatable && params?.rot === 90) return "turned"; // two free ends
+  if (Array.isArray(params?.legs) && def.freeLegs?.(params)) return "legs"; // a bent TO-92
   return "discrete"; // linear footprint along one grid row
 }
 
