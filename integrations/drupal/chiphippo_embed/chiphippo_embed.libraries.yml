@@ -1,0 +1,10 @@
+embed:
+  version: 1.x
+  css:
+    component:
+      css/chiphippo-embed.css: {}
+  js:
+    js/chiphippo-embed.js: {}
+  dependencies:
+    - core/drupal
+    - core/once

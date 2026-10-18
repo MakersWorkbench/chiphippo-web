@@ -78,6 +78,7 @@ test("lists the whole catalog grouped by function; picks report the ref", () => 
   assert.deepEqual(groups, [
     ...chipGroupNames,
     "CUSTOM",
+    "Sensors",
     "Switches",
     "Resistors",
     "Capacitors",
@@ -123,6 +124,7 @@ test("logic chips nest under CHIPS; Memory + parts are their own sections", () =
     .sort(byRank);
   assert.deepEqual(groupsIn(bodies[0]), [...chipGroupNames, "CUSTOM"]);
   assert.deepEqual(groupsIn(bodies[1]), [
+    "Sensors",
     "Switches",
     "Resistors",
     "Capacitors",

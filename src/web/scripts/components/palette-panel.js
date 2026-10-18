@@ -113,7 +113,9 @@ const COMPONENT_ORDER = [
     every one of them carries), so a new one is marked with nothing to add
     here. */
 const LIMITED_GROUPS = new Set(
-  PALETTE_DEFS.filter((def) => def.countsAsConnection).map((def) => def.group),
+  PALETTE_DEFS.filter(
+    (def) => def.countsAsConnection && def.fullySimulated !== true,
+  ).map((def) => def.group),
 );
 
 /** Is `group` shelved under COMPONENTS? Every group COMPONENT_ORDER names,

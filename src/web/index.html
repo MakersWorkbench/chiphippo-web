@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
       CSP: only load scripts/styles/fonts from the same origin. The renderer
-      makes no network calls of its own — all I/O goes through the main process
-      over window.chiphippo.*.
+      uses the platform bridge for I/O. Electron delegates it to main; the web
+      adapter fetches only bundled same-origin assets.
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -22,16 +22,22 @@
       "
     />
     <title>Chip Hippo</title>
-    <link rel="icon" type="image/svg+xml" href="chiphippo-icon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/app/chiphippo-icon.svg" />
 
     <!-- Design tokens + reset first, then the shell layout. -->
-    <link rel="stylesheet" href="styles/theme.css" />
-    <link rel="stylesheet" href="styles/app.css" />
+    <link rel="stylesheet" href="/app/styles/theme.css" />
+    <link rel="stylesheet" href="/app/styles/app.css" />
   </head>
   <body>
     <!-- app.js mounts the shell (header bar + desk viewport) here. -->
     <div id="app"></div>
 
-    <script type="module" src="scripts/app.js"></script>
+    <script
+      type="module"
+      src="/app/scripts/platform/browser-bootstrap.js"
+    ></script>
+    <script type="module" src="/app/scripts/app.js"></script>
+    <script type="module" src="/app/scripts/embed-mode.js"></script>
+    <script type="module" src="/app/scripts/web-chrome.js"></script>
   </body>
 </html>

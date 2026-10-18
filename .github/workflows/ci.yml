@@ -46,6 +46,14 @@ jobs:
       - name: Check formatting
         run: make fmt-check
 
+      - name: Build browser release
+        working-directory: src
+        run: npm run web:build
+
+      - name: Test read-only web server
+        working-directory: src
+        run: npm run web:test-server
+
       - name: Test
         run: |
           set -o pipefail

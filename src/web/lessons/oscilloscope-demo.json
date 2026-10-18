@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "oscilloscope-demo",
+  "title": "Oscilloscope Clock Lab",
+  "description": "Measure a 1 Hz clock and a divide-by-two flip-flop output.",
+  "desktopTitle": "Oscilloscope Clock Lab",
+  "demo": "74LS74",
+  "editable": true,
+  "ui": {
+    "showPartsTray": true,
+    "showProjectTabs": false,
+    "showOpenFull": true
+  }
+}

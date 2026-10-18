@@ -944,6 +944,57 @@
   gap: var(--space-2);
 }
 
+/* Article embeds keep the simulator editable while removing project-level
+   file chrome. Reset and Open full workbench own the lesson lifecycle. */
+[data-chiphippo-mode="embed"] .toolbar-pill--file,
+[data-chiphippo-mode="embed"] .header-icon-btn {
+  display: none;
+}
+
+.embed-hide-tabs .project-tabs,
+.embed-hide-palette .palette-panel,
+.embed-hide-palette .palette-rail {
+  display: none;
+}
+
+.embed-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--toolbar-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-overlay);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-0);
+  color: var(--color-text);
+  font: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.embed-action:hover {
+  background: var(--color-surface-1);
+}
+
+.embed-action--primary {
+  border-color: var(--color-accent);
+  color: var(--color-brand);
+}
+
+@media (max-width: 850px) {
+  [data-chiphippo-mode="embed"] .app-header-brand {
+    display: none;
+  }
+
+  /* The meter is an article interaction, not project chrome. Keep it beside
+     Run even when the rest of the wide workbench tool strip is collapsed. */
+  [data-chiphippo-mode="embed"]
+    .toolbar-pill--tools
+    > :not(.toolbar-meter):not(.toolbar-oscilloscope) {
+    display: none;
+  }
+}
+
 /* Bare icon buttons (ported from Rest Hippo). */
 .icon-btn {
   display: flex;
@@ -1079,6 +1130,10 @@
 
 .desk-viewport--probing {
   cursor: pointer;
+}
+
+.desk-viewport--metering {
+  cursor: crosshair;
 }
 
 .desk-hint {
@@ -2184,6 +2239,112 @@
   pointer-events: none;
 }
 
+/* Direct-use sensor modules. Their electrical behavior lives in the catalog;
+   these shapes deliberately match the workbench's compact native SVG style. */
+.part-sensor-board {
+  fill: #176b50;
+  stroke: #0a3528;
+  stroke-width: 0.12;
+}
+
+.part-sensor-board--contact,
+.part-sensor-board--resistive {
+  fill: #216b75;
+}
+
+.part-sensor-pin {
+  stroke: #c7a44b;
+  stroke-width: 0.18;
+  stroke-linecap: round;
+}
+
+.part-sensor-label,
+.part-sensor-value {
+  fill: #f4f7ef;
+  font-family: var(--font-mono);
+  font-size: 0.44px;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.part-sensor-value {
+  fill: #bee7d8;
+  font-size: 0.33px;
+  font-weight: 500;
+}
+
+.part-sensor-disc {
+  fill: #d7ba73;
+  stroke: #4f3a1f;
+  stroke-width: 0.12;
+}
+
+.part-sensor-indicator {
+  fill: #26342f;
+  stroke: #9db9ad;
+  stroke-width: 0.08;
+}
+
+.part-sensor-indicator--on {
+  fill: #ff493f;
+  filter: drop-shadow(0 0 0.16px #ff493f);
+}
+
+.part-sensor-joystick-base {
+  fill: #20272a;
+  stroke: #aeb8bb;
+  stroke-width: 0.13;
+}
+
+.part-sensor-joystick-knob {
+  fill: #3a4246;
+  stroke: #111719;
+  stroke-width: 0.12;
+}
+
+.part-sensor-joystick-knob--pressed {
+  fill: #252b2e;
+  stroke: #7cd3b1;
+}
+
+.part-sensor-key {
+  fill: #303642;
+  stroke: #a8b0bd;
+  stroke-width: 0.08;
+}
+
+.part-sensor-key--pressed {
+  fill: #f0b429;
+  stroke: #ffe6a3;
+}
+
+.part-sensor-key-label {
+  fill: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.46px;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.part-sensor-encoder {
+  fill: #b8bdc5;
+  stroke: #535a64;
+  stroke-width: 0.12;
+}
+
+.part-sensor-encoder-mark {
+  stroke: #353a42;
+  stroke-width: 0.18;
+  stroke-linecap: round;
+}
+
+.part-sensor-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
 /* ── PSU brick (desk-level) ──────────────────────────────────────────────── */
 .part-psu-body {
   fill: var(--color-psu-body);
@@ -3015,6 +3176,459 @@
 /* A named net (Feature 120) leads its readout with the user name in accent. */
 .net-status--named {
   color: var(--color-accent);
+}
+
+/* ── Two-probe multimeter ───────────────────────────────────────────────── */
+.multimeter-panel {
+  position: absolute;
+  z-index: 12;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: min(24rem, calc(100% - 2 * var(--space-3)));
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-0);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 35%);
+  color: var(--color-text);
+}
+
+.multimeter-panel[hidden] {
+  display: none;
+}
+
+.multimeter-close {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.multimeter-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.75rem;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-subtext);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.multimeter-panel--dragging .multimeter-drag-handle {
+  cursor: grabbing;
+}
+
+.multimeter-title {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.multimeter-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.multimeter-mode,
+.multimeter-lead {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-1);
+  color: inherit;
+  cursor: pointer;
+}
+
+.multimeter-mode {
+  min-width: 3rem;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+}
+
+.multimeter-mode--active {
+  border-color: var(--color-accent);
+  background: var(--color-surface-0);
+}
+
+.multimeter-display {
+  display: block;
+  margin: var(--space-3) 0 var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: #c9d5b1;
+  color: #172116;
+  font: 700 1.8rem/1.25 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.multimeter-hint {
+  min-height: 1.3em;
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.multimeter-leads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.multimeter-lead {
+  overflow: hidden;
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multimeter-lead--red {
+  border-left: 0.35rem solid var(--color-wire-red);
+}
+
+.multimeter-lead--black {
+  border-left: 0.35rem solid var(--color-wire-black);
+}
+
+.multimeter-lead--active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.multimeter-probe {
+  position: absolute;
+  z-index: 14;
+  width: 17px;
+  height: 17px;
+  border: 3px solid;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgb(255 255 255 / 22%);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 95%),
+    0 0 0 3px rgb(0 0 0 / 35%),
+    0 0 8px 3px currentColor;
+  pointer-events: none;
+}
+
+.multimeter-probe::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.multimeter-probe--red {
+  color: var(--color-wire-red);
+  border-color: var(--color-wire-red);
+}
+
+.multimeter-probe--black {
+  color: var(--color-wire-black);
+  border-color: var(--color-wire-black);
+}
+
+/* ── Two-channel oscilloscope ───────────────────────────────────────────── */
+.desk-viewport--scoping {
+  cursor: crosshair;
+}
+
+.oscilloscope-panel {
+  position: absolute;
+  z-index: 11;
+  right: var(--space-3);
+  bottom: calc(var(--space-3) + 3rem);
+  width: min(40rem, calc(100% - 2 * var(--space-3)));
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-0);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 35%);
+  color: var(--color-text);
+}
+
+.oscilloscope-panel[hidden] {
+  display: none;
+}
+
+.oscilloscope-close {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.oscilloscope-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.75rem;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-subtext);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.oscilloscope-panel--dragging .oscilloscope-drag-handle {
+  cursor: grabbing;
+}
+
+.oscilloscope-title {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.oscilloscope-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+}
+
+.oscilloscope-select,
+.oscilloscope-control,
+.oscilloscope-trigger-level,
+.oscilloscope-offset,
+.oscilloscope-probe-button {
+  min-height: 1.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-1);
+  color: inherit;
+  font: inherit;
+}
+
+.oscilloscope-control,
+.oscilloscope-probe-button {
+  cursor: pointer;
+}
+
+.oscilloscope-control--active {
+  border-color: var(--color-accent);
+  background: var(--color-surface-0);
+}
+
+.oscilloscope-trigger-level {
+  width: 4.5rem;
+  padding: 0 var(--space-1);
+}
+
+.oscilloscope-channels,
+.oscilloscope-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.oscilloscope-channel {
+  display: flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-left: var(--space-1);
+  border-left: 0.25rem solid;
+  font-size: var(--font-size-xs);
+}
+
+.oscilloscope-channel--ch1 {
+  border-color: #ffd84a;
+}
+
+.oscilloscope-channel--ch2 {
+  border-color: #52d7ff;
+}
+
+.oscilloscope-offset {
+  width: 3.75rem;
+  padding: 0 var(--space-1);
+}
+
+.oscilloscope-actions .oscilloscope-control {
+  padding: var(--space-1) var(--space-2);
+}
+
+.oscilloscope-screen {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  border: 1px solid #496149;
+  border-radius: var(--radius-sm);
+  background: #071107;
+  aspect-ratio: 5 / 2;
+}
+
+.oscilloscope-grid {
+  stroke: #254125;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.oscilloscope-trace {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.oscilloscope-trace--ch1 {
+  stroke: #ffd84a;
+}
+
+.oscilloscope-trace--ch2 {
+  stroke: #52d7ff;
+}
+
+.oscilloscope-readout {
+  display: block;
+  min-height: 1.4em;
+  margin-top: var(--space-1);
+  color: var(--color-subtext);
+  font: var(--font-size-xs) var(--font-mono);
+}
+
+.oscilloscope-measurements {
+  margin-top: var(--space-1);
+  color: var(--color-subtext);
+  font: var(--font-size-xs) var(--font-mono);
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.oscilloscope-cursor-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.oscilloscope-cursor-controls[hidden] {
+  display: none;
+}
+
+.oscilloscope-cursor-controls label {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.oscilloscope-cursor-readout {
+  grid-column: 1 / -1;
+  color: var(--color-subtext);
+  font-family: var(--font-mono);
+}
+
+.oscilloscope-cursor {
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.oscilloscope-cursor--a {
+  stroke: #ff9f43;
+}
+
+.oscilloscope-cursor--b {
+  stroke: #bc8cff;
+}
+
+.oscilloscope-probes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.oscilloscope-probe-button {
+  overflow: hidden;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oscilloscope-probe-button--ch1 {
+  border-left: 0.35rem solid #ffd84a;
+}
+
+.oscilloscope-probe-button--ch2 {
+  border-left: 0.35rem solid #52d7ff;
+}
+
+.oscilloscope-probe-button--ground {
+  border-left: 0.35rem solid #e8e8e8;
+}
+
+.oscilloscope-probe-button--active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.oscilloscope-probe {
+  position: absolute;
+  z-index: 14;
+  width: 15px;
+  height: 15px;
+  border: 3px solid;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 95%),
+    0 0 0 3px rgb(0 0 0 / 35%),
+    0 0 7px 2px currentColor;
+  pointer-events: none;
+}
+
+.oscilloscope-probe--ch1 {
+  color: #ffd84a;
+}
+
+.oscilloscope-probe--ch2 {
+  color: #52d7ff;
+}
+
+.oscilloscope-probe--ground {
+  color: #e8e8e8;
+}
+
+@media (max-width: 600px) {
+  .oscilloscope-panel {
+    bottom: var(--space-2);
+  }
+
+  .oscilloscope-probes {
+    grid-template-columns: 1fr;
+  }
+
+  .oscilloscope-cursor-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .oscilloscope-cursor-readout {
+    grid-column: 1;
+  }
 }
 
 /* ── Annotations: labels & notes (Feature 120) ───────────────────────────── */
@@ -9868,4 +10482,25 @@ button.integration-lamp:hover {
 .cpumon-port-line--latest {
   background: var(--color-code-current);
   border-radius: var(--radius-sm);
+}
+/* Web-only navigation actions. */
+.web-action {
+  border: 1px solid var(--color-border, #67717e);
+  border-radius: 6px;
+  background: var(--color-surface-raised, #27313b);
+  color: inherit;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .wire-hit {
+    stroke-width: 22;
+  }
+
+  .embed-action,
+  .web-action {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

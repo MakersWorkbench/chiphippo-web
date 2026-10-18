@@ -80,6 +80,10 @@ of the same glue logic.
   capacitors, gate delays, output and supply current limits, and wire
   resistance.
 - [Probing & Net Names](probing.md) — the connectivity probe and naming nets.
+- [Multimeter](multimeter.md) — movable voltage, current, resistance,
+  continuity, capacitance, and inductance probes.
+- [Oscilloscope](oscilloscope.md) — two movable voltage channels, a shared
+  ground, adjustable scales, and edge triggering.
 - [Memory Chips & the Inspector](memory.md) — ROM/RAM, the programmer, and
   the hex/ASCII inspector.
 - [Logic Analyzer & Timing](logic-analyzer.md) — capturing and reading

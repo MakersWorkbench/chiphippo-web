@@ -158,6 +158,14 @@
       "label": "Probe",
       "title": "Connectivity probe — hover to highlight a net, click to pin (P)"
     },
+    "meter": {
+      "label": "Multimeter",
+      "title": "Multimeter — place red and black probes to measure the circuit"
+    },
+    "oscilloscope": {
+      "label": "Oscilloscope",
+      "title": "Two-channel oscilloscope — place CH1, CH2, and ground probes"
+    },
     "analyzer": {
       "label": "Analyzer",
       "title": "Logic analyzer — record and view signal waveforms over time (A)"
@@ -425,7 +433,8 @@
       "opamps": "Op-amps",
       "regulators": "Regulators",
       "relays": "Relays",
-      "audio": "Audio"
+      "audio": "Audio",
+      "sensors": "Sensors"
     },
     "integration": {
       "output": "Output",
@@ -699,6 +708,20 @@
     "pot": {
       "title": "Potentiometer"
     },
+    "sensor-ldr": { "title": "Photoresistor (LDR)" },
+    "sensor-ntc": { "title": "NTC temperature sensor (10 kΩ)" },
+    "sensor-joystick": { "title": "Analog joystick module" },
+    "sensor-sound": { "title": "Sound sensor module" },
+    "sensor-flame": { "title": "Flame sensor module" },
+    "sensor-gas": { "title": "Gas sensor module" },
+    "sensor-heartbeat": { "title": "Heartbeat sensor module" },
+    "sensor-pir": { "title": "PIR motion sensor" },
+    "sensor-hall": { "title": "Hall-effect sensor module" },
+    "sensor-tilt": { "title": "Tilt switch" },
+    "sensor-reed": { "title": "Magnetic reed switch" },
+    "sensor-vibration": { "title": "Vibration switch" },
+    "sensor-encoder": { "title": "Rotary encoder module" },
+    "sensor-keypad": { "title": "4×4 matrix keypad" },
     "psu": {
       "title": "Power supply"
     },
@@ -1554,6 +1577,71 @@
     "milliamps": "{amps} mA",
     "microamps": "{amps} µA",
     "amps": "{amps} A"
+  },
+  "multimeter": {
+    "title": "Multimeter",
+    "placeBoth": "Place both probes on circuit points.",
+    "runSpice": "Run the circuit with Spice Lite to measure voltage.",
+    "redMinusBlack": "Red probe voltage minus black probe voltage.",
+    "logicVoltage": "Nominal logic voltage (0/5 V); Spice Lite gives solved voltage.",
+    "currentLead": "Current is read through the component lead under a probe.",
+    "powerOff": "Equivalent passive value; stop the circuit before measuring.",
+    "beep": "BEEP",
+    "open": "Open circuit",
+    "red": "Red",
+    "black": "Black",
+    "place": "Place probe",
+    "mode": {
+      "voltage": "DC voltage",
+      "resistance": "Resistance",
+      "continuity": "Continuity",
+      "current": "DC current",
+      "capacitance": "Capacitance",
+      "inductance": "Inductance"
+    }
+  },
+  "oscilloscope": {
+    "title": "Oscilloscope",
+    "screen": "Oscilloscope voltage display",
+    "timeScale": "Time per division",
+    "voltageScale": "Volts per division",
+    "trigger": "Trigger",
+    "triggerChannel": "Trigger channel",
+    "triggerEdge": "Toggle rising or falling edge trigger",
+    "triggerLevel": "Trigger voltage",
+    "voltsUnit": "V",
+    "runHint": "Place probes and run the circuit to capture a trace.",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "ground": "Ground",
+    "channels": "Oscilloscope channels",
+    "channelEnabled": "{channel} enabled",
+    "coupling": "{channel} coupling",
+    "dc": "DC",
+    "ac": "AC",
+    "offset": "Vertical offset",
+    "channelOffset": "{channel} vertical offset",
+    "divisions": "div",
+    "hold": "Hold",
+    "holdTitle": "Freeze the current capture",
+    "resume": "Resume",
+    "clear": "Clear",
+    "clearTitle": "Clear captured samples",
+    "auto": "Auto",
+    "autoTitle": "Automatically fit voltage and time scales",
+    "cursors": "Cursors",
+    "cursorsTitle": "Show time and voltage cursors",
+    "t1": "T1",
+    "t2": "T2",
+    "v1": "V1",
+    "v2": "V2",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "vpp": "Vpp",
+    "average": "Avg",
+    "frequency": "Freq",
+    "period": "Period",
+    "duty": "Duty"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

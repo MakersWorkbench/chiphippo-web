@@ -1,0 +1,12 @@
+.chiphippo-embed {
+  width: 100%;
+  min-height: 32rem;
+  aspect-ratio: 16 / 10;
+}
+
+.chiphippo-embed iframe {
+  display: block;
+  width: 100%;
+  min-height: 32rem;
+  border: 0;
+}

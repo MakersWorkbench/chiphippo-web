@@ -158,6 +158,14 @@
       "label": "Prüfspitze",
       "title": "Durchgangsprüfer — zum Hervorheben eines Netzes darüberfahren, zum Anheften klicken (P)"
     },
+    "meter": {
+      "label": "Multimeter",
+      "title": "Multimeter — rote und schwarze Messspitze an Schaltungspunkten platzieren"
+    },
+    "oscilloscope": {
+      "label": "Oszilloskop",
+      "title": "Zweikanal-Oszilloskop — CH1, CH2 und Masse platzieren"
+    },
     "analyzer": {
       "label": "Analysator",
       "title": "Logikanalysator — Signalverläufe über die Zeit aufzeichnen und ansehen (A)"
@@ -425,7 +433,8 @@
       "opamps": "Operationsverstärker",
       "regulators": "Spannungsregler",
       "relays": "Relais",
-      "audio": "Audio"
+      "audio": "Audio",
+      "sensors": "Sensoren"
     },
     "integration": {
       "output": "Ausgang",
@@ -699,6 +708,20 @@
     "pot": {
       "title": "Potentiometer"
     },
+    "sensor-ldr": { "title": "Fotowiderstand (LDR)" },
+    "sensor-ntc": { "title": "NTC-Temperatursensor (10 kΩ)" },
+    "sensor-joystick": { "title": "Analoges Joystickmodul" },
+    "sensor-sound": { "title": "Schallsensormodul" },
+    "sensor-flame": { "title": "Flammensensormodul" },
+    "sensor-gas": { "title": "Gassensormodul" },
+    "sensor-heartbeat": { "title": "Herzschlagsensormodul" },
+    "sensor-pir": { "title": "PIR-Bewegungssensor" },
+    "sensor-hall": { "title": "Hall-Sensormodul" },
+    "sensor-tilt": { "title": "Neigungsschalter" },
+    "sensor-reed": { "title": "Magnetischer Reedschalter" },
+    "sensor-vibration": { "title": "Vibrationsschalter" },
+    "sensor-encoder": { "title": "Drehgebermodul" },
+    "sensor-keypad": { "title": "4×4-Matrixtastatur" },
     "psu": {
       "title": "Netzteil"
     },
@@ -1554,6 +1577,71 @@
     "milliamps": "{amps} mA",
     "microamps": "{amps} µA",
     "amps": "{amps} A"
+  },
+  "multimeter": {
+    "title": "Multimeter",
+    "placeBoth": "Beide Messspitzen an Schaltungspunkten platzieren.",
+    "runSpice": "Schaltung mit Spice Lite starten, um Spannung zu messen.",
+    "redMinusBlack": "Spannung Rot minus Spannung Schwarz.",
+    "logicVoltage": "Nenn-Logikspannung (0/5 V); Spice Lite liefert die berechnete Spannung.",
+    "currentLead": "Strom wird am Bauteilanschluss unter einer Messspitze gemessen.",
+    "powerOff": "Passiver Ersatzwert; Schaltung vor der Messung stoppen.",
+    "beep": "PIEP",
+    "open": "Offener Stromkreis",
+    "red": "Rot",
+    "black": "Schwarz",
+    "place": "Messspitze setzen",
+    "mode": {
+      "voltage": "Gleichspannung",
+      "resistance": "Widerstand",
+      "continuity": "Durchgang",
+      "current": "Gleichstrom",
+      "capacitance": "Kapazität",
+      "inductance": "Induktivität"
+    }
+  },
+  "oscilloscope": {
+    "title": "Oszilloskop",
+    "screen": "Oszilloskop-Spannungsanzeige",
+    "timeScale": "Zeit pro Division",
+    "voltageScale": "Volt pro Division",
+    "trigger": "Trigger",
+    "triggerChannel": "Triggerkanal",
+    "triggerEdge": "Steigende oder fallende Triggerflanke",
+    "triggerLevel": "Triggerspannung",
+    "voltsUnit": "V",
+    "runHint": "Messspitzen platzieren und Schaltung starten.",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "ground": "Masse",
+    "channels": "Oszilloskopkanäle",
+    "channelEnabled": "{channel} aktiviert",
+    "coupling": "{channel}-Kopplung",
+    "dc": "DC",
+    "ac": "AC",
+    "offset": "Vertikaler Versatz",
+    "channelOffset": "Vertikaler Versatz {channel}",
+    "divisions": "Div",
+    "hold": "Halten",
+    "holdTitle": "Aktuelle Aufnahme einfrieren",
+    "resume": "Fortsetzen",
+    "clear": "Löschen",
+    "clearTitle": "Aufgenommene Samples löschen",
+    "auto": "Auto",
+    "autoTitle": "Spannungs- und Zeitskala automatisch anpassen",
+    "cursors": "Cursor",
+    "cursorsTitle": "Zeit- und Spannungscursor anzeigen",
+    "t1": "T1",
+    "t2": "T2",
+    "v1": "V1",
+    "v2": "V2",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "vpp": "Vss",
+    "average": "Mittel",
+    "frequency": "Freq",
+    "period": "Periode",
+    "duty": "Tastgrad"
   },
   "shortcuts": {
     "title": "Tastaturkürzel",

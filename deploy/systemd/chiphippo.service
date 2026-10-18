@@ -1,0 +1,25 @@
+[Unit]
+Description=Chip Hippo read-only web application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chiphippo
+Group=chiphippo
+WorkingDirectory=/opt/chiphippo/current
+EnvironmentFile=/etc/chiphippo/chiphippo.env
+ExecStart=/usr/bin/node /opt/chiphippo/current/server/chiphippo-server.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

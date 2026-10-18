@@ -112,6 +112,8 @@ fmt:
 		"web/**/*.{js,css,html}" \
 		"app/**/*.js" \
 		"../scripts/*.mjs" \
+		"../server/**/*.mjs" \
+		"../integrations/drupal/**/*.js" \
 		"../website/**/*.js" > /dev/null
 	@echo "--------------------------------"
 
@@ -121,6 +123,8 @@ fmt-check:
 		"web/**/*.{js,css,html}" \
 		"app/**/*.js" \
 		"../scripts/*.mjs" \
+		"../server/**/*.mjs" \
+		"../integrations/drupal/**/*.js" \
 		"../website/**/*.js"
 	@echo "--------------------------------"
 
@@ -135,6 +139,8 @@ lint:
 		"src/web/scripts/**/*.js" \
 		"src/app/**/*.js" \
 		"scripts/**/*.mjs" \
+		"server/**/*.mjs" \
+		"integrations/drupal/**/*.js" \
 		"website/**/*.js"
 	@echo "--------------------------------"
 

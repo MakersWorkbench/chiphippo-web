@@ -158,6 +158,14 @@
       "label": "Sonda",
       "title": "Sonda di continuità — passa sopra per evidenziare un net, clicca per fissarlo (P)"
     },
+    "meter": {
+      "label": "Multimetro",
+      "title": "Multimetro — posiziona le sonde rossa e nera sui punti del circuito"
+    },
+    "oscilloscope": {
+      "label": "Oscilloscopio",
+      "title": "Oscilloscopio a due canali — posiziona CH1, CH2 e massa"
+    },
     "analyzer": {
       "label": "Analizzatore",
       "title": "Analizzatore logico — registra e osserva le forme d'onda nel tempo (A)"
@@ -426,7 +434,8 @@
       "opamps": "Amplificatori operazionali",
       "regulators": "Regolatori",
       "relays": "Relè",
-      "audio": "Audio"
+      "audio": "Audio",
+      "sensors": "Sensori"
     },
     "integration": {
       "output": "Uscita",
@@ -700,6 +709,20 @@
     "pot": {
       "title": "Potenziometro"
     },
+    "sensor-ldr": { "title": "Fotoresistenza (LDR)" },
+    "sensor-ntc": { "title": "Sensore di temperatura NTC (10 kΩ)" },
+    "sensor-joystick": { "title": "Modulo joystick analogico" },
+    "sensor-sound": { "title": "Modulo sensore sonoro" },
+    "sensor-flame": { "title": "Modulo sensore di fiamma" },
+    "sensor-gas": { "title": "Modulo sensore di gas" },
+    "sensor-heartbeat": { "title": "Modulo sensore cardiaco" },
+    "sensor-pir": { "title": "Sensore di movimento PIR" },
+    "sensor-hall": { "title": "Modulo sensore a effetto Hall" },
+    "sensor-tilt": { "title": "Interruttore di inclinazione" },
+    "sensor-reed": { "title": "Interruttore magnetico reed" },
+    "sensor-vibration": { "title": "Interruttore di vibrazione" },
+    "sensor-encoder": { "title": "Modulo encoder rotativo" },
+    "sensor-keypad": { "title": "Tastierino a matrice 4×4" },
     "psu": {
       "title": "Alimentatore"
     },
@@ -1557,6 +1580,71 @@
     "milliamps": "{amps} mA",
     "microamps": "{amps} µA",
     "amps": "{amps} A"
+  },
+  "multimeter": {
+    "title": "Multimetro",
+    "placeBoth": "Posiziona entrambe le sonde sui punti del circuito.",
+    "runSpice": "Avvia il circuito con Spice Lite per misurare la tensione.",
+    "redMinusBlack": "Tensione della sonda rossa meno quella della sonda nera.",
+    "logicVoltage": "Tensione logica nominale (0/5 V); Spice Lite fornisce la tensione calcolata.",
+    "currentLead": "La corrente è letta nel terminale del componente sotto una sonda.",
+    "powerOff": "Valore passivo equivalente; arresta il circuito prima della misura.",
+    "beep": "BIP",
+    "open": "Circuito aperto",
+    "red": "Rossa",
+    "black": "Nera",
+    "place": "Posiziona sonda",
+    "mode": {
+      "voltage": "Tensione CC",
+      "resistance": "Resistenza",
+      "continuity": "Continuità",
+      "current": "Corrente CC",
+      "capacitance": "Capacità",
+      "inductance": "Induttanza"
+    }
+  },
+  "oscilloscope": {
+    "title": "Oscilloscopio",
+    "screen": "Display di tensione dell'oscilloscopio",
+    "timeScale": "Tempo per divisione",
+    "voltageScale": "Volt per divisione",
+    "trigger": "Trigger",
+    "triggerChannel": "Canale trigger",
+    "triggerEdge": "Alterna fronte di salita o discesa",
+    "triggerLevel": "Tensione di trigger",
+    "voltsUnit": "V",
+    "runHint": "Posiziona le sonde e avvia il circuito.",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "ground": "Massa",
+    "channels": "Canali oscilloscopio",
+    "channelEnabled": "{channel} attivo",
+    "coupling": "Accoppiamento {channel}",
+    "dc": "CC",
+    "ac": "CA",
+    "offset": "Offset verticale",
+    "channelOffset": "Offset verticale {channel}",
+    "divisions": "div",
+    "hold": "Mantieni",
+    "holdTitle": "Blocca l’acquisizione corrente",
+    "resume": "Riprendi",
+    "clear": "Cancella",
+    "clearTitle": "Cancella i campioni acquisiti",
+    "auto": "Auto",
+    "autoTitle": "Adatta automaticamente le scale",
+    "cursors": "Cursori",
+    "cursorsTitle": "Mostra i cursori di tempo e tensione",
+    "t1": "T1",
+    "t2": "T2",
+    "v1": "V1",
+    "v2": "V2",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "vpp": "Vpp",
+    "average": "Media",
+    "frequency": "Freq",
+    "period": "Periodo",
+    "duty": "Duty"
   },
   "shortcuts": {
     "title": "Scorciatoie da tastiera",

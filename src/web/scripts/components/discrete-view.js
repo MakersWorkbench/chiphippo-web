@@ -130,6 +130,90 @@ const BOXES = Object.freeze({
   // A 12 mm speaker on legs 0.3 in apart, its round body standing back over
   // the rows behind them (see buildSpeaker).
   speaker: Object.freeze({ minX: -0.9, minY: -4.2, width: 4.8, height: 4.9 }),
+  "sensor-ldr": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-ntc": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-pir": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-hall": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-tilt": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-reed": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-vibration": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 3.4,
+    height: 3.9,
+  }),
+  "sensor-sound": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 4.4,
+    height: 3.9,
+  }),
+  "sensor-flame": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 4.4,
+    height: 3.9,
+  }),
+  "sensor-gas": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 4.4,
+    height: 3.9,
+  }),
+  "sensor-heartbeat": Object.freeze({
+    minX: -0.7,
+    minY: -3.3,
+    width: 4.4,
+    height: 3.9,
+  }),
+  "sensor-joystick": Object.freeze({
+    minX: -0.7,
+    minY: -4.3,
+    width: 5.4,
+    height: 4.9,
+  }),
+  "sensor-encoder": Object.freeze({
+    minX: -0.7,
+    minY: -4.3,
+    width: 5.4,
+    height: 4.9,
+  }),
+  "sensor-keypad": Object.freeze({
+    minX: -0.7,
+    minY: -6.3,
+    width: 8.4,
+    height: 6.9,
+  }),
 });
 
 /**
@@ -2156,6 +2240,166 @@ function buildCharacterDisplay(svg, def, params) {
   svg.append(status);
 }
 
+/** Draw the compact breakout boards used by the direct-use sensor catalog. */
+function buildSensor(svg, def, params) {
+  const label = (className, x, y, value) => {
+    const node = svgEl("text", {
+      class: className,
+      x,
+      y,
+      "text-anchor": "middle",
+    });
+    node.textContent = value;
+    return node;
+  };
+  const pins = def.footprint?.offsets ?? [0, 1];
+  const last = pins.at(-1) ?? 1;
+  const top =
+    def.sensor.type === "keypad"
+      ? -6
+      : ["joystick", "encoder"].includes(def.sensor.type)
+        ? -4
+        : -3;
+  const body = svgEl("rect", {
+    class: `part-sensor-board part-sensor-board--${def.sensor.type}`,
+    x: -0.45,
+    y: top,
+    width: last + 0.9,
+    height: -top - 0.35,
+    rx: 0.22,
+  });
+  svg.append(body);
+  for (const x of pins) {
+    svg.append(
+      svgEl("line", {
+        class: "part-sensor-pin",
+        x1: x,
+        y1: -0.5,
+        x2: x,
+        y2: 0.2,
+      }),
+    );
+  }
+
+  if (def.sensor.type === "keypad") {
+    const keys = [
+      "1",
+      "2",
+      "3",
+      "A",
+      "4",
+      "5",
+      "6",
+      "B",
+      "7",
+      "8",
+      "9",
+      "C",
+      "*",
+      "0",
+      "#",
+      "D",
+    ];
+    const startX = last / 2 - 1.65;
+    for (const [index, key] of keys.entries()) {
+      const x = startX + (index % 4) * 1.1;
+      const y = top + 0.75 + Math.floor(index / 4) * 1.1;
+      svg.append(
+        svgEl("rect", {
+          class:
+            params.key === key
+              ? "part-sensor-key part-sensor-key--pressed"
+              : "part-sensor-key",
+          x: x - 0.4,
+          y: y - 0.4,
+          width: 0.8,
+          height: 0.8,
+          rx: 0.12,
+        }),
+        label("part-sensor-key-label", x, y + 0.15, key),
+      );
+    }
+  } else if (def.sensor.type === "encoder") {
+    const x = last / 2;
+    svg.append(
+      svgEl("circle", {
+        class: "part-sensor-encoder",
+        cx: x,
+        cy: -2.3,
+        r: 1.15,
+      }),
+      svgEl("line", {
+        class: "part-sensor-encoder-mark",
+        x1: x,
+        y1: -2.3,
+        x2: x + Math.sin(((params.phase ?? 0) * Math.PI) / 2) * 0.8,
+        y2: -2.3 - Math.cos(((params.phase ?? 0) * Math.PI) / 2) * 0.8,
+      }),
+      label("part-sensor-value", x, -0.72, `Phase ${params.phase ?? 0}`),
+    );
+  } else if (def.sensor.type === "joystick") {
+    const x = last / 2;
+    const px = ((params.x ?? 50) - 50) / 65;
+    const py = ((params.y ?? 50) - 50) / 65;
+    svg.append(
+      svgEl("circle", {
+        class: "part-sensor-joystick-base",
+        cx: x,
+        cy: -2.25,
+        r: 1.15,
+      }),
+      svgEl("circle", {
+        class: params.pressed
+          ? "part-sensor-joystick-knob part-sensor-joystick-knob--pressed"
+          : "part-sensor-joystick-knob",
+        cx: x + px,
+        cy: -2.25 + py,
+        r: 0.6,
+      }),
+    );
+  } else if (def.sensor.type === "resistive") {
+    svg.append(
+      svgEl("circle", {
+        class: "part-sensor-disc",
+        cx: last / 2,
+        cy: -1.75,
+        r: 0.72,
+      }),
+      label("part-sensor-label", last / 2, -1.58, def.sensor.label),
+    );
+  } else {
+    const active = params.active === true;
+    const level = Number.isFinite(params.level)
+      ? params.level
+      : active
+        ? 100
+        : 0;
+    svg.append(
+      svgEl("circle", {
+        class:
+          active || level >= (params.threshold ?? 50)
+            ? "part-sensor-indicator part-sensor-indicator--on"
+            : "part-sensor-indicator",
+        cx: last - 0.05,
+        cy: top + 0.55,
+        r: 0.18,
+      }),
+      label("part-sensor-label", last / 2, top + 1.55, def.sensor.label),
+      label("part-sensor-value", last / 2, top + 2.18, `${Math.round(level)}%`),
+    );
+  }
+  svg.append(
+    svgEl("rect", {
+      class: "part-sensor-hit",
+      x: -0.35,
+      y: top + 0.1,
+      width: last + 0.7,
+      height: -top - 0.6,
+      rx: 0.18,
+    }),
+  );
+}
+
 /**
  * Build a discrete part's SVG from its catalog def + params. Pure DOM
  * construction (unit-testable under jsdom).
@@ -2294,6 +2538,8 @@ export function buildDiscreteSvg(ref, params = {}) {
     if (turnsHalfLap(def, normalized)) turnHalfLap(svg, halfLapPivot(def, normalized)); // prettier-ignore
   } else if (def.speaker) {
     buildSpeaker(svg, normalized);
+  } else if (def.sensor) {
+    buildSensor(svg, def, normalized);
   } else if (def.contacts) {
     buildRelay(svg, def, normalized);
     if (turnsHalfLap(def, normalized)) turnHalfLap(svg, halfLapPivot(def, normalized)); // prettier-ignore

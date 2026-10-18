@@ -158,6 +158,14 @@
       "label": "Sonde",
       "title": "Sonde de continuité — survole pour mettre un net en évidence, clique pour l'épingler (P)"
     },
+    "meter": {
+      "label": "Multimètre",
+      "title": "Multimètre — placez les pointes rouge et noire sur le circuit"
+    },
+    "oscilloscope": {
+      "label": "Oscilloscope",
+      "title": "Oscilloscope à deux voies — placez CH1, CH2 et la masse"
+    },
     "analyzer": {
       "label": "Analyseur",
       "title": "Analyseur logique — enregistre et visualise les signaux dans le temps (A)"
@@ -426,7 +434,8 @@
       "opamps": "Amplificateurs opérationnels",
       "regulators": "Régulateurs",
       "relays": "Relais",
-      "audio": "Audio"
+      "audio": "Audio",
+      "sensors": "Capteurs"
     },
     "integration": {
       "output": "Sortie",
@@ -700,6 +709,20 @@
     "pot": {
       "title": "Potentiomètre"
     },
+    "sensor-ldr": { "title": "Photorésistance (LDR)" },
+    "sensor-ntc": { "title": "Capteur de température NTC (10 kΩ)" },
+    "sensor-joystick": { "title": "Module joystick analogique" },
+    "sensor-sound": { "title": "Module capteur sonore" },
+    "sensor-flame": { "title": "Module détecteur de flamme" },
+    "sensor-gas": { "title": "Module capteur de gaz" },
+    "sensor-heartbeat": { "title": "Module capteur cardiaque" },
+    "sensor-pir": { "title": "Détecteur de mouvement PIR" },
+    "sensor-hall": { "title": "Module capteur à effet Hall" },
+    "sensor-tilt": { "title": "Interrupteur d’inclinaison" },
+    "sensor-reed": { "title": "Interrupteur magnétique à lames" },
+    "sensor-vibration": { "title": "Interrupteur de vibration" },
+    "sensor-encoder": { "title": "Module encodeur rotatif" },
+    "sensor-keypad": { "title": "Clavier matriciel 4×4" },
     "psu": {
       "title": "Alimentation"
     },
@@ -1557,6 +1580,71 @@
     "milliamps": "{amps} mA",
     "microamps": "{amps} µA",
     "amps": "{amps} A"
+  },
+  "multimeter": {
+    "title": "Multimètre",
+    "placeBoth": "Placez les deux pointes sur des points du circuit.",
+    "runSpice": "Lancez le circuit avec Spice Lite pour mesurer la tension.",
+    "redMinusBlack": "Tension de la pointe rouge moins celle de la pointe noire.",
+    "logicVoltage": "Tension logique nominale (0/5 V) ; Spice Lite donne la tension calculée.",
+    "currentLead": "Le courant est lu dans la broche de composant sous une pointe.",
+    "powerOff": "Valeur passive équivalente ; arrêtez le circuit avant la mesure.",
+    "beep": "BIP",
+    "open": "Circuit ouvert",
+    "red": "Rouge",
+    "black": "Noire",
+    "place": "Placer la pointe",
+    "mode": {
+      "voltage": "Tension CC",
+      "resistance": "Résistance",
+      "continuity": "Continuité",
+      "current": "Courant CC",
+      "capacitance": "Capacité",
+      "inductance": "Inductance"
+    }
+  },
+  "oscilloscope": {
+    "title": "Oscilloscope",
+    "screen": "Affichage de tension de l'oscilloscope",
+    "timeScale": "Temps par division",
+    "voltageScale": "Volts par division",
+    "trigger": "Déclenchement",
+    "triggerChannel": "Voie de déclenchement",
+    "triggerEdge": "Basculer le front montant ou descendant",
+    "triggerLevel": "Tension de déclenchement",
+    "voltsUnit": "V",
+    "runHint": "Placez les sondes et lancez le circuit.",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "ground": "Masse",
+    "channels": "Canaux de l’oscilloscope",
+    "channelEnabled": "{channel} activé",
+    "coupling": "Couplage {channel}",
+    "dc": "CC",
+    "ac": "CA",
+    "offset": "Décalage vertical",
+    "channelOffset": "Décalage vertical {channel}",
+    "divisions": "div",
+    "hold": "Maintenir",
+    "holdTitle": "Geler l’acquisition actuelle",
+    "resume": "Reprendre",
+    "clear": "Effacer",
+    "clearTitle": "Effacer les échantillons capturés",
+    "auto": "Auto",
+    "autoTitle": "Ajuster automatiquement les échelles",
+    "cursors": "Curseurs",
+    "cursorsTitle": "Afficher les curseurs de temps et tension",
+    "t1": "T1",
+    "t2": "T2",
+    "v1": "V1",
+    "v2": "V2",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "vpp": "Vcc",
+    "average": "Moy",
+    "frequency": "Fréq",
+    "period": "Période",
+    "duty": "Rapport"
   },
   "shortcuts": {
     "title": "Raccourcis clavier",

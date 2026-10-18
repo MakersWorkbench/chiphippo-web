@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "74ls00-intro",
+  "title": "74LS00 NAND Gate Lab",
+  "description": "Explore the truth table of four two-input NAND gates.",
+  "desktopTitle": "NAND Gate Lab",
+  "demo": "74LS00",
+  "editable": true,
+  "ui": {
+    "showPartsTray": true,
+    "showProjectTabs": false,
+    "showOpenFull": true
+  }
+}

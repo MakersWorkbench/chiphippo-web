@@ -1,0 +1,7 @@
+name: Chip Hippo Embed
+type: module
+description: Responsive, origin-validated Chip Hippo lesson and project embeds.
+package: The Makers Workbench
+core_version_requirement: ^10.3 || ^11
+dependencies:
+  - drupal:filter

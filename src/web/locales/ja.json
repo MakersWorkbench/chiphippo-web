@@ -158,6 +158,14 @@
       "label": "プローブ",
       "title": "導通プローブ — ポインタを乗せるとネットを強調、クリックで固定します（P）"
     },
+    "meter": {
+      "label": "マルチメーター",
+      "title": "マルチメーター — 赤と黒のプローブを回路点に配置"
+    },
+    "oscilloscope": {
+      "label": "オシロスコープ",
+      "title": "2チャンネルオシロスコープ — CH1、CH2、GNDを配置"
+    },
     "analyzer": {
       "label": "アナライザ",
       "title": "ロジックアナライザ — 信号の波形を時間軸で記録して表示します（A）"
@@ -424,7 +432,8 @@
       "opamps": "オペアンプ",
       "regulators": "レギュレータ",
       "relays": "リレー",
-      "audio": "オーディオ"
+      "audio": "オーディオ",
+      "sensors": "センサー"
     },
     "integration": {
       "output": "出力",
@@ -698,6 +707,20 @@
     "pot": {
       "title": "ポテンショメータ"
     },
+    "sensor-ldr": { "title": "フォトレジスタ（LDR）" },
+    "sensor-ntc": { "title": "NTC温度センサー（10 kΩ）" },
+    "sensor-joystick": { "title": "アナログジョイスティックモジュール" },
+    "sensor-sound": { "title": "音センサーモジュール" },
+    "sensor-flame": { "title": "炎センサーモジュール" },
+    "sensor-gas": { "title": "ガスセンサーモジュール" },
+    "sensor-heartbeat": { "title": "心拍センサーモジュール" },
+    "sensor-pir": { "title": "PIR人感センサー" },
+    "sensor-hall": { "title": "ホール効果センサーモジュール" },
+    "sensor-tilt": { "title": "傾斜スイッチ" },
+    "sensor-reed": { "title": "磁気リードスイッチ" },
+    "sensor-vibration": { "title": "振動スイッチ" },
+    "sensor-encoder": { "title": "ロータリーエンコーダーモジュール" },
+    "sensor-keypad": { "title": "4×4マトリクスキーパッド" },
     "psu": {
       "title": "電源"
     },
@@ -1529,6 +1552,71 @@
     "milliamps": "{amps} mA",
     "microamps": "{amps} µA",
     "amps": "{amps} A"
+  },
+  "multimeter": {
+    "title": "マルチメーター",
+    "placeBoth": "両方のプローブを回路点に配置してください。",
+    "runSpice": "電圧測定には Spice Lite で回路を実行してください。",
+    "redMinusBlack": "赤プローブ電圧から黒プローブ電圧を引いた値です。",
+    "logicVoltage": "公称ロジック電圧 (0/5 V)。Spice Lite では計算電圧を表示します。",
+    "currentLead": "プローブ下の部品リードを流れる電流を表示します。",
+    "powerOff": "等価受動値です。測定前に回路を停止してください。",
+    "beep": "ビープ",
+    "open": "開回路",
+    "red": "赤",
+    "black": "黒",
+    "place": "プローブを配置",
+    "mode": {
+      "voltage": "直流電圧",
+      "resistance": "抵抗",
+      "continuity": "導通",
+      "current": "直流電流",
+      "capacitance": "静電容量",
+      "inductance": "インダクタンス"
+    }
+  },
+  "oscilloscope": {
+    "title": "オシロスコープ",
+    "screen": "オシロスコープ電圧表示",
+    "timeScale": "時間/div",
+    "voltageScale": "電圧/div",
+    "trigger": "トリガー",
+    "triggerChannel": "トリガーチャンネル",
+    "triggerEdge": "立ち上がり・立ち下がりトリガー切替",
+    "triggerLevel": "トリガー電圧",
+    "voltsUnit": "V",
+    "runHint": "プローブを配置して回路を実行してください。",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "ground": "GND",
+    "channels": "オシロスコープチャンネル",
+    "channelEnabled": "{channel} 有効",
+    "coupling": "{channel} 結合",
+    "dc": "DC",
+    "ac": "AC",
+    "offset": "垂直オフセット",
+    "channelOffset": "{channel} 垂直オフセット",
+    "divisions": "div",
+    "hold": "保持",
+    "holdTitle": "現在の波形を保持",
+    "resume": "再開",
+    "clear": "クリア",
+    "clearTitle": "取得サンプルを消去",
+    "auto": "自動",
+    "autoTitle": "電圧と時間スケールを自動調整",
+    "cursors": "カーソル",
+    "cursorsTitle": "時間と電圧カーソルを表示",
+    "t1": "T1",
+    "t2": "T2",
+    "v1": "V1",
+    "v2": "V2",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "vpp": "Vpp",
+    "average": "平均",
+    "frequency": "周波数",
+    "period": "周期",
+    "duty": "デューティ"
   },
   "shortcuts": {
     "title": "キーボードショートカット",

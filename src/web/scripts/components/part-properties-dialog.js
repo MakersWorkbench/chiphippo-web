@@ -443,17 +443,22 @@ function buildRange(field, value, onChange) {
       el("output", { class: "properties-range-end properties-range-end--end" }),
     ]);
   }
-  const percent = (v) =>
-    formatNumber(field.valuePercent ? v / 100 : (v - min) / (max - min || 1), {
-      style: "percent",
-    });
+  const valueText = (v) => {
+    if (typeof field.valueSuffix === "string") {
+      return `${formatNumber(v)}${field.valueSuffix}`;
+    }
+    return formatNumber(
+      field.valuePercent ? v / 100 : (v - min) / (max - min || 1),
+      { style: "percent" },
+    );
+  };
   const readout = el("output", {
     class: "properties-range-value",
-    text: percent(start),
+    text: valueText(start),
   });
   input.addEventListener("input", () => {
     const v = Number(input.value);
-    readout.textContent = percent(v);
+    readout.textContent = valueText(v);
     input.setAttribute("aria-valuetext", readout.textContent);
     onChange(field.key, v);
   });

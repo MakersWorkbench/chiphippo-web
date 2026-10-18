@@ -173,6 +173,21 @@ const PROBE_SVG =
   '<line x1="20" y1="4" x2="13" y2="11"/>' +
   '<path d="M20 4c1-1.5 3-1.5 3 0"/></svg>';
 
+/** Compact digital multimeter: display, two probe sockets and trailing leads. */
+const METER_SVG =
+  ICON_SVG_OPEN +
+  '<rect x="3" y="2" width="14" height="18" rx="2"/>' +
+  '<rect x="6" y="5" width="8" height="5" rx="1"/>' +
+  '<circle cx="8" cy="15" r="1.2"/><circle cx="13" cy="15" r="1.2"/>' +
+  '<path d="M8 16.2v3.5M13 16.2c0 3 3 3 5 1.5l3-2.5"/></svg>';
+
+/** Two-channel oscilloscope: graticule and two offset traces. */
+const OSCILLOSCOPE_SVG =
+  ICON_SVG_OPEN +
+  '<rect x="2" y="4" width="20" height="16" rx="2"/>' +
+  '<path d="M5 12h3l2-5 3 10 2-5h4"/>' +
+  '<path d="M5 15h4l2-3 2 3h6" opacity=".65"/></svg>';
+
 /** Logic-analyzer icon for the Analyzer toolbar toggle: a recorded digital
  * waveform — what the panel draws. */
 const ANALYZER_SVG =
@@ -302,7 +317,7 @@ function buildHeader() {
 
   const icon = document.createElement("img");
   icon.className = "app-header-icon";
-  icon.src = "chiphippo-icon.svg";
+  icon.src = "/app/chiphippo-icon.svg";
   icon.width = 28;
   icon.height = 28;
   icon.alt = "";
@@ -861,6 +876,8 @@ function createRelabeller({
       [buttons.routeBtn, "route", null],
       [buttons.fadeBtn, "fade", null],
       [buttons.probeBtn, "probe", null],
+      [buttons.meterBtn, "meter", null],
+      [buttons.oscilloscopeBtn, "oscilloscope", null],
       [buttons.scopeBtn, "analyzer", { mod: MOD_KEY }],
       [buttons.guideBtn, "bom", { mod: MOD_KEY }],
     ]) {
@@ -1005,6 +1022,20 @@ function buildDeskToolPill({
     t("toolbar.probe.title"),
     () => controller.toggleProbe(),
   );
+  const meter = iconSegment(
+    METER_SVG,
+    t("toolbar.meter.label"),
+    t("toolbar.meter.title"),
+    () => controller.toggleMultimeter(),
+  );
+  meter.classList.add("toolbar-meter");
+  const oscilloscope = iconSegment(
+    OSCILLOSCOPE_SVG,
+    t("toolbar.oscilloscope.label"),
+    t("toolbar.oscilloscope.title"),
+    () => controller.toggleOscilloscope(),
+  );
+  oscilloscope.classList.add("toolbar-oscilloscope");
   // Logic analyzer. No `mod` to interpolate: it is a BARE `A`, like the desk's
   // other tool letters — ⌘A is Select All, which the native Edit menu owns.
   const scope = iconSegment(
@@ -1076,6 +1107,8 @@ function buildDeskToolPill({
     route,
     fade,
     probe,
+    meter,
+    oscilloscope,
     scope,
     fit,
     guide,
@@ -1094,6 +1127,8 @@ function buildDeskToolPill({
       route,
       fade,
       probe,
+      meter,
+      oscilloscope,
       scope,
       fit,
       guide,
@@ -1815,6 +1850,8 @@ async function init() {
   let busBtn = null;
   let busWidth = null; // the Bus button's width badge: readout AND picker
   let probeBtn = null;
+  let meterBtn = null;
+  let oscilloscopeBtn = null;
   let routeBtn = null; // the one-shot Auto-route action
   let fadeBtn = null; // the "Fade wires" toggle
   let modeBtn = null; // the Breadboard ⇄ Schematic segment
@@ -1838,6 +1875,14 @@ async function init() {
     probeBtn?.classList.toggle("toolbar-btn--active", armed);
     probeBtn?.setAttribute("aria-pressed", String(armed));
   };
+  const onMeterStateChange = ({ visible }) => {
+    meterBtn?.classList.toggle("toolbar-btn--active", visible);
+    meterBtn?.setAttribute("aria-pressed", String(visible));
+  };
+  const onOscilloscopeStateChange = ({ visible }) => {
+    oscilloscopeBtn?.classList.toggle("toolbar-btn--active", visible);
+    oscilloscopeBtn?.setAttribute("aria-pressed", String(visible));
+  };
   // Fading the wires is a view preference, so it persists like the panels do —
   // and the button follows whether the toolbar or H flipped it.
   const onWireFadeChange = ({ faded }) => {
@@ -1859,6 +1904,8 @@ async function init() {
     // the badge's own picker — arrives here.
     onBusNameChange: (name) => busWidth?.setName(name),
     onProbeStateChange,
+    onMeterStateChange,
+    onOscilloscopeStateChange,
     onWireFadeChange,
     // Probe context-menu → pin the net as an analyzer channel (and reveal it).
     onAddNetToAnalyzer: (address, opts) => {
@@ -2008,6 +2055,7 @@ async function init() {
   const { pill: filePill, buttons: fileButtons } = buildFilePill(
     () => workspace,
   );
+  filePill.classList.add("toolbar-pill--file");
 
   // DESKTOP actions have no toolbar button at all: Add / Duplicate / Import /
   // Export / Properties / Delete are the application's **Desktop** menu
@@ -2065,7 +2113,8 @@ async function init() {
     onAutoRoute: (debug) => autoRoute(debug),
   });
   const toolPill = deskTools.pill;
-  ({ wire: wireBtn, wireDot, bus: busBtn, busWidth, route: routeBtn, fade: fadeBtn, probe: probeBtn, scope: scopeBtn, guide: guideBtn, mode: modeBtn, view3d: view3dBtn, ai: aiBtn } = deskTools.buttons); // prettier-ignore
+  toolPill.classList.add("toolbar-pill--tools");
+  ({ wire: wireBtn, wireDot, bus: busBtn, busWidth, route: routeBtn, fade: fadeBtn, probe: probeBtn, meter: meterBtn, oscilloscope: oscilloscopeBtn, scope: scopeBtn, guide: guideBtn, mode: modeBtn, view3d: view3dBtn, ai: aiBtn } = deskTools.buttons); // prettier-ignore
   const updateLocateIcon = deskTools.relabelFit;
   toolbar.append(toolPill);
   // The segments that mirror state the app already holds, synced once now that
@@ -2613,7 +2662,7 @@ async function init() {
     fileButtons,
     toolPill,
     transportPill,
-    buttons: { wireBtn, busBtn, routeBtn, fadeBtn, probeBtn, scopeBtn, guideBtn, aiBtn, stepBtn, speedBtn, pauseBtn }, // prettier-ignore
+    buttons: { wireBtn, busBtn, routeBtn, fadeBtn, probeBtn, meterBtn, oscilloscopeBtn, scopeBtn, guideBtn, aiBtn, stepBtn, speedBtn, pauseBtn }, // prettier-ignore
     panels: [
       palette,
       projectTabs,

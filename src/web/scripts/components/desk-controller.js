@@ -136,6 +136,8 @@ import {
 } from "../model/signals.js";
 import { SimOverlay } from "./sim-overlay.js";
 import { ProbeInspector } from "./probe-inspector.js";
+import { Multimeter } from "./multimeter.js";
+import { Oscilloscope } from "./oscilloscope.js";
 import { WireTools } from "./wire-tools.js";
 import { BusTools } from "./bus-tools.js";
 import { beginPointerGesture, releaseWorld } from "./pointer-gesture.js";
@@ -320,6 +322,8 @@ export class DeskController {
   #sel; // DeskSelection: what is picked, plus the outline + ride-preview
   #place; // DeskPlacement: every ghost, the copy buffers, and the drops
   #probe; // ProbeInspector: netlist highlight + net-status readout
+  #meter; // Multimeter: two runtime probes + passive/live readings
+  #oscilloscope; // Two-channel voltage scope + three runtime probes
   // Simulation (Feature 90): editing is locked while running; live net levels
   // arrive over chiphippo:sim-state and drive LEDs / chip badges / probe tint.
   #editingLocked = false;
@@ -374,6 +378,10 @@ export class DeskController {
    *   the toolbar button + swatch strip).
    * @param {(state: {armed: boolean}) => void} [opts.onProbeStateChange] -
    *   probe-tool arm/disarm (drives the toolbar probe button).
+   * @param {(state: {visible: boolean, armed: boolean}) => void}
+   *   [opts.onMeterStateChange] - multimeter panel/probe state.
+   * @param {(state: {visible: boolean, armed: boolean}) => void}
+   *   [opts.onOscilloscopeStateChange] - oscilloscope panel/probe state.
    * @param {(state: {faded: boolean}) => void} [opts.onWireFadeChange] - the
    *   wire fade toggled (drives the toolbar button + persists the setting);
    *   fires on every setWiresFaded, including the initial apply at startup.
@@ -433,6 +441,8 @@ export class DeskController {
     onBusStateChange,
     onBusNameChange,
     onProbeStateChange,
+    onMeterStateChange,
+    onOscilloscopeStateChange,
     onWireFadeChange,
     onAddNetToAnalyzer,
     onEditRefused,
@@ -733,6 +743,25 @@ export class DeskController {
       },
     });
 
+    this.#meter = new Multimeter({
+      doc: deskDoc,
+      viewport,
+      overlay: this.#layers.overlay,
+      simOverlay: this.#simOverlay,
+      netlist,
+      hitTest: (world) => this.#hitTest(world),
+      addressWorld: (address) => this.#addressWorld(address),
+      onStateChange: onMeterStateChange,
+    });
+
+    this.#oscilloscope = new Oscilloscope({
+      viewport,
+      overlay: this.#layers.overlay,
+      hitTest: (world) => this.#hitTest(world),
+      addressWorld: (address) => this.#addressWorld(address),
+      onStateChange: onOscilloscopeStateChange,
+    });
+
     // Wire subsystem (Feature 50): the click-click tool + endpoint/whole-wire
     // drags. It shares the controller's `#mode` through this host so the
     // viewport dispatcher's mode checks are unchanged.
@@ -820,12 +849,14 @@ export class DeskController {
 
     // A pinned net follows its anchor through edits, switch flips, and each
     // sim tick (the probe self-guards when nothing is pinned).
-    window.addEventListener("chiphippo:doc-changed", () =>
-      this.#probe.refreshPinned(),
-    );
-    window.addEventListener("chiphippo:part-state", () =>
-      this.#probe.refreshPinned(),
-    );
+    window.addEventListener("chiphippo:doc-changed", () => {
+      this.#probe.refreshPinned();
+      this.#meter.refresh();
+    });
+    window.addEventListener("chiphippo:part-state", () => {
+      this.#probe.refreshPinned();
+      this.#meter.refresh();
+    });
     window.addEventListener("chiphippo:sim-state", (e) => {
       this.#simOverlay.apply(e.detail);
       this.#viewport.classList.toggle(
@@ -833,6 +864,7 @@ export class DeskController {
         !this.#simOverlay.glowing,
       );
       this.#probe.refreshPinned(); // re-tint a pinned net
+      this.#meter.refresh();
     });
 
     for (const board of this.#doc.boards) this.#mountBoard(board);
@@ -1758,6 +1790,8 @@ export class DeskController {
   }
 
   armWireTool() {
+    this.#meter.disarmPlacement();
+    this.#oscilloscope.disarmPlacement();
     this.#wire.arm();
   }
 
@@ -1766,6 +1800,8 @@ export class DeskController {
   }
 
   toggleWireTool() {
+    this.#meter.disarmPlacement();
+    this.#oscilloscope.disarmPlacement();
     this.#wire.toggle();
   }
 
@@ -1950,6 +1986,8 @@ export class DeskController {
   }
 
   armBusTool() {
+    this.#meter.disarmPlacement();
+    this.#oscilloscope.disarmPlacement();
     this.#bus.arm();
   }
 
@@ -1958,6 +1996,8 @@ export class DeskController {
   }
 
   toggleBusTool() {
+    this.#meter.disarmPlacement();
+    this.#oscilloscope.disarmPlacement();
     this.#bus.toggle();
   }
 
@@ -1976,6 +2016,8 @@ export class DeskController {
 
   /** Arm probe mode: hover highlights a net, click pins it. */
   armProbe() {
+    this.#meter.disarmPlacement();
+    this.#oscilloscope.disarmPlacement();
     this.#probe.arm();
   }
 
@@ -1984,7 +2026,29 @@ export class DeskController {
   }
 
   toggleProbe() {
+    this.#meter.disarmPlacement();
+    this.#oscilloscope.disarmPlacement();
     this.#probe.toggle();
+  }
+
+  toggleMultimeter() {
+    this.cancelPlacement();
+    this.disarmWireTool();
+    this.disarmBusTool();
+    this.disarmProbe();
+    this.#oscilloscope.disarmPlacement();
+    this.deselect();
+    this.#meter.toggle();
+  }
+
+  toggleOscilloscope() {
+    this.cancelPlacement();
+    this.disarmWireTool();
+    this.disarmBusTool();
+    this.disarmProbe();
+    this.#meter.disarmPlacement();
+    this.deselect();
+    this.#oscilloscope.toggle();
   }
 
   /** Centre + scale the camera so every board, part, and wire fits on
@@ -3110,6 +3174,9 @@ export class DeskController {
         this.#cancelDragGesture();
         return true;
       }
+      // Instrument leads are the most recent explicit targeting modes.
+      if (this.#oscilloscope.handleEscape()) return true;
+      if (this.#meter.handleEscape()) return true;
       // First Esc unpins a pinned net; the next disarms the probe. Then the
       // wire tool (cancel a pending wire, else disarm).
       if (this.#probe.handleEscape()) return true;
@@ -3135,7 +3202,7 @@ export class DeskController {
       this.toggleProbe();
       return true;
     }
-    // M disarms whichever of the wire/bus/probe tools is currently armed — a
+    // M disarms whichever of the wire/bus/probe/meter tools is currently armed — a
     // single "put the tools away" key. Stays available while running too (the
     // probe does), so it can turn that off even while the circuit is live.
     if ((e.key === "m" || e.key === "M") && bareKey) {
@@ -3150,6 +3217,14 @@ export class DeskController {
       }
       if (this.probeArmed) {
         this.disarmProbe();
+        handled = true;
+      }
+      if (this.#meter.armed) {
+        this.#meter.disarmPlacement();
+        handled = true;
+      }
+      if (this.#oscilloscope.armed) {
+        this.#oscilloscope.disarmPlacement();
         handled = true;
       }
       return handled;
@@ -3405,7 +3480,14 @@ export class DeskController {
    */
   #onBoardPointerDown(id, e) {
     if (e.button !== 0) return; // middle = pan (DeskView), right = menu
-    if (this.#mode || this.#probe.armed || this.#editingLocked) return;
+    if (
+      this.#mode ||
+      this.#probe.armed ||
+      this.#meter.armed ||
+      this.#oscilloscope.armed ||
+      this.#editingLocked
+    )
+      return;
     if (this.#press(e, { kind: "board", id })) e.stopPropagation();
   }
 
@@ -3582,7 +3664,13 @@ export class DeskController {
   #onPartPointerDown(id, e) {
     if (e.button !== 0) return;
     const toggling = isToggleSelectEvent(e, IS_MAC);
-    if (this.#mode || this.#probe.armed) return; // no part drags while probing
+    if (
+      this.#mode ||
+      this.#probe.armed ||
+      this.#meter.armed ||
+      this.#oscilloscope.armed
+    )
+      return; // no part drags while targeting an instrument probe
     // While running, only click-toggle parts stay interactive (click to
     // flip); every other part is frozen in place.
     if (this.#editingLocked) {
@@ -5950,6 +6038,8 @@ export class DeskController {
     this.#lastDown = { x: e.clientX, y: e.clientY };
     this.#pressWentThrough = false;
     if (this.#mode || e.button !== 0) return; // busy (tool/drag) or non-left
+    if (this.#meter.armed) return; // the click seats the active meter lead
+    if (this.#oscilloscope.armed) return; // seats CH1, CH2 or ground
     if (this.#editingLocked) {
       // While RUNNING a wire is frozen and a switch is the one thing a click
       // is for — but the wires draw ABOVE the parts, so a lead laid across a
@@ -6031,7 +6121,9 @@ export class DeskController {
       !this.placementArmed &&
       m?.kind !== "wire" &&
       m?.kind !== "bus" &&
-      !this.#probe.armed
+      !this.#probe.armed &&
+      !this.#meter.armed &&
+      !this.#oscilloscope.armed
     )
       return;
     // A pan that started while armed still ends in a click — suppress it.
@@ -6044,6 +6136,14 @@ export class DeskController {
     }
     if (this.#probe.armed) {
       this.#probe.commitClick(this.#deskView.worldFromEvent(e));
+      return;
+    }
+    if (this.#meter.armed) {
+      this.#meter.commitClick(this.#deskView.worldFromEvent(e));
+      return;
+    }
+    if (this.#oscilloscope.armed) {
+      this.#oscilloscope.commitClick(this.#deskView.worldFromEvent(e));
       return;
     }
     if (m.kind === "wire") {

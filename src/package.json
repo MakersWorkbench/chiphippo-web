@@ -16,6 +16,9 @@
   "scripts": {
     "start": "electron app/main.js",
     "dev": "electron app/main.js --dev",
+    "web:serve": "node ../server/chiphippo-server.mjs",
+    "web:build": "node ../scripts/build-web.mjs",
+    "web:test-server": "node --test ../server/tests/*.test.mjs",
     "fmt": "prettier --write \"web/**/*.{js,css,html}\" \"app/**/*.js\"",
     "lint": "eslint \"web/scripts/**/*.js\" \"app/**/*.js\"",
     "test": "node --test --test-timeout=30000 \"app/tests/**/*.test.js\" \"web/scripts/tests/**/*.test.js\"",

@@ -1,0 +1,22 @@
+<?php
+
+/**
+ * @file
+ * Theme integration for Chip Hippo embeds.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function chiphippo_embed_theme($existing, $type, $theme, $path): array {
+  return [
+    'chiphippo_embed' => [
+      'variables' => [
+        'src' => NULL,
+        'title' => NULL,
+        'height' => 720,
+      ],
+      'template' => 'chiphippo-embed',
+    ],
+  ];
+}

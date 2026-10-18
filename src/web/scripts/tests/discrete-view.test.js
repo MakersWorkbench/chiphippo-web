@@ -47,6 +47,33 @@ test("buildDiscreteSvg: toggle button cap reflects params.on", () => {
   assert.ok(on.querySelector(".part-toggle-cap--on"));
 });
 
+test("buildDiscreteSvg: sensors use native module artwork and live state", () => {
+  resetDom();
+  const gas = buildDiscreteSvg("sensor-gas", {
+    level: 75,
+    threshold: 50,
+  });
+  assert.ok(gas.querySelector(".part-sensor-board--analog"));
+  assert.equal(gas.querySelector(".part-sensor-label").textContent, "GAS");
+  assert.equal(gas.querySelector(".part-sensor-value").textContent, "75%");
+  assert.ok(gas.querySelector(".part-sensor-indicator--on"));
+
+  const joystick = buildDiscreteSvg("sensor-joystick", {
+    x: 100,
+    y: 0,
+    pressed: true,
+  });
+  assert.ok(joystick.querySelector(".part-sensor-joystick-knob--pressed"));
+
+  const encoder = buildDiscreteSvg("sensor-encoder", { phase: 2 });
+  assert.ok(encoder.querySelector(".part-sensor-encoder"));
+  assert.match(encoder.textContent, /Phase 2/);
+
+  const keypad = buildDiscreteSvg("sensor-keypad", { key: "6" });
+  assert.equal(keypad.querySelectorAll(".part-sensor-key").length, 16);
+  assert.equal(keypad.querySelectorAll(".part-sensor-key--pressed").length, 1);
+});
+
 test("buildDiscreteSvg: LED color class + flip mirrors the cathode flat", () => {
   resetDom();
   const green = buildDiscreteSvg("led", { color: "green" });

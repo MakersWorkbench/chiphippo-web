@@ -1,9 +1,9 @@
 # Chip Hippo — A free, offline, open-source breadboard designer & simulator
 
-[![CI](https://github.com/jfigge/chiphippo/actions/workflows/ci.yml/badge.svg)](https://github.com/jfigge/chiphippo/actions/workflows/ci.yml)
+[![CI](https://github.com/MakersWorkbench/chiphippo/actions/workflows/ci.yml/badge.svg)](https://github.com/MakersWorkbench/chiphippo/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
-[![GitHub stars](https://img.shields.io/github/stars/jfigge/chiphippo?style=social)](https://github.com/jfigge/chiphippo/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/MakersWorkbench/chiphippo?style=social)](https://github.com/MakersWorkbench/chiphippo/stargazers)
 
 Design and simulate **74LS TTL and CD4000 CMOS logic circuits on virtual
 solderless breadboards**, laid out on an infinitely pannable, zoomable desk.
@@ -28,6 +28,99 @@ with its siblings [Rest Hippo](https://github.com/jfigge/resthippo) and Port Hip
 📦 **[Download for macOS, Windows &amp; Linux](https://chiphippo.com/#downloads)** &nbsp;·&nbsp;
 🌐 **[chiphippo.com](https://chiphippo.com)** &nbsp;·&nbsp;
 📖 **[User guide](https://chiphippo.com/docs/)** ([PDF](docs/chip-hippo-user-guide.pdf))
+
+## TMWB browser edition
+
+This fork contains the self-hosted browser port built for **The Makers
+Workbench Breadboard Lab**. It runs the existing editor and both simulation
+engines directly in a browser, without Electron and without moving simulation
+work to the server.
+
+### What the web port adds
+
+- **Full browser workbench** at `/app/`, sharing the desktop application's
+  breadboards, catalog, editor, simulation engines, undo/redo, documentation,
+  custom chips and memory model. A browser platform adapter replaces Electron
+  IPC with IndexedDB, `fetch`, browser file pickers and downloads.
+- **Portable projects** using the same `.chiphippo` extension. Visitors can
+  export a project to their own computer and import it when they return.
+  Browser-local IndexedDB holds settings, recovery data, memory images and the
+  current working copy, but the Breadboard Lab server has no project-write API
+  and stores no visitor projects.
+- **Article-ready interactive embeds.** `/embed/:lesson` loads a bundled,
+  versioned lesson; `/p/:id` and `/embed/project/:id` load a curated public
+  `.chiphippo` project. Embedded readers can run, pause, edit, experiment,
+  reset and open the circuit in the full workbench.
+- **Safe iframe integration** through a versioned, origin-checked
+  `postMessage` protocol. Embeds report ready/loaded/dirty/run/height state and
+  accept only known commands from an explicitly allowed parent origin.
+- **Drupal publishing integration.** The included Drupal 10.3/11 text-filter
+  module turns lesson or Media Library project tokens into responsive embeds.
+  Only an authenticated Drupal editor with Media Library permission can
+  publish curated projects; public readers never receive a Drupal credential
+  or a save-to-Drupal capability.
+- **A draggable multimeter** with visible red and black probes and DC voltage,
+  DC current, resistance, continuity, capacitance and inductance modes. It uses
+  live simulator data, understands passive series/parallel networks, works in
+  embeds, and intentionally omits ESR because simulated capacitors are ideal.
+- **A draggable two-channel oscilloscope** with CH1, CH2 and common-ground
+  probes; adjustable time/div and volts/div; DC and display-only AC coupling;
+  channel offsets; rising/falling edge trigger; Auto, Hold and Clear; automatic
+  peak-to-peak, average, frequency, period and duty-cycle measurements; and
+  independent time/voltage cursors with live delta readouts. A bundled
+  `oscilloscope-demo` embed exercises the instrument.
+- **Fourteen no-firmware sensors and controls**, electrically simulated rather
+  than added as decorative artwork: photoresistor (LDR), 10 kΩ NTC thermistor,
+  analog joystick, quadrature rotary encoder, 4×4 matrix keypad, sound sensor,
+  flame sensor, gas sensor, heartbeat sensor, PIR motion sensor, Hall-effect
+  sensor, tilt switch, magnetic reed switch and vibration switch. Analog
+  modules expose adjustable analog dividers and digital thresholds; passive
+  contacts, pull-ups and quadrature phases connect to ordinary logic, 555s,
+  comparators and counters without a programmable board.
+- **Curated lesson fixtures**, including the NAND-gate introduction and the
+  oscilloscope clock lab, with compact embed chrome and lesson-specific reset.
+- **Production packaging** with a fingerprinted static build, dependency-free
+  read-only Node service, health endpoint, Nginx configuration, systemd unit,
+  CSP/frame policy, immutable release layout and rollback instructions for an
+  Oracle Free Tier ARM64 server.
+- **Responsive browser chrome and security boundaries.** Unsupported native
+  desktop services are explicit inert adapters instead of browser crashes;
+  project imports are size-limited, curated project sources are origin and
+  extension restricted, and all circuit simulation remains client-side.
+
+Protocol-driven peripherals that are only useful after firmware speaks I²C,
+SPI, one-wire or a proprietary data protocol—such as an OLED/TFT, DHT22, RTC,
+SD card, IMU or NeoPixel chain—are intentionally not added to this
+fundamental-logic lab. Existing Chip Hippo parts already cover pushbuttons,
+switch banks, potentiometers, LEDs, displays, relays and audio output.
+
+### Run and build the browser edition
+
+From `src/`:
+
+```bash
+npm ci
+npm run web:serve       # http://127.0.0.1:4173/app/
+npm run web:build       # fingerprinted production tree in dist/web
+npm run web:test-server # server and route tests
+```
+
+Useful local routes include:
+
+```text
+http://127.0.0.1:4173/app/
+http://127.0.0.1:4173/embed/74ls00-intro
+http://127.0.0.1:4173/embed/oscilloscope-demo
+http://127.0.0.1:4173/api/health
+```
+
+Architecture, Oracle ARM deployment, and Drupal integration are documented in
+[`docs/architecture/web-port.md`](docs/architecture/web-port.md),
+[`deploy/README.md`](deploy/README.md), and
+[`integrations/drupal/README.md`](integrations/drupal/README.md). Instrument
+operation is documented in
+[`src/web/docs/multimeter.md`](src/web/docs/multimeter.md) and
+[`src/web/docs/oscilloscope.md`](src/web/docs/oscilloscope.md).
 
 ## Features
 
@@ -54,13 +147,16 @@ with its siblings [Rest Hippo](https://github.com/jfigge/resthippo) and Port Hip
   `/RFSH` and `/WAIT` mean something. The tray shows one family or both; each
   family keeps its own rules (supply range, a floating CMOS input reading
   unknown, fan-out between families).
-- **30 components** — slide switches, momentary and toggle push buttons,
+- **54 components** — slide switches, momentary and toggle push buttons,
   1/2/4/8-position DIP switch banks, resistors (any value, drawn with real colour
   bands), bussed resistor arrays and a trimmer potentiometer, ceramic and
   electrolytic capacitors, inductors, diodes and Zeners, NPN/PNP transistors and
   N/P-channel MOSFETs, LEDs in five colours, 8-segment digits and bar graphs,
-  HD44780 character LCDs (16×2, 20×4), oscillator cans, power supplies (3 / 5 /
-  9 / 12 / 15 V) and clock sources (1 Hz – 1 kHz, or manual).
+  HD44780 character LCDs (16×2, 20×4), oscillator cans, regulators, a relay,
+  speaker and electronic load, power supplies (3 / 5 / 9 / 12 / 15 V), clock
+  sources (1 Hz – 1 kHz, or manual), and fourteen direct-use sensors and
+  controls: LDR, NTC thermistor, joystick, rotary encoder, 4×4 keypad, sound,
+  flame, gas, heartbeat, PIR, Hall, tilt, reed and vibration parts.
 - **Wiring** — click-click jumper wires in eight colours, laid **direct** (a
   sagging hole-to-hole curve) or **routed** through waypoints, or **auto-routed**
   around the parts in one click. Buses lay a whole `D[7:0]` run in one click and
@@ -89,11 +185,15 @@ with its siblings [Rest Hippo](https://github.com/jfigge/resthippo) and Port Hip
   and inductors with flyback kick. Graded against **ngspice** — within 2 % in
   every area it models.
 - **Instrumentation** — a connectivity **probe** that lights up an entire net
-  across boards (with volts and amps under Spice Lite), a **logic analyzer**
-  recording waveforms, hex bus lanes and voltage traces with cursors and a Δ
-  readout, per-part **pin-assignment windows** carrying hand-cut datasheet crops
-  (and a button through to the manufacturer PDF), and a **build guide** with a
-  bill of materials, a numbered wire cutting list, and ordered assembly steps
+  across boards (with volts and amps under Spice Lite); a draggable
+  **multimeter** measuring DC volts/current, resistance, continuity,
+  capacitance and inductance through two visible movable probes; a draggable
+  two-channel **oscilloscope** with a common ground, trigger, coupling, scales,
+  offsets, automatic measurements and time/voltage cursors; and a **logic
+  analyzer** recording digital waveforms, hex bus lanes and voltage traces.
+  Per-part **pin-assignment windows** carry hand-cut datasheet crops (and a
+  button through to the manufacturer PDF), while the **build guide** provides
+  a bill of materials, numbered wire cutting list and ordered assembly steps
   you can follow at a real bench.
 - **Schematic view** — `Tab` flips the desk over to a derived logical diagram:
   chip symbols, discrete symbols with values, routed named nets, and bus lines
@@ -142,9 +242,12 @@ with its siblings [Rest Hippo](https://github.com/jfigge/resthippo) and Port Hip
   into **seven languages** (English, German, Spanish, French, Italian, Japanese,
   Simplified Chinese).
 
-Chip Hippo makes **no network call at all** unless you ask it to: the AI builder,
-the datasheet downloader, and the update check are the only three, and every one
-is opt-in. (The Arduino link is a USB serial port, not the network.)
+The Electron edition makes **no network call at all** unless you ask it to: the
+AI builder, datasheet downloader and update check are opt-in. The browser
+edition fetches its application assets, documentation, lessons and curated
+public projects from the configured Breadboard Lab/Drupal origins; simulation
+and visitor project editing still happen locally. (The Arduino link is a USB
+serial port, not the network.)
 
 ## Architecture
 
@@ -189,11 +292,14 @@ the compiler, the 3D renderer, the Verilog interpreter — is first-party.
 ```
 Chip Hippo/
 ├── Makefile               # Build orchestration (authoritative command list)
+├── deploy/                # Oracle ARM64 systemd, Nginx, environment + release guide
+├── integrations/drupal/   # Drupal text filter and responsive embed behavior
+├── server/                # Read-only dependency-free browser host + route tests
 ├── features/              # Numbered implementation plans; finished ones in done/
 ├── demos/                 # Generated + engine-validated demo projects
 ├── website/               # The chiphippo.com static site (GitHub Pages)
-├── docs/                  # Generated user-guide PDF
-├── scripts/               # Build tooling (docs, PDF, icons, demos, license guard)
+├── docs/                  # Generated user-guide PDF + web-port architecture
+├── scripts/               # Build tooling, including fingerprinted browser builds
 └── src/
     ├── package.json       # Node / Electron dependencies + electron-builder config
     ├── packaging/         # Mac App Store entitlements + provisioning profiles
@@ -209,6 +315,7 @@ Chip Hippo/
         ├── index.html     #   plus pinout / memory / chip-designer / docs /
         │                  #   serial-log auxiliary windows
         ├── scripts/
+        │   ├── platform/  #     Electron-compatible browser storage/file adapter
         │   ├── model/     #     breadboards, documents, occupancy, move rules (pure)
         │   ├── sim/       #     netlist, levels, chip eval, resolve, engine (pure)
         │   │   └── spice/ #       Spice Lite — the second, voltage-level engine
@@ -218,8 +325,9 @@ Chip Hippo/
         │   ├── scene3d/   #     the 3D view's scene builder (pure)
         │   ├── ai/        #     catalog brief + generate pipeline (pure)
         │   ├── bench/     #     engine performance tooling (make bench)
-        │   └── components/#     thin view components
+        │   └── components/#     thin views, including multimeter + oscilloscope
         ├── demos/         #   bundled example circuits (one per benchable part)
+        ├── lessons/       #   browser lesson manifests + embedded lab fixtures
         ├── docs/          #   the user guide's Markdown source + screenshots
         ├── datasheets/    #   committed datasheet crops for the pinout window
         ├── locales/       #   i18n catalogs (7 languages)

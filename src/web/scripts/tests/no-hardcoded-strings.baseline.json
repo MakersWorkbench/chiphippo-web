@@ -1,1 +1,16 @@
-[]
+[
+  "embed-mode.js::Open full workbench",
+  "embed-mode.js::Reset",
+  "embed-mode.js::Restore the lesson's starting circuit",
+  "platform\\browser-platform.js::Chip Hippo Project",
+  "web-chrome.js::Chip Hippo source code (GPL-3.0-or-later)",
+  "web-chrome.js::Export project",
+  "web-chrome.js::Export project as",
+  "web-chrome.js::Export this project to a new local .chiphippo file",
+  "web-chrome.js::Export this project to its local .chiphippo file",
+  "web-chrome.js::Guide",
+  "web-chrome.js::Import a .chiphippo project from this device",
+  "web-chrome.js::Import project",
+  "web-chrome.js::Open the Chip Hippo user guide",
+  "web-chrome.js::Source"
+]

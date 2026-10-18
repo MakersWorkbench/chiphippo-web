@@ -158,6 +158,14 @@
       "label": "探针",
       "title": "连通性探针 — 悬停高亮一个网络，点击可固定（P）"
     },
+    "meter": {
+      "label": "万用表",
+      "title": "万用表 — 将红黑表笔放在电路测量点上"
+    },
+    "oscilloscope": {
+      "label": "示波器",
+      "title": "双通道示波器 — 放置 CH1、CH2 和接地探头"
+    },
     "analyzer": {
       "label": "分析仪",
       "title": "逻辑分析仪 — 记录并查看信号随时间的波形（A）"
@@ -424,7 +432,8 @@
       "opamps": "运算放大器",
       "regulators": "稳压器",
       "relays": "继电器",
-      "audio": "音频"
+      "audio": "音频",
+      "sensors": "传感器"
     },
     "integration": {
       "output": "输出",
@@ -698,6 +707,20 @@
     "pot": {
       "title": "电位器"
     },
+    "sensor-ldr": { "title": "光敏电阻（LDR）" },
+    "sensor-ntc": { "title": "NTC温度传感器（10 kΩ）" },
+    "sensor-joystick": { "title": "模拟摇杆模块" },
+    "sensor-sound": { "title": "声音传感器模块" },
+    "sensor-flame": { "title": "火焰传感器模块" },
+    "sensor-gas": { "title": "气体传感器模块" },
+    "sensor-heartbeat": { "title": "心率传感器模块" },
+    "sensor-pir": { "title": "PIR运动传感器" },
+    "sensor-hall": { "title": "霍尔效应传感器模块" },
+    "sensor-tilt": { "title": "倾斜开关" },
+    "sensor-reed": { "title": "磁簧开关" },
+    "sensor-vibration": { "title": "振动开关" },
+    "sensor-encoder": { "title": "旋转编码器模块" },
+    "sensor-keypad": { "title": "4×4矩阵键盘" },
     "psu": {
       "title": "电源"
     },
@@ -1529,6 +1552,71 @@
     "milliamps": "{amps} mA",
     "microamps": "{amps} µA",
     "amps": "{amps} A"
+  },
+  "multimeter": {
+    "title": "万用表",
+    "placeBoth": "将两支表笔放在电路测量点上。",
+    "runSpice": "使用 Spice Lite 运行电路以测量电压。",
+    "redMinusBlack": "红表笔电压减去黑表笔电压。",
+    "logicVoltage": "标称逻辑电压（0/5 V）；Spice Lite 显示求解电压。",
+    "currentLead": "读取表笔下方元件引脚中的电流。",
+    "powerOff": "等效无源值；测量前请停止电路。",
+    "beep": "蜂鸣",
+    "open": "开路",
+    "red": "红",
+    "black": "黑",
+    "place": "放置表笔",
+    "mode": {
+      "voltage": "直流电压",
+      "resistance": "电阻",
+      "continuity": "通断",
+      "current": "直流电流",
+      "capacitance": "电容",
+      "inductance": "电感"
+    }
+  },
+  "oscilloscope": {
+    "title": "示波器",
+    "screen": "示波器电压显示",
+    "timeScale": "每格时间",
+    "voltageScale": "每格电压",
+    "trigger": "触发",
+    "triggerChannel": "触发通道",
+    "triggerEdge": "切换上升沿或下降沿触发",
+    "triggerLevel": "触发电压",
+    "voltsUnit": "V",
+    "runHint": "放置探头并运行电路以捕获波形。",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "ground": "接地",
+    "channels": "示波器通道",
+    "channelEnabled": "启用 {channel}",
+    "coupling": "{channel} 耦合",
+    "dc": "直流",
+    "ac": "交流",
+    "offset": "垂直偏移",
+    "channelOffset": "{channel} 垂直偏移",
+    "divisions": "格",
+    "hold": "保持",
+    "holdTitle": "冻结当前采集",
+    "resume": "继续",
+    "clear": "清除",
+    "clearTitle": "清除已采集样本",
+    "auto": "自动",
+    "autoTitle": "自动调整电压和时间刻度",
+    "cursors": "游标",
+    "cursorsTitle": "显示时间和电压游标",
+    "t1": "T1",
+    "t2": "T2",
+    "v1": "V1",
+    "v2": "V2",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "vpp": "峰峰值",
+    "average": "平均",
+    "frequency": "频率",
+    "period": "周期",
+    "duty": "占空比"
   },
   "shortcuts": {
     "title": "键盘快捷键",

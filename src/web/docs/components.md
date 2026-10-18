@@ -25,7 +25,7 @@ The palette opens with every section collapsed, grouped by function:
   [Choosing a logic family](chip-library.md#choosing-a-logic-family)). The 555
   belongs to neither family, so it shows in every mode; showing CD4000 alone,
   it shares the **Timer** group with the CD4000 timers.
-- **COMPONENTS** — **Switches**, **Resistors**, **Capacitors**,
+- **COMPONENTS** — **Sensors**, **Switches**, **Resistors**, **Capacitors**,
   **Inductors**, **Diodes**, **Transistors**, **Relays**, **LEDs**,
   **Displays**, **Audio**, **Oscillators**, **Regulators** and **Power**, in
   that shelf order. Capacitors, Inductors,
@@ -77,11 +77,11 @@ apart across the trench. There are four ways to do that, and the chip takes
 whichever is nearest the pointer as you place or drag it:
 
 | Pin 1's row | Other row | Body covers |
-|---|---|---|
-| **e** | **i** | f, g, h |
-| **d** | **h** | e, f, g |
-| **c** | **g** | d, e, f |
-| **b** | **f** | c, d, e |
+| ----------- | --------- | ----------- |
+| **e**       | **i**     | f, g, h     |
+| **d**       | **h**     | e, f, g     |
+| **c**       | **g**     | d, e, f     |
+| **b**       | **f**     | c, d, e     |
 
 Every one makes the same connections — each half-column is one connected
 strip — so pick the one that leaves room for your wiring. The chip's body
@@ -133,6 +133,36 @@ A few parts don't fit that linear model:
 - **Character LCD modules** (**lcd16x2**, **lcd20x4**) _are_ linear — a
   16-way header along 16 adjacent holes in one row — but the module itself
   is much bigger than that row. See below.
+
+## Sensors that need no programming
+
+**COMPONENTS ▸ Sensors** contains parts that can be used directly with logic,
+comparators, transistor switches and 555 circuits. They do not require a
+microcontroller, firmware or a development board. Change a sensor's simulated
+condition in **Properties…**; the PIR, Hall, tilt, reed and vibration sensors
+can also be clicked directly on the desk.
+
+| Part                                    | Pins and simulated behavior                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Photoresistor (LDR)                     | A passive two-terminal resistance, about 1 MΩ in darkness down to 1 kΩ in bright light                  |
+| NTC temperature sensor                  | A passive 10 kΩ, 3950 K thermistor with an adjustable −40 °C to 125 °C temperature                      |
+| Analog joystick                         | Two 10 kΩ divider outputs (`X`, `Y`) plus a push switch (`SW`) to ground                                |
+| Rotary encoder                          | Quadrature `CLK`/`DT` outputs and a shaft switch, all with 10 kΩ pull-ups                               |
+| 4×4 matrix keypad                       | Eight passive row/column pins; the selected key closes one matrix contact                               |
+| Sound, flame, gas and heartbeat modules | `VCC`, `GND`, adjustable analog `AO`, and a digital comparator output `DO` with an adjustable threshold |
+| PIR motion and Hall-effect modules      | Powered `VCC`/`GND` sensors whose digital `OUT` follows the selected state                              |
+| Tilt, reed and vibration switches       | Passive two-terminal contacts that open or close with the selected condition                            |
+
+The analog outputs use real resistive dividers, so Spice Lite measures the
+intermediate voltage. The digital outputs and contact sensors work in both
+simulation engines. These controls represent the external world—light,
+temperature, sound, motion or a magnet—so changing them is the virtual
+equivalent of interacting with the physical sensor.
+
+Protocol-driven modules such as OLED displays, DHT sensors, real-time clocks,
+SD cards and IMUs are intentionally not included here: they only become useful
+after a programmed controller sends or decodes their digital protocol. The
+same is true of development boards themselves.
 
 ## Component values
 

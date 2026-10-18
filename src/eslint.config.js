@@ -19,8 +19,7 @@ module.exports = [
   // web/scripts/vendor/markdown.js is esbuild's bundled marked + DOMPurify
   // (Feature 230) — generated output, never hand-edited, never linted.
   {
-    basePath: "src",
-    ignores: ["web/scripts/vendor/**"],
+    ignores: ["src/web/scripts/vendor/**", "web/scripts/vendor/**"],
   },
 
   // ── Renderer / browser scripts ─────────────────────────────────────────────
@@ -137,6 +136,30 @@ module.exports = [
         "warn",
         { argsIgnorePattern: "^_", ignoreRestSiblings: true },
       ],
+    },
+  },
+  {
+    files: ["server/**/*.mjs"],
+    ...js.configs.recommended,
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
+    files: ["integrations/drupal/**/*.js"],
+    ...js.configs.recommended,
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: {
+        ...globals.browser,
+        Drupal: "readonly",
+        once: "readonly",
+      },
     },
   },
 ];

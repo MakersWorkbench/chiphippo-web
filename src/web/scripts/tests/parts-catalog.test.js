@@ -75,6 +75,20 @@ test("the part catalog carries the Feature 60 inventory", () => {
     "seg7cc",
     "seg8ca",
     "seg8cc",
+    "sensor-encoder",
+    "sensor-flame",
+    "sensor-gas",
+    "sensor-hall",
+    "sensor-heartbeat",
+    "sensor-joystick",
+    "sensor-keypad",
+    "sensor-ldr",
+    "sensor-ntc",
+    "sensor-pir",
+    "sensor-reed",
+    "sensor-sound",
+    "sensor-tilt",
+    "sensor-vibration",
     "speaker",
     "sw-dip1",
     "sw-dip2",
@@ -94,10 +108,10 @@ test("the part catalog carries the Feature 60 inventory", () => {
   // 115 chips (24 + 29 LS + 46 CD4000 + 7 memory + 2 io + 2 cpu + the 555
   // + the bench parts' LM358, ULN2003A, 4N35 and PC817) + 40 parts (the
   // discretes brought 7: two diodes, an inductor and four transistors; the
-  // bench parts 7: five regulators, the relay and the electronic load; and
-  // the speaker; and the two 7-segment displays that replaced the retired
+  // bench parts 7: five regulators, the relay and the electronic load; the
+  // speaker; 14 directly usable sensors; and the two 7-segment displays that replaced the retired
   // single-row digits, which stay for the desks that hold them) = 155
-  assert.equal(PALETTE_DEFS.length, 155);
+  assert.equal(PALETTE_DEFS.length, 169);
 });
 
 for (const def of PART_DEFS.filter((d) => d.kind === "discrete")) {
@@ -172,9 +186,9 @@ test("sw-toggle: bridges while on; on persists in params", () => {
 // `clickToggle` is BOTH the behaviour and the flag: DeskController asks whether
 // the function is there to decide whether a part flips under the finger at all
 // (clickTogglingPart), so a def that declares one is making a promise about
-// what a click does. It replaced a hand-kept Set of six refs beside a
-// three-way `ref ===` ladder in the view — the arrangement that lets a
-// seventh switch be added and simply not respond, with nothing to catch it.
+// what a click does. It replaced a hand-kept Set beside a three-way
+// `ref ===` ladder in the view — an arrangement that let a new switch be
+// added and simply not respond, with nothing to catch it.
 
 test("clickToggle: exactly the parts that flip under a click declare one", () => {
   const declared = PART_DEFS.filter(
@@ -182,7 +196,19 @@ test("clickToggle: exactly the parts that flip under a click declare one", () =>
   ).map((d) => d.id);
   assert.deepEqual(
     declared.sort(),
-    ["sw-dip1", "sw-dip2", "sw-dip4", "sw-dip8", "sw-slide", "sw-toggle"],
+    [
+      "sensor-hall",
+      "sensor-pir",
+      "sensor-reed",
+      "sensor-tilt",
+      "sensor-vibration",
+      "sw-dip1",
+      "sw-dip2",
+      "sw-dip4",
+      "sw-dip8",
+      "sw-slide",
+      "sw-toggle",
+    ],
     "a part that flips on a plain click declares clickToggle, and only those " +
       "do — a momentary button is transient state, not a durable param",
   );
