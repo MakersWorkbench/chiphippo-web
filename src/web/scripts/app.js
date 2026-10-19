@@ -28,6 +28,9 @@ import { el } from "./dom.js";
 import * as i18n from "./i18n.js";
 import { t, tf } from "./i18n.js";
 import { saveToSite } from "./drupal-save.js";
+import { ExampleLibraryDialog } from "./components/example-library.js";
+import { designClipOf } from "./model/autobuild.js";
+import { insertDocOf } from "./model/example-library.js";
 import { siteOrigins } from "./site-config.js";
 import {
   applyFontSize,
@@ -1799,6 +1802,35 @@ async function init() {
       controller?.armGeneratedDesign(clip);
     }
   });
+  // Hand a verified design clip to the desk as a placement ghost. A circuit
+  // that is running cannot take one (the desk is locked), so it is kept and
+  // armed at Stop. Both the AI builder and the Example Library place this way,
+  // so a placed example rides undo/redo exactly as a pasted design does.
+  function placeDesign(clip) {
+    if (transportMode !== "stopped") {
+      heldDesign = clip;
+      return "held";
+    }
+    heldDesign = null;
+    return controller?.armGeneratedDesign(clip);
+  }
+
+  // The Example Library (web edition: the bridge has `examples` there only).
+  // Open adds the example as its own desktop; Insert arms it on THIS desk.
+  window.addEventListener("chiphippo:examples-open", () => {
+    ExampleLibraryDialog.open({
+      bridge,
+      onOpen: (entry, project) => workspace?.openLibraryExample(entry, project),
+      onInsert: (entry, project) => {
+        const doc = insertDocOf(project);
+        const clip = doc ? designClipOf(doc) : null;
+        if (!clip || placeDesign(clip) === false) {
+          PopupManager.notify({ message: t("examples.insertFailed") });
+        }
+      },
+    });
+  });
+
   const aiPanel = new AiPanel(app, {
     config: () => currentSettings.ai ?? {},
     height: settings.aiHeight,
@@ -1814,14 +1846,7 @@ async function init() {
     // is locked); it is kept and armed the moment the run stops, rather than
     // thrown away with the generation the user paid for. `false` tells the
     // panel to say so.
-    onDesign: (clip) => {
-      if (transportMode !== "stopped") {
-        heldDesign = clip;
-        return "held";
-      }
-      heldDesign = null;
-      return controller?.armGeneratedDesign(clip);
-    },
+    onDesign: placeDesign,
     onHistoryChange: (entries) => {
       bridge.settings
         .set({ aiHistory: entries })

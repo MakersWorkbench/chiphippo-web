@@ -61,6 +61,13 @@ moving simulation work to the server.
 - **Safe iframe integration** through a versioned, origin-checked
   `postMessage` protocol. Embeds report ready/loaded/dirty/run/height state and
   accept only known commands from an explicitly allowed parent origin.
+- **Example Library.** The **Examples** button in the web lab's top bar opens a
+  searchable list of bundled example circuits (`src/web/examples/`). Each can be
+  opened as a new desktop or inserted into the desktop that is open. New examples
+  are built from plain-text netlist specs with
+  `node scripts/build-project.mjs <spec.json> --library --category "<Category>"`,
+  which compiles, verifies against the spec's own tests, and files the project in
+  the library (see `docs/project-specs/` for two worked specs).
 - **Optional Drupal integration.** The included Drupal 10.3/11 module adds a
   **Chip Hippo Circuit** CKEditor button, a Chip Hippo Project media type and a
   **Save to site** action in the lab's File toolbar, so circuits built in the

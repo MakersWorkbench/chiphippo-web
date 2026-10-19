@@ -119,6 +119,23 @@
       "title": "Exporter vers Digital"
     }
   },
+  "examples": {
+    "button": "Exemples",
+    "buttonTitle": "Parcourir la bibliothèque d’exemples",
+    "title": "Bibliothèque d’exemples",
+    "search": "Rechercher des exemples…",
+    "loading": "Chargement des exemples…",
+    "empty": "Aucun exemple ne correspond à la recherche.",
+    "none": "La bibliothèque ne contient pas encore d’exemples.",
+    "failedLoad": "Impossible de charger la bibliothèque d’exemples.",
+    "failedOpen": "Impossible d’ouvrir « {title} ».",
+    "parts": "Composants : {parts}",
+    "open": "Ouvrir comme nouveau bureau",
+    "openTitle": "Ajouter cet exemple au projet comme nouveau bureau",
+    "insert": "Insérer dans ce bureau",
+    "insertTitle": "Placer cet exemple sur le bureau ouvert : il suit le pointeur, cliquez où il doit aller",
+    "insertFailed": "Impossible de placer l’exemple sur ce bureau."
+  },
   "toolbar": {
     "file": {
       "saveSite": "Enregistrer sur le site",
@@ -1366,6 +1383,7 @@
     "failDuplicate": "Le bureau n'a pas pu être dupliqué",
     "failImport": "Ce bureau n'a pas pu être importé",
     "failExport": "Le bureau n'a pas pu être exporté",
+    "failLibraryExample": "Impossible d’ouvrir l’exemple « {title} ».",
     "failExample": "L'exemple {ref} n'a pas pu être ouvert"
   },
   "export": {

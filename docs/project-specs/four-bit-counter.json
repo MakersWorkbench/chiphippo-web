@@ -1,0 +1,27 @@
+{
+  "title": "4-bit binary counter",
+  "notes": "A 74LS161 counts clock pulses in binary. The clock brick feeds the counter's CLK pin, and each of the four outputs, QA (the 1s place) through QD (the 8s place), drives one LED. Press Run and the lights count from 0 to 15, then roll back to 0. CLR, LOAD, ENP and ENT are tied HIGH so the counter is always allowed to count, and the preset inputs A to D are tied LOW because nothing is being loaded.",
+  "parts": [
+    { "id": "U1", "ref": "74LS161", "label": "counter" },
+    { "id": "CLK", "ref": "clock", "label": "clock" },
+    { "id": "L1", "ref": "led", "label": "1s" },
+    { "id": "L2", "ref": "led", "label": "2s" },
+    { "id": "L3", "ref": "led", "label": "4s" },
+    { "id": "L4", "ref": "led", "label": "8s" }
+  ],
+  "nets": [
+    { "name": "CLOCK", "members": ["CLK.out", "U1.CLK"] },
+    { "name": "ENABLES", "members": ["U1.CLR", "U1.LOAD", "U1.ENP", "U1.ENT", "VCC"] },
+    { "name": "PRESETS", "members": ["U1.A", "U1.B", "U1.C", "U1.D", "GND"] },
+    { "name": "QA", "members": ["U1.QA", "L1.A"] },
+    { "name": "QB", "members": ["U1.QB", "L2.A"] },
+    { "name": "QC", "members": ["U1.QC", "L3.A"] },
+    { "name": "QD", "members": ["U1.QD", "L4.A"] },
+    { "name": "RETURN", "members": ["L1.K", "L2.K", "L3.K", "L4.K", "GND"] }
+  ],
+  "tests": [
+    { "name": "after 1 pulse", "edges": 1, "expect": [{ "target": "U1.QA", "value": "H" }, { "target": "U1.QB", "value": "L" }, { "target": "U1.QC", "value": "L" }, { "target": "U1.QD", "value": "L" }] },
+    { "name": "after 5 pulses", "edges": 5, "expect": [{ "target": "U1.QA", "value": "H" }, { "target": "U1.QB", "value": "L" }, { "target": "U1.QC", "value": "H" }, { "target": "U1.QD", "value": "L" }] },
+    { "name": "after 10 pulses", "edges": 10, "expect": [{ "target": "U1.QA", "value": "L" }, { "target": "U1.QB", "value": "H" }, { "target": "U1.QC", "value": "L" }, { "target": "U1.QD", "value": "H" }] }
+  ]
+}

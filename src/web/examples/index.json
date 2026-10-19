@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "examples": [
+    {
+      "id": "How-Counters-Work-4-Bit-Binary-Counter",
+      "title": "4-bit binary counter",
+      "description": "A 74LS161 counts clock pulses in binary. The clock brick feeds the counter's CLK pin, and each of the four outputs, QA (the 1s place) through QD (the 8s place), drives one LED. Press Run and the lights count from 0 to 15, then roll back to 0. CLR, LOAD, ENP and ENT are tied HIGH so the counter is always allowed to count, and the preset inputs A to D are tied LOW because nothing is being loaded.",
+      "category": "Digital Logic Fundamentals",
+      "parts": 11
+    },
+    {
+      "id": "How-Logic-Gates-Work-NAND-Gate",
+      "title": "NAND gate lab",
+      "description": "One gate of a 74LS00 quad NAND chip. A two-position DIP switch feeds the gate's A and B inputs, and one LED shows the output. Switch up (on) puts a HIGH on that input. The LED lights when the output is HIGH, which is every combination except both inputs HIGH. The other three gates on the chip are not used.",
+      "category": "Digital Logic Fundamentals",
+      "parts": 6
+    }
+  ]
+}

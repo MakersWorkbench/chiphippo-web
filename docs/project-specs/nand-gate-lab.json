@@ -1,0 +1,23 @@
+{
+  "title": "NAND gate lab",
+  "notes": "One gate of a 74LS00 quad NAND chip. A two-position DIP switch feeds the gate's A and B inputs, and one LED shows the output. Switch up (on) puts a HIGH on that input. The LED lights when the output is HIGH, which is every combination except both inputs HIGH. The other three gates on the chip are not used.",
+  "parts": [
+    { "id": "U1", "ref": "74LS00", "label": "NAND gate" },
+    { "id": "SW1", "ref": "sw-dip2", "label": "inputs A and B" },
+    { "id": "LED1", "ref": "led", "label": "output" }
+  ],
+  "nets": [
+    { "name": "A", "members": ["U1.1A", "SW1.1B"] },
+    { "name": "B", "members": ["U1.1B", "SW1.2B"] },
+    { "name": "SRC_A", "members": ["SW1.1A", "VCC"] },
+    { "name": "SRC_B", "members": ["SW1.2A", "VCC"] },
+    { "name": "Y", "members": ["U1.1Y", "LED1.A"] },
+    { "name": "LEDRET", "members": ["LED1.K", "GND"] }
+  ],
+  "tests": [
+    { "name": "both low", "set": [{ "target": "SW1", "value": "00" }], "expect": [{ "target": "U1.1Y", "value": "H" }] },
+    { "name": "A high", "set": [{ "target": "SW1", "value": "10" }], "expect": [{ "target": "U1.1Y", "value": "H" }] },
+    { "name": "B high", "set": [{ "target": "SW1", "value": "01" }], "expect": [{ "target": "U1.1Y", "value": "H" }] },
+    { "name": "both high", "set": [{ "target": "SW1", "value": "11" }], "expect": [{ "target": "U1.1Y", "value": "L" }] }
+  ]
+}

@@ -110,6 +110,7 @@ import {
   withPlacedChips,
 } from "../model/project-doc.js";
 import { exampleDesktops } from "../model/example-desktops.js";
+import { exampleDesktopsOf } from "../model/example-library.js";
 import { programmedPatch } from "../model/rom-binding.js";
 import { isRomChip } from "../sim/chip-eval.js";
 import { partDef, setCustomChips } from "../catalog/index.js";
@@ -1417,6 +1418,18 @@ export class ProjectWorkspace {
     if (!desktops.length) {
       return failed(new Error("no example circuit is bundled for that part"));
     }
+    return this.#placeExampleDesktops(desktops, failed);
+  }
+
+  /**
+   * Add (or switch to) the desktops an example brings — the tail both a part's
+   * bundled example and an Example Library entry share. Runs inside a swap.
+   *
+   * @param {{name:string, description:string, doc:object, images:object|null}[]} desktops
+   * @param {(err:Error) => null} failed - reports and answers null
+   * @returns {Promise<"added"|"switched"|null>}
+   */
+  async #placeExampleDesktops(desktops, failed) {
     const tabNamed = (name) =>
       this.#project.tabs.find((tab) => tab.name === name);
     const missing = desktops.filter((d) => !tabNamed(d.name));
@@ -1475,6 +1488,45 @@ export class ProjectWorkspace {
     this.#renderTabs();
     this.#announce();
     return "added";
+  }
+
+  /**
+   * Open an Example Library entry: its desktop(s) are added to the project as
+   * new tabs (or switched to if already there), exactly as a part's bundled
+   * example is. The library holds ordinary projects, so `project` is the
+   * loaded .chiphippo; ROM images are not carried (library circuits are built
+   * from specs, which cannot hold a programmed chip).
+   *
+   * @param {{id:string, title:string, description:string}} entry
+   * @param {object} project - the entry's loaded .chiphippo
+   * @returns {Promise<"added"|"switched"|null>}
+   */
+  openLibraryExample(entry, project) {
+    if (!this.#project || typeof entry?.id !== "string") {
+      return Promise.resolve(null);
+    }
+    const key = `library:${entry.id}`;
+    const inFlight = this.#examples.get(key);
+    if (inFlight) return inFlight;
+    const failed = (err) => {
+      this.#fail(
+        t("workspace.failLibraryExample", { title: entry.title }),
+        err,
+      );
+      return null;
+    };
+    const desktops = exampleDesktopsOf(entry, project).map((d) => ({
+      ...d,
+      images: null,
+    }));
+    if (!desktops.length) {
+      return Promise.resolve(failed(new Error("the example holds no desktop")));
+    }
+    const run = this.#oneSwapAtATime(() =>
+      this.#placeExampleDesktops(desktops, failed),
+    ).finally(() => this.#examples.delete(key));
+    this.#examples.set(key, run);
+    return run;
   }
 
   /**

@@ -119,6 +119,23 @@
       "title": "导出到 Digital"
     }
   },
+  "examples": {
+    "button": "示例",
+    "buttonTitle": "浏览示例库",
+    "title": "示例库",
+    "search": "搜索示例…",
+    "loading": "正在加载示例…",
+    "empty": "没有符合搜索的示例。",
+    "none": "示例库中还没有示例。",
+    "failedLoad": "无法加载示例库。",
+    "failedOpen": "无法打开“{title}”。",
+    "parts": "元件数：{parts}",
+    "open": "作为新桌面打开",
+    "openTitle": "将此示例作为新桌面添加到项目",
+    "insert": "插入到此桌面",
+    "insertTitle": "将此示例放到当前桌面：它会跟随指针，点击要放置的位置",
+    "insertFailed": "无法将示例放到此桌面。"
+  },
   "toolbar": {
     "file": {
       "saveSite": "保存到网站",
@@ -1349,6 +1366,7 @@
     "failDuplicate": "无法复制该桌面",
     "failImport": "无法导入该桌面",
     "failExport": "无法导出该桌面",
+    "failLibraryExample": "无法打开示例“{title}”。",
     "failExample": "无法打开 {ref} 的示例"
   },
   "export": {

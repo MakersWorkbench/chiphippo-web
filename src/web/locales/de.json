@@ -119,6 +119,23 @@
       "title": "Nach Digital exportieren"
     }
   },
+  "examples": {
+    "button": "Beispiele",
+    "buttonTitle": "Beispielbibliothek durchsuchen",
+    "title": "Beispielbibliothek",
+    "search": "Beispiele suchen…",
+    "loading": "Beispiele werden geladen…",
+    "empty": "Keine passenden Beispiele gefunden.",
+    "none": "Die Bibliothek enthält noch keine Beispiele.",
+    "failedLoad": "Die Beispielbibliothek konnte nicht geladen werden.",
+    "failedOpen": "„{title}“ konnte nicht geöffnet werden.",
+    "parts": "Bauteile: {parts}",
+    "open": "Als neues Arbeitsblatt öffnen",
+    "openTitle": "Dieses Beispiel als neues Arbeitsblatt zum Projekt hinzufügen",
+    "insert": "In dieses Arbeitsblatt einfügen",
+    "insertTitle": "Beispiel auf dem geöffneten Arbeitsblatt platzieren: Es folgt dem Zeiger, per Klick wird es abgelegt",
+    "insertFailed": "Das Beispiel konnte nicht auf diesem Arbeitsblatt platziert werden."
+  },
   "toolbar": {
     "file": {
       "saveSite": "Auf Website speichern",
@@ -1365,6 +1382,7 @@
     "failDuplicate": "Das Arbeitsblatt konnte nicht dupliziert werden",
     "failImport": "Dieses Arbeitsblatt konnte nicht importiert werden",
     "failExport": "Das Arbeitsblatt konnte nicht exportiert werden",
+    "failLibraryExample": "Das Beispiel „{title}“ konnte nicht geöffnet werden.",
     "failExample": "Das Beispiel {ref} konnte nicht geöffnet werden"
   },
   "export": {

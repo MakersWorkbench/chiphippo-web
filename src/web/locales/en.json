@@ -119,6 +119,23 @@
       "title": "Export to Digital"
     }
   },
+  "examples": {
+    "button": "Examples",
+    "buttonTitle": "Browse the example library",
+    "title": "Example library",
+    "search": "Search examples…",
+    "loading": "Loading examples…",
+    "empty": "No examples match your search.",
+    "none": "The library has no examples yet.",
+    "failedLoad": "The example library could not be loaded.",
+    "failedOpen": "Could not open “{title}”.",
+    "parts": "Parts: {parts}",
+    "open": "Open as new desktop",
+    "openTitle": "Add this example to the project as a new desktop",
+    "insert": "Insert into this desktop",
+    "insertTitle": "Place this example on the desktop you have open: it follows the pointer, click where it should go",
+    "insertFailed": "The example could not be placed on this desktop."
+  },
   "toolbar": {
     "file": {
       "group": "File",
@@ -1365,6 +1382,7 @@
     "failDuplicate": "Could not duplicate the desktop",
     "failImport": "Could not import that desktop",
     "failExport": "Could not export the desktop",
+    "failLibraryExample": "Could not open the example “{title}”.",
     "failExample": "Could not open the {ref} example"
   },
   "export": {

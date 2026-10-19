@@ -18,6 +18,7 @@
  */
 
 import { booted } from "./app.js";
+import { t } from "./i18n.js";
 
 const bridge = window.chiphippo;
 
@@ -52,6 +53,18 @@ if (bridge?.platform === "web" && bridge.web?.mode === "app") {
     source.textContent = "Source";
     source.title = "Chip Hippo source code (GPL-3.0-or-later)";
 
-    actions.prepend(guide, source);
+    // The Example Library: browse bundled circuits, open one as a desktop or
+    // insert it into the desk that is open. The dialog lives in app.js.
+    const examples = document.createElement("button");
+    examples.type = "button";
+    examples.className = "web-action";
+    examples.textContent = t("examples.button");
+    examples.title = t("examples.buttonTitle");
+    examples.hidden = !bridge.examples;
+    examples.addEventListener("click", () =>
+      window.dispatchEvent(new CustomEvent("chiphippo:examples-open")),
+    );
+
+    actions.prepend(examples, guide, source);
   }
 }

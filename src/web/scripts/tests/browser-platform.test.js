@@ -400,3 +400,33 @@ test("duplicated browser desktops receive independent ROM storage", async () => 
   await bridge.mem.write(copiedGuid, new Uint8Array([6, 5, 4]));
   assert.deepEqual([...(await bridge.mem.load(guid, 3)).bytes], [9, 8, 7]);
 });
+
+test("the example library lists the bundled index and reads one project by id", async () => {
+  const requested = [];
+  const bridge = platform(new MemoryStorage(), {
+    fetchRef: async (path) => {
+      requested.push(path);
+      const body = path.endsWith("/index.json")
+        ? {
+            version: 1,
+            examples: [
+              { id: "ok-1", title: "One", category: "Logic" },
+              { id: "../escape", title: "Bad" },
+            ],
+          }
+        : { version: 5, tabs: [{ id: "t1", doc: {} }] };
+      return { ok: true, status: 200, json: async () => body };
+    },
+  });
+  assert.deepEqual(
+    (await bridge.examples.list()).map((e) => e.id),
+    ["ok-1"],
+    "a bad id in the index is dropped",
+  );
+  assert.equal((await bridge.examples.read("ok-1")).version, 5);
+  assert.equal(await bridge.examples.read("../secret"), null);
+  assert.deepEqual(requested, [
+    "/app/examples/index.json",
+    "/app/examples/ok-1.chiphippo",
+  ]);
+});

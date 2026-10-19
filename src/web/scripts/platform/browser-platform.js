@@ -19,6 +19,11 @@
 
 import { DeskDoc } from "../model/desk-doc.js";
 import { siteOrigins } from "../site-config.js";
+import {
+  EXAMPLE_ID,
+  exampleFile,
+  parseLibraryIndex,
+} from "../model/example-library.js";
 
 const KEYS = Object.freeze({
   settings: "settings",
@@ -825,6 +830,17 @@ export function createBrowserPlatform({
     demo: {
       open: async () => false,
       read: (ref) => /^[a-z0-9-]+$/i.test(String(ref)) ? fetchedJson(fetchRef, asset(`demos/${ref}.json`)) : null, // prettier-ignore
+    },
+    // The Example Library (model/example-library.js): bundled projects under
+    // examples/, listed by examples/index.json. Web edition only — the desktop
+    // bridge has no `examples`, and the UI is absent there.
+    examples: {
+      list: async () =>
+        parseLibraryIndex(await fetchedJson(fetchRef, asset("examples/index.json"))), // prettier-ignore
+      read: async (id) =>
+        EXAMPLE_ID.test(String(id))
+          ? fetchedJson(fetchRef, asset(exampleFile(String(id))))
+          : null,
     },
     docs: {
       read: (slug) => /^[a-z0-9-]+$/i.test(String(slug)) ? fetchedText(fetchRef, asset(`docs/${slug}.md`)) : null, // prettier-ignore

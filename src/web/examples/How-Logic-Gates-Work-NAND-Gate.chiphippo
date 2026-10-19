@@ -1,0 +1,272 @@
+{
+  "version": 5,
+  "name": "How-Logic-Gates-Work-NAND-Gate",
+  "description": "One gate of a 74LS00 quad NAND chip. A two-position DIP switch feeds the gate's A and B inputs, and one LED shows the output. Switch up (on) puts a HIGH on that input. The LED lights when the output is HIGH, which is every combination except both inputs HIGH. The other three gates on the chip are not used.",
+  "wheelLocked": false,
+  "activeTab": "t1",
+  "nextIndex": 2,
+  "tabs": [
+    {
+      "id": "t1",
+      "name": "How-Logic-Gates-Work-NAND-Gate",
+      "doc": {
+        "version": 15,
+        "boards": [
+          {
+            "id": "bb1",
+            "type": "rail-half",
+            "x": 0,
+            "y": 0,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb2",
+            "type": "pins-half",
+            "x": 0,
+            "y": 3.5,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb3",
+            "type": "rail-half",
+            "x": 0,
+            "y": 17.52,
+            "rot": 0,
+            "group": "g1"
+          }
+        ],
+        "components": [
+          {
+            "id": "psu1",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 0,
+            "params": {
+              "volts": 5
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "chip",
+            "ref": "74LS00",
+            "board": "bb2",
+            "anchor": "e1",
+            "params": {},
+            "name": "U1",
+            "description": "NAND gate"
+          },
+          {
+            "id": "c2",
+            "kind": "discrete",
+            "ref": "sw-dip2",
+            "board": "bb2",
+            "anchor": "e9",
+            "params": {
+              "states": [
+                false,
+                false
+              ]
+            },
+            "name": "SW1",
+            "description": "inputs A and B"
+          },
+          {
+            "id": "c3",
+            "kind": "discrete",
+            "ref": "rnet9",
+            "board": "bb2",
+            "anchor": "j9",
+            "params": {
+              "ohms": 1000,
+              "rot": 180
+            }
+          },
+          {
+            "id": "c4",
+            "kind": "discrete",
+            "ref": "led",
+            "board": "bb2",
+            "anchor": "b18",
+            "params": {
+              "color": "red",
+              "flip": false,
+              "rot": 0,
+              "end": null
+            },
+            "name": "LED1",
+            "description": "output"
+          },
+          {
+            "id": "c5",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a19",
+            "params": {
+              "ohms": 10000,
+              "rot": 90,
+              "end": {
+                "dx": 1,
+                "dy": 3.76
+              }
+            }
+          }
+        ],
+        "wires": [
+          {
+            "id": "w1",
+            "from": "bb2.j1",
+            "to": "bb1.+1",
+            "color": "red"
+          },
+          {
+            "id": "w2",
+            "from": "bb2.a7",
+            "to": "bb3.-5",
+            "color": "black"
+          },
+          {
+            "id": "w3",
+            "from": "psu1.+",
+            "to": "bb1.+25",
+            "color": "red"
+          },
+          {
+            "id": "w4",
+            "from": "psu1.-",
+            "to": "bb3.-25",
+            "color": "black"
+          },
+          {
+            "id": "w5",
+            "from": "bb1.+24",
+            "to": "bb3.+24",
+            "color": "red"
+          },
+          {
+            "id": "w6",
+            "from": "bb3.-24",
+            "to": "bb1.-24",
+            "color": "black"
+          },
+          {
+            "id": "w7",
+            "from": "bb2.d1",
+            "to": "bb2.h9",
+            "color": "purple"
+          },
+          {
+            "id": "w8",
+            "from": "bb2.d2",
+            "to": "bb2.g10",
+            "color": "blue"
+          },
+          {
+            "id": "w9",
+            "from": "bb3.+7",
+            "to": "bb2.a9",
+            "color": "red"
+          },
+          {
+            "id": "w10",
+            "from": "bb3.+8",
+            "to": "bb2.a10",
+            "color": "red"
+          },
+          {
+            "id": "w11",
+            "from": "bb2.a3",
+            "to": "bb2.a18",
+            "color": "purple"
+          },
+          {
+            "id": "w12",
+            "from": "bb1.-16",
+            "to": "bb2.i17",
+            "color": "black"
+          }
+        ],
+        "buses": [],
+        "netNames": [],
+        "annotations": [
+          {
+            "id": "an1",
+            "kind": "label",
+            "x": 0,
+            "y": -12.8,
+            "text": "NAND gate lab",
+            "anchor": "c1"
+          },
+          {
+            "id": "an2",
+            "kind": "label",
+            "x": 0,
+            "y": -11,
+            "text": "One gate of a 74LS00 quad NAND chip. A two-position DIP switch",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an3",
+            "kind": "label",
+            "x": 0,
+            "y": -9.2,
+            "text": "feeds the gate's A and B inputs, and one LED shows the output.",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an4",
+            "kind": "label",
+            "x": 0,
+            "y": -7.4,
+            "text": "Switch up (on) puts a HIGH on that input. The LED lights when",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an5",
+            "kind": "label",
+            "x": 0,
+            "y": -5.6,
+            "text": "the output is HIGH, which is every combination except both",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an6",
+            "kind": "label",
+            "x": 0,
+            "y": -3.8,
+            "text": "inputs HIGH. The other three gates on the chip are not used.",
+            "color": "#808080",
+            "anchor": "c1"
+          }
+        ],
+        "scopeChannels": [],
+        "signals": [],
+        "integrations": [],
+        "nextBoardId": 4,
+        "nextGroupId": 2,
+        "nextComponentId": 6,
+        "nextPsuId": 2,
+        "nextClockId": 1,
+        "nextWireId": 13,
+        "nextBusId": 1,
+        "nextAnnotationId": 7,
+        "nextScopeChannelId": 1,
+        "nextSignalId": 1,
+        "nextOutputId": 1,
+        "nextInputId": 1
+      }
+    }
+  ],
+  "connections": [],
+  "codegen": {},
+  "cpuBreakpoints": {},
+  "customChips": [],
+  "location": null
+}

@@ -119,6 +119,23 @@
       "title": "Esporta in Digital"
     }
   },
+  "examples": {
+    "button": "Esempi",
+    "buttonTitle": "Sfoglia la libreria di esempi",
+    "title": "Libreria di esempi",
+    "search": "Cerca esempi…",
+    "loading": "Caricamento degli esempi…",
+    "empty": "Nessun esempio corrisponde alla ricerca.",
+    "none": "La libreria non contiene ancora esempi.",
+    "failedLoad": "Impossibile caricare la libreria di esempi.",
+    "failedOpen": "Impossibile aprire «{title}».",
+    "parts": "Componenti: {parts}",
+    "open": "Apri come nuova scrivania",
+    "openTitle": "Aggiungi questo esempio al progetto come nuova scrivania",
+    "insert": "Inserisci in questa scrivania",
+    "insertTitle": "Posiziona questo esempio sulla scrivania aperta: segue il puntatore, fai clic dove deve andare",
+    "insertFailed": "Impossibile posizionare l’esempio su questa scrivania."
+  },
   "toolbar": {
     "file": {
       "saveSite": "Salva sul sito",
@@ -1366,6 +1383,7 @@
     "failDuplicate": "Non è stato possibile duplicare la scrivania",
     "failImport": "Non è stato possibile importare quella scrivania",
     "failExport": "Non è stato possibile esportare la scrivania",
+    "failLibraryExample": "Impossibile aprire l’esempio «{title}».",
     "failExample": "Non è stato possibile aprire l'esempio di {ref}"
   },
   "export": {
