@@ -1,9 +1,15 @@
-# Chip Hippo — A free, offline, open-source breadboard designer & simulator
+# Chip Hippo Web — The Makers Workbench Port
 
-[![CI](https://github.com/MakersWorkbench/chiphippo/actions/workflows/ci.yml/badge.svg)](https://github.com/MakersWorkbench/chiphippo/actions/workflows/ci.yml)
+[![CI](https://github.com/MakersWorkbench/chiphippo-web/actions/workflows/ci.yml/badge.svg)](https://github.com/MakersWorkbench/chiphippo-web/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
-[![GitHub stars](https://img.shields.io/github/stars/MakersWorkbench/chiphippo?style=social)](https://github.com/MakersWorkbench/chiphippo/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/MakersWorkbench/chiphippo-web?style=social)](https://github.com/MakersWorkbench/chiphippo-web/stargazers)
+
+> This is The Makers Workbench browser-focused fork of
+> [jfigge/chiphippo](https://github.com/jfigge/chiphippo), not the official
+> upstream project. The original desktop application remains supported here,
+> while this fork adds the self-hosted web lab, embeds, instruments, sensors,
+> Drupal integration and Oracle ARM deployment described below.
 
 Design and simulate **74LS TTL and CD4000 CMOS logic circuits on virtual
 solderless breadboards**, laid out on an infinitely pannable, zoomable desk.

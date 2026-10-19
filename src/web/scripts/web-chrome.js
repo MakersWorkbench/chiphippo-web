@@ -32,7 +32,7 @@ if (bridge?.platform === "web" && bridge.web?.mode === "app") {
 
     const source = document.createElement("a");
     source.className = "web-action";
-    source.href = "https://github.com/jfigge/chiphippo";
+    source.href = "https://github.com/MakersWorkbench/chiphippo-web";
     source.target = "_blank";
     source.rel = "noopener noreferrer";
     source.textContent = "Source";

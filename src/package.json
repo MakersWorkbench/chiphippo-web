@@ -2,10 +2,10 @@
   "name": "chiphippo",
   "version": "1.4.3",
   "description": "Design and simulate 74xx TTL logic circuits on virtual breadboards",
-  "homepage": "https://github.com/jfigge/chiphippo",
+  "homepage": "https://github.com/MakersWorkbench/chiphippo-web",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jfigge/chiphippo.git"
+    "url": "https://github.com/MakersWorkbench/chiphippo-web.git"
   },
   "author": {
     "name": "Jason Figge",
