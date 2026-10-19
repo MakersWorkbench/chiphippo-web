@@ -3431,6 +3431,17 @@
   padding: 0 var(--space-1);
 }
 
+.oscilloscope-trigger-position {
+  width: 5rem;
+  accent-color: var(--color-accent);
+}
+
+.oscilloscope-scale-button {
+  min-width: 1.8rem;
+  padding: 0 var(--space-1);
+  font-weight: 700;
+}
+
 .oscilloscope-channels,
 .oscilloscope-actions {
   display: flex;
@@ -3480,6 +3491,49 @@
 .oscilloscope-grid {
   stroke: #254125;
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.oscilloscope-axis-tick {
+  stroke: rgb(210 230 210 / 70%);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.oscilloscope-axis-label {
+  font: 8px ui-monospace, SFMono-Regular, Consolas, monospace;
+  paint-order: stroke;
+  stroke: #071107;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oscilloscope-axis-label--time {
+  fill: #c4d3c4;
+}
+
+.oscilloscope-axis-label--ch1 {
+  fill: #ffd84a;
+}
+
+.oscilloscope-axis-label--ch2 {
+  fill: #52d7ff;
+}
+
+.oscilloscope-zero-marker--ch1 {
+  fill: #ffd84a;
+}
+
+.oscilloscope-zero-marker--ch2 {
+  fill: #52d7ff;
+}
+
+.oscilloscope-trigger-marker {
+  stroke: rgb(255 255 255 / 45%);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
   vector-effect: non-scaling-stroke;
 }
 

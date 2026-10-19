@@ -2011,6 +2011,9 @@ async function init() {
           console.error("[renderer] menu:edit-state failed:", err),
         ),
   });
+  if (bridge.web?.manifest?.oscilloscope) {
+    controller.loadOscilloscopeSetup(bridge.web.manifest.oscilloscope);
+  }
 
   wireEditMenu(controller);
 

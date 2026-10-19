@@ -2574,6 +2574,7 @@ export class SimController {
         detail: {
           running: this.running,
           mode: this.#mode,
+          speed: this.#speed,
           // The simulated moment this board stands at (seconds; null when
           // stopped or replaying) — how far the run has got, for the
           // analyzer's time axis.

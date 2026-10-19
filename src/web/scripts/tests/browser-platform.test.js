@@ -190,7 +190,7 @@ test("browser routes accept only safe lesson identifiers", () => {
 test("embed lessons boot from a versioned manifest and keep isolated saves", async () => {
   const storage = new MemoryStorage();
   const requested = [];
-  const bridge = platform(storage, {
+  const lessonOptions = {
     locationRef: { pathname: "/embed/74ls00-intro", search: "" },
     fetchRef: async (path) => {
       requested.push(path);
@@ -213,7 +213,8 @@ test("embed lessons boot from a versioned manifest and keep isolated saves", asy
         json: async () => ({ doc: { version: 15 } }),
       };
     },
-  });
+  };
+  const bridge = platform(storage, lessonOptions);
 
   const seeded = await bridge.project.boot();
   assert.equal((await bridge.settings.get()).spiceLite.enabled, true);
@@ -228,6 +229,12 @@ test("embed lessons boot from a versioned manifest and keep isolated saves", asy
   await bridge.project.save({ ...seeded, name: "My NAND Lab" }, null);
   assert.equal((await bridge.project.boot()).name, "My NAND Lab");
   assert.equal(await storage.get("project.current"), undefined);
+
+  // A page reload creates a new bridge. Its locally saved circuit must not
+  // prevent the current lesson's instrument/UI manifest from loading.
+  const reloaded = platform(storage, lessonOptions);
+  assert.equal((await reloaded.project.boot()).name, "My NAND Lab");
+  assert.equal(reloaded.web.manifest.title, "NAND Lab");
 
   assert.equal(await bridge.web.resetLesson(), true);
   assert.equal((await bridge.project.boot()).name, "NAND Lab");

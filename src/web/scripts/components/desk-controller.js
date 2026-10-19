@@ -2051,6 +2051,10 @@ export class DeskController {
     this.#oscilloscope.toggle();
   }
 
+  loadOscilloscopeSetup(setup) {
+    this.#oscilloscope.loadSetup(setup);
+  }
+
   /** Centre + scale the camera so every board, part, and wire fits on
       screen — how a lost component gets found again. The desk itself is
       recentred on the origin first (see #recentreDesk), so fitting is also

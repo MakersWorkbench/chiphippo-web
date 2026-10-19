@@ -6,6 +6,18 @@
   "desktopTitle": "Oscilloscope Clock Lab",
   "demo": "74LS74",
   "editable": true,
+  "oscilloscope": {
+    "visible": true,
+    "timePerDiv": 0.25,
+    "voltsPerDiv": 1,
+    "triggerChannel": "ch2",
+    "triggerMode": "auto",
+    "probes": {
+      "ch1": "clk1.out",
+      "ch2": "bb2.g31",
+      "ground": "psu1.-"
+    }
+  },
   "ui": {
     "showPartsTray": true,
     "showProjectTabs": false,

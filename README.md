@@ -69,12 +69,17 @@ work to the server.
   DC current, resistance, continuity, capacitance and inductance modes. It uses
   live simulator data, understands passive series/parallel networks, works in
   embeds, and intentionally omits ESR because simulated capacitors are ideal.
-- **A draggable two-channel oscilloscope** with CH1, CH2 and common-ground
-  probes; adjustable time/div and volts/div; DC and display-only AC coupling;
-  channel offsets; rising/falling edge trigger; Auto, Hold and Clear; automatic
-  peak-to-peak, average, frequency, period and duty-cycle measurements; and
-  independent time/voltage cursors with live delta readouts. A bundled
-  `oscilloscope-demo` embed exercises the instrument.
+- **A draggable two-channel digital oscilloscope** with visible CH1, CH2 and
+  common-ground probes; adjustable time/div and volts/div; DC and display-only
+  AC coupling; independent vertical positioning and colored 0 V markers;
+  channel-colored voltage scales; a trigger-relative time axis; selectable
+  rising/falling edge, level, source and trigger position; real-scope-style
+  Auto, Normal and smoothly scrolling Roll modes; Hold, Clear and Autoscale;
+  peak-to-peak, average, frequency, period and complete-cycle duty measurements;
+  and independent time/voltage cursors with live delta readouts. Sampling is
+  event-driven and independent from display refresh, so slow signals scroll
+  smoothly without losing captured transitions. A bundled `oscilloscope-demo`
+  embed exercises a 1 Hz clock and its divide-by-two output.
 - **Fourteen no-firmware sensors and controls**, electrically simulated rather
   than added as decorative artwork: photoresistor (LDR), 10 kΩ NTC thermistor,
   analog joystick, quadrature rotary encoder, 4×4 matrix keypad, sound sensor,
@@ -126,7 +131,11 @@ Architecture, Oracle ARM deployment, and Drupal integration are documented in
 [`integrations/drupal/README.md`](integrations/drupal/README.md). Instrument
 operation is documented in
 [`src/web/docs/multimeter.md`](src/web/docs/multimeter.md) and
-[`src/web/docs/oscilloscope.md`](src/web/docs/oscilloscope.md).
+[`src/web/docs/oscilloscope.md`](src/web/docs/oscilloscope.md). Beginner-friendly
+walkthroughs are also available in the GitHub wiki: **[Using the
+Multimeter](https://github.com/MakersWorkbench/chiphippo-web/wiki/Using-the-Multimeter)**
+and **[Using the
+Oscilloscope](https://github.com/MakersWorkbench/chiphippo-web/wiki/Using-the-Oscilloscope)**.
 
 ## Features
 

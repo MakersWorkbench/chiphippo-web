@@ -11,8 +11,10 @@ import {
   appendScopeSample,
   autoTimeScale,
   autoVoltageScale,
+  extendScopeSamples,
+  resampleScopeWindow,
+  scopeWindow,
   scopeMeasurements,
-  triggerAt,
 } from "../model/oscilloscope-trace.js";
 
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -33,6 +35,12 @@ function svg(tag, attrs = {}) {
   for (const [key, value] of Object.entries(attrs)) {
     node.setAttribute(key, String(value));
   }
+  return node;
+}
+
+function svgText(text, attrs = {}) {
+  const node = svg("text", attrs);
+  node.textContent = text;
   return node;
 }
 
@@ -72,6 +80,12 @@ function scaledLabel(value, unit) {
   return `${formatNumber(value / scale, { maximumSignificantDigits: 4 })} ${prefix}${unit}`;
 }
 
+function signedLabel(value, unit) {
+  if (Math.abs(value) < 1e-12) return `0 ${unit}`;
+  const label = scaledLabel(value, unit);
+  return value > 0 ? `+${label}` : label;
+}
+
 export class Oscilloscope {
   #viewport;
   #overlay;
@@ -86,6 +100,8 @@ export class Oscilloscope {
   #cursorReadout;
   #timeSelect;
   #voltsSelect;
+  #triggerChannelSelect;
+  #triggerModeSelect;
   #probeButtons = new Map();
   #markers = new Map();
   #probes = { ch1: null, ch2: null, ground: null };
@@ -93,11 +109,17 @@ export class Oscilloscope {
   #visible = false;
   #activeProbe = null;
   #wasRunning = false;
+  #running = false;
+  #simSpeed = 1;
+  #rollAnchor = null;
+  #rollFrame = null;
   #timePerDiv = 10e-6;
   #voltsPerDiv = 1;
   #triggerChannel = "ch1";
   #triggerEdge = "rising";
   #triggerLevel = 2.5;
+  #triggerMode = "auto";
+  #triggerPosition = 0.3;
   #held = false;
   #channels = {
     ch1: { enabled: true, coupling: "dc", offset: 0 },
@@ -131,9 +153,17 @@ export class Oscilloscope {
     window.addEventListener("chiphippo:sim-state", (event) => {
       const running =
         event.detail?.mode !== "stopped" && event.detail?.running !== false;
-      if (running) this.#onTick(event.detail);
+      this.#running = running;
+      if (Number.isFinite(event.detail?.speed)) {
+        this.#simSpeed = event.detail.speed;
+      }
+      if (running) {
+        this.#onTick(event.detail);
+        this.#animateRoll();
+      }
       else {
         this.#wasRunning = false;
+        this.#rollAnchor = null;
         if (this.#visible) this.#scheduleRender();
       }
     });
@@ -159,7 +189,37 @@ export class Oscilloscope {
     if (this.#visible && !this.#probes.ch1) this.arm("ch1");
     else if (!this.#visible) this.disarmPlacement();
     this.refresh();
+    this.#animateRoll();
     this.#onStateChange?.({ visible: this.#visible, armed: this.armed });
+  }
+
+  /** Apply a lesson-supplied starting setup without making instrument state
+      part of the saved circuit document. Unknown addresses are harmless: the
+      normal refresh path simply leaves their markers hidden. */
+  loadSetup(setup = {}) {
+    const probes = setup.probes ?? {};
+    for (const probe of PROBES) {
+      const address = probes[probe];
+      if (typeof address === "string" && address) this.#probes[probe] = address;
+    }
+    if (TIME_STEPS.includes(setup.timePerDiv)) {
+      this.#timePerDiv = setup.timePerDiv;
+      this.#timeSelect.value = String(setup.timePerDiv);
+    }
+    if (VOLT_STEPS.includes(setup.voltsPerDiv)) {
+      this.#voltsPerDiv = setup.voltsPerDiv;
+      this.#voltsSelect.value = String(setup.voltsPerDiv);
+    }
+    if (CHANNELS.includes(setup.triggerChannel)) {
+      this.#triggerChannel = setup.triggerChannel;
+      this.#triggerChannelSelect.value = setup.triggerChannel;
+    }
+    if (["auto", "normal", "roll"].includes(setup.triggerMode)) {
+      this.#triggerMode = setup.triggerMode;
+      this.#triggerModeSelect.value = setup.triggerMode;
+    }
+    this.setVisible(setup.visible !== false);
+    if (PROBES.every((probe) => this.#probes[probe])) this.disarmPlacement();
   }
 
   arm(probe) {
@@ -214,6 +274,10 @@ export class Oscilloscope {
 
   #onTick(detail) {
     if (!Number.isFinite(detail?.at)) return;
+    this.#rollAnchor = {
+      at: detail.at,
+      wall: globalThis.performance?.now?.() ?? Date.now(),
+    };
     if (this.#held) return;
     // Some engines publish their first settled tick immediately before the
     // matching running-state announcement. Mark the run here as well so that
@@ -287,6 +351,25 @@ export class Oscilloscope {
         el("option", { value: "ch2", text: t("oscilloscope.ch2") }),
       ],
     );
+    this.#triggerChannelSelect = triggerChannel;
+    const triggerMode = el(
+      "select",
+      {
+        class: "oscilloscope-select",
+        "aria-label": t("oscilloscope.triggerMode"),
+        onChange: (event) => {
+          this.#triggerMode = event.currentTarget.value;
+          this.#scheduleRender();
+          this.#animateRoll();
+        },
+      },
+      [
+        el("option", { value: "auto", text: t("oscilloscope.triggerAuto") }),
+        el("option", { value: "normal", text: t("oscilloscope.triggerNormal") }),
+        el("option", { value: "roll", text: t("oscilloscope.triggerRoll") }),
+      ],
+    );
+    this.#triggerModeSelect = triggerMode;
     const edge = el("button", {
       type: "button",
       class: "oscilloscope-control",
@@ -314,6 +397,54 @@ export class Oscilloscope {
         this.#triggerLevel = Number(event.currentTarget.value) || 0;
         this.#scheduleRender();
       },
+    });
+    const triggerPosition = el("input", {
+      class: "oscilloscope-trigger-position",
+      type: "range",
+      min: 10,
+      max: 90,
+      step: 5,
+      value: this.#triggerPosition * 100,
+      title: t("oscilloscope.triggerPosition"),
+      "aria-label": t("oscilloscope.triggerPosition"),
+      onInput: (event) => {
+        this.#triggerPosition = Number(event.currentTarget.value) / 100;
+        this.#scheduleRender();
+      },
+    });
+
+    const scaleStep = (values, current, direction) => {
+      const index = Math.max(0, values.indexOf(current));
+      return values[Math.max(0, Math.min(values.length - 1, index + direction))];
+    };
+    const scaleButton = (text, title, onClick) =>
+      el("button", {
+        type: "button",
+        class: "oscilloscope-control oscilloscope-scale-button",
+        text,
+        title,
+        "aria-label": title,
+        onClick,
+      });
+    const timeDown = scaleButton("−", t("oscilloscope.timeZoomIn"), () => {
+      this.#timePerDiv = scaleStep(TIME_STEPS, this.#timePerDiv, -1);
+      this.#timeSelect.value = String(this.#timePerDiv);
+      this.#scheduleRender();
+    });
+    const timeUp = scaleButton("+", t("oscilloscope.timeZoomOut"), () => {
+      this.#timePerDiv = scaleStep(TIME_STEPS, this.#timePerDiv, 1);
+      this.#timeSelect.value = String(this.#timePerDiv);
+      this.#scheduleRender();
+    });
+    const voltsDown = scaleButton("−", t("oscilloscope.voltageZoomIn"), () => {
+      this.#voltsPerDiv = scaleStep(VOLT_STEPS, this.#voltsPerDiv, -1);
+      this.#voltsSelect.value = String(this.#voltsPerDiv);
+      this.#scheduleRender();
+    });
+    const voltsUp = scaleButton("+", t("oscilloscope.voltageZoomOut"), () => {
+      this.#voltsPerDiv = scaleStep(VOLT_STEPS, this.#voltsPerDiv, 1);
+      this.#voltsSelect.value = String(this.#voltsPerDiv);
+      this.#scheduleRender();
     });
 
     const probes = el("div", { class: "oscilloscope-probes" });
@@ -414,6 +545,7 @@ export class Oscilloscope {
         this.#held,
       );
       this.#scheduleRender();
+      this.#animateRoll();
     });
     const clear = action("clear", () => {
       this.#samples = [];
@@ -496,13 +628,22 @@ export class Oscilloscope {
       ],
     );
     const controls = el("div", { class: "oscilloscope-controls" }, [
+      el("span", { text: t("oscilloscope.horizontal") }),
+      timeDown,
       time,
+      timeUp,
+      el("span", { text: t("oscilloscope.vertical") }),
+      voltsDown,
       volts,
+      voltsUp,
       el("span", { text: t("oscilloscope.trigger") }),
+      triggerMode,
       triggerChannel,
       edge,
       triggerLevel,
       el("span", { text: t("oscilloscope.voltsUnit") }),
+      el("span", { text: t("oscilloscope.triggerPosition") }),
+      triggerPosition,
     ]);
     const panel = el(
       "section",
@@ -643,6 +784,49 @@ export class Oscilloscope {
     });
   }
 
+  #animateRoll() {
+    if (
+      this.#rollFrame != null ||
+      !this.#running ||
+      !this.#visible ||
+      this.#held ||
+      this.#triggerMode !== "roll"
+    ) {
+      return;
+    }
+    const frame =
+      globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 16));
+    this.#rollFrame = frame(() => {
+      this.#rollFrame = null;
+      if (
+        !this.#running ||
+        !this.#visible ||
+        this.#held ||
+        this.#triggerMode !== "roll"
+      ) {
+        return;
+      }
+      this.#render();
+      this.#animateRoll();
+    });
+  }
+
+  #displaySamples() {
+    if (
+      this.#triggerMode !== "roll" ||
+      !this.#running ||
+      !this.#rollAnchor
+    ) {
+      return this.#samples;
+    }
+    const wall = globalThis.performance?.now?.() ?? Date.now();
+    const elapsed = Math.max(0, wall - this.#rollAnchor.wall) / 1000;
+    return extendScopeSamples(
+      this.#samples,
+      this.#rollAnchor.at + elapsed * this.#simSpeed,
+    );
+  }
+
   #render() {
     if (!this.#screen) return;
     this.#screen.replaceChildren();
@@ -668,31 +852,45 @@ export class Oscilloscope {
         }),
       );
     }
-    if (!this.#samples.length) {
+    const displaySamples = this.#displaySamples();
+    if (!displaySamples.length) {
       this.#readout.textContent = t("oscilloscope.runHint");
       this.#measurements.textContent = "";
       this.#cursorReadout.textContent = "";
       return;
     }
-    const latest = this.#samples.at(-1).at;
     const span = this.#timePerDiv * X_DIVS;
-    const before = latest - 2 * this.#timePerDiv;
-    const trigger = triggerAt(
-      this.#samples,
-      this.#triggerChannel,
-      this.#triggerEdge,
-      this.#triggerLevel,
-      before,
-    );
-    const end =
-      trigger == null
-        ? latest
-        : Math.min(latest, trigger + 2 * this.#timePerDiv);
-    const start = end - span;
+    const window = scopeWindow(displaySamples, {
+      channel: this.#triggerChannel,
+      edge: this.#triggerEdge,
+      level: this.#triggerLevel,
+      mode: this.#triggerMode,
+      span,
+      triggerPosition: this.#triggerPosition,
+    });
+    if (!window) {
+      this.#readout.textContent = t("oscilloscope.waitingForTrigger");
+      this.#measurements.textContent = "";
+      return;
+    }
+    const { start, end, trigger, acquiring = false } = window;
     const centerY = HEIGHT / 2;
-    const visibleSamples = this.#samples.filter(
-      (sample) => sample.at >= start && sample.at <= end,
-    );
+    const last = this.#samples.at(-1);
+    const visibleSamples = acquiring
+      ? []
+      : resampleScopeWindow(displaySamples, start, end, WIDTH + 1);
+    if (trigger != null) {
+      const x = ((trigger - start) / span) * WIDTH;
+      this.#screen.append(
+        svg("line", {
+          class: "oscilloscope-trigger-marker",
+          x1: x,
+          x2: x,
+          y1: 0,
+          y2: HEIGHT,
+        }),
+      );
+    }
     for (const channel of CHANNELS) {
       if (!this.#channels[channel].enabled) continue;
       const values = visibleSamples
@@ -735,6 +933,71 @@ export class Oscilloscope {
         );
       }
     }
+    const pixelsPerDivision = HEIGHT / Y_DIVS;
+    for (let division = 1; division < Y_DIVS; division += 1) {
+      const y = division * pixelsPerDivision;
+      for (const [channel, x, anchor] of [
+        ["ch1", 5, "start"],
+        ["ch2", WIDTH - 5, "end"],
+      ]) {
+        if (!this.#channels[channel].enabled) continue;
+        const volts =
+          ((centerY - y) / pixelsPerDivision -
+            this.#channels[channel].offset) *
+          this.#voltsPerDiv;
+        this.#screen.append(
+          svgText(signedLabel(volts, "V"), {
+            class: `oscilloscope-axis-label oscilloscope-axis-label--${channel}`,
+            x,
+            y: y - 3,
+            "text-anchor": anchor,
+          }),
+        );
+      }
+    }
+    const timeReference = trigger ?? end;
+    for (let division = 0; division <= X_DIVS; division += 1) {
+      const x = (division / X_DIVS) * WIDTH;
+      const at = start + division * this.#timePerDiv;
+      this.#screen.append(
+        svg("line", {
+          class: "oscilloscope-axis-tick",
+          x1: x,
+          x2: x,
+          y1: 0,
+          y2: 6,
+        }),
+        svgText(signedLabel(at - timeReference, "s"), {
+          class: "oscilloscope-axis-label oscilloscope-axis-label--time",
+          x: x === 0 ? 4 : x === WIDTH ? WIDTH - 4 : x,
+          y: 11,
+          "text-anchor": x === 0 ? "start" : x === WIDTH ? "end" : "middle",
+        }),
+      );
+    }
+    for (const [channel, side] of [
+      ["ch1", "left"],
+      ["ch2", "right"],
+    ]) {
+      if (!this.#channels[channel].enabled) continue;
+      const y = Math.max(
+        6,
+        Math.min(
+          HEIGHT - 6,
+          centerY - this.#channels[channel].offset * pixelsPerDivision,
+        ),
+      );
+      const points =
+        side === "left"
+          ? `0,${y} 9,${y - 5} 9,${y + 5}`
+          : `${WIDTH},${y} ${WIDTH - 9},${y - 5} ${WIDTH - 9},${y + 5}`;
+      this.#screen.append(
+        svg("polygon", {
+          class: `oscilloscope-zero-marker oscilloscope-zero-marker--${channel}`,
+          points,
+        }),
+      );
+    }
     if (this.#cursorsVisible) {
       for (const [key, className] of [
         ["t1", "a"],
@@ -775,14 +1038,16 @@ export class Oscilloscope {
       }
       this.#cursorReadout.textContent = `${t("oscilloscope.deltaTime")} ${scaledLabel(Math.abs(this.#cursors.t2 - this.#cursors.t1) * span, "s")} · ${t("oscilloscope.deltaVoltage")} ${scaledLabel(Math.abs(this.#cursors.v2 - this.#cursors.v1), "V")}`;
     } else this.#cursorReadout.textContent = "";
-    const last = this.#samples.at(-1);
     const fmt = (value) =>
       Number.isFinite(value)
         ? `${formatNumber(value, { maximumFractionDigits: 3 })} V`
         : "—";
-    this.#readout.textContent = `CH1 ${fmt(last.ch1)} · CH2 ${fmt(last.ch2)}`;
+    const levels = `CH1 ${fmt(last.ch1)} · CH2 ${fmt(last.ch2)}`;
+    this.#readout.textContent = acquiring
+      ? `${t("oscilloscope.acquiringTrigger")} · ${levels}`
+      : levels;
     const measurementText = [];
-    for (const channel of CHANNELS) {
+    for (const channel of acquiring ? [] : CHANNELS) {
       if (!this.#channels[channel].enabled) continue;
       const measured = scopeMeasurements(visibleSamples, channel, {
         threshold: this.#triggerLevel,

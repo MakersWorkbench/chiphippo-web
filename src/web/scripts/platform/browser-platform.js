@@ -371,7 +371,7 @@ export function createBrowserPlatform({
     return doc;
   };
 
-  const lessonProject = async () => {
+  const lessonManifest = async () => {
     if (!route.lessonId) return null;
     const manifest = await fetchedJson(
       fetchRef,
@@ -385,6 +385,12 @@ export function createBrowserPlatform({
       throw new Error(`Invalid lesson manifest: ${route.lessonId}`);
     }
     activeLessonManifest = clone(manifest);
+    return manifest;
+  };
+
+  const lessonProject = async (loadedManifest = null) => {
+    if (!route.lessonId) return null;
+    const manifest = loadedManifest ?? (await lessonManifest());
     const example = await fetchedJson(
       fetchRef,
       asset(`demos/${manifest.demo}.json`),
@@ -494,6 +500,10 @@ export function createBrowserPlatform({
 
   const project = {
     async boot() {
+      // Instrument/UI setup belongs to the lesson, not to its locally saved
+      // circuit. Always load the current manifest even when a recovery or
+      // autosave supplies the project document for this visit.
+      const manifest = route.lessonId ? await lessonManifest() : null;
       const recovery = await storage.get(recoveryKey);
       if (recovery?.meta?.tabs?.length) {
         return {
@@ -509,7 +519,7 @@ export function createBrowserPlatform({
       const stored = await storage.get(projectKey);
       return clone(
         stored ??
-          (await lessonProject()) ??
+          (await lessonProject(manifest)) ??
           (await publishedProject()) ??
           newProject(),
       );
