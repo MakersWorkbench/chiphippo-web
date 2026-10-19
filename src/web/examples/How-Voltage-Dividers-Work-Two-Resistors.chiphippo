@@ -1,0 +1,222 @@
+{
+  "version": 5,
+  "name": "How-Voltage-Dividers-Work-Two-Resistors",
+  "description": "A 9 V supply feeds two resistors in series, R1 (1 kilohm) on top and R2 (2 kilohms) below it, with the lower end on ground (0 V). The same current flows through both, 9 V divided by their 3 kilohm total, which is 3 milliamps. That current drops 3 V across R1 and 6 V across R2, so the point between them sits at 6 V. Touch a multimeter's probes to that point and to ground to read it.",
+  "wheelLocked": false,
+  "activeTab": "t1",
+  "nextIndex": 2,
+  "tabs": [
+    {
+      "id": "t1",
+      "name": "How-Voltage-Dividers-Work-Two-Resistors",
+      "doc": {
+        "version": 15,
+        "boards": [
+          {
+            "id": "bb1",
+            "type": "rail-half",
+            "x": 0,
+            "y": 0,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb2",
+            "type": "pins-half",
+            "x": 0,
+            "y": 3.5,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb3",
+            "type": "rail-half",
+            "x": 0,
+            "y": 17.52,
+            "rot": 0,
+            "group": "g1"
+          }
+        ],
+        "components": [
+          {
+            "id": "psu1",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 0,
+            "params": {
+              "volts": 9
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a1",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R1",
+            "description": "top resistor, 1 kilohm"
+          },
+          {
+            "id": "c2",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a6",
+            "params": {
+              "ohms": 2000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R2",
+            "description": "bottom resistor, 2 kilohms"
+          }
+        ],
+        "wires": [
+          {
+            "id": "w1",
+            "from": "psu1.+",
+            "to": "bb1.+25",
+            "color": "red"
+          },
+          {
+            "id": "w2",
+            "from": "psu1.-",
+            "to": "bb3.-25",
+            "color": "black"
+          },
+          {
+            "id": "w3",
+            "from": "bb1.+24",
+            "to": "bb3.+24",
+            "color": "red"
+          },
+          {
+            "id": "w4",
+            "from": "bb3.-24",
+            "to": "bb1.-24",
+            "color": "black"
+          },
+          {
+            "id": "w5",
+            "from": "bb3.+7",
+            "to": "bb2.e1",
+            "color": "red"
+          },
+          {
+            "id": "w6",
+            "from": "bb2.b4",
+            "to": "bb2.b6",
+            "color": "purple"
+          },
+          {
+            "id": "w7",
+            "from": "bb3.-9",
+            "to": "bb2.c9",
+            "color": "black"
+          }
+        ],
+        "buses": [],
+        "netNames": [],
+        "annotations": [
+          {
+            "id": "an1",
+            "kind": "label",
+            "x": 0,
+            "y": -16.4,
+            "text": "Two-resistor voltage divider",
+            "anchor": "c1"
+          },
+          {
+            "id": "an2",
+            "kind": "label",
+            "x": 0,
+            "y": -14.6,
+            "text": "A 9 V supply feeds two resistors in series, R1 (1 kilohm) on top",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an3",
+            "kind": "label",
+            "x": 0,
+            "y": -12.8,
+            "text": "and R2 (2 kilohms) below it, with the lower end on ground (0 V).",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an4",
+            "kind": "label",
+            "x": 0,
+            "y": -11,
+            "text": "The same current flows through both, 9 V divided by their 3",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an5",
+            "kind": "label",
+            "x": 0,
+            "y": -9.2,
+            "text": "kilohm total, which is 3 milliamps. That current drops 3 V",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an6",
+            "kind": "label",
+            "x": 0,
+            "y": -7.4,
+            "text": "across R1 and 6 V across R2, so the point between them sits at 6",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an7",
+            "kind": "label",
+            "x": 0,
+            "y": -5.6,
+            "text": "V. Touch a multimeter's probes to that point and to ground to",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an8",
+            "kind": "label",
+            "x": 0,
+            "y": -3.8,
+            "text": "read it.",
+            "color": "#808080",
+            "anchor": "c1"
+          }
+        ],
+        "scopeChannels": [],
+        "signals": [],
+        "integrations": [],
+        "nextBoardId": 4,
+        "nextGroupId": 2,
+        "nextComponentId": 3,
+        "nextPsuId": 2,
+        "nextClockId": 1,
+        "nextWireId": 8,
+        "nextBusId": 1,
+        "nextAnnotationId": 9,
+        "nextScopeChannelId": 1,
+        "nextSignalId": 1,
+        "nextOutputId": 1,
+        "nextInputId": 1
+      }
+    }
+  ],
+  "connections": [],
+  "codegen": {},
+  "cpuBreakpoints": {},
+  "customChips": [],
+  "location": null
+}

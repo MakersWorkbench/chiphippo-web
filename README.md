@@ -67,7 +67,16 @@ moving simulation work to the server.
   are built from plain-text netlist specs with
   `node scripts/build-project.mjs <spec.json> --library --category "<Category>"`,
   which compiles, verifies against the spec's own tests, and files the project in
-  the library (see `docs/project-specs/` for two worked specs).
+  the library (see `docs/project-specs/` for worked specs).
+- **Circuits from text.** A spec names parts, their settings (`"ohms": "4.7k"`,
+  `"farads": "100u"`, a supply of 9 V), and which pins connect. Digital specs
+  are checked against logic levels and clock pulses; `"mode": "analog"` specs are
+  checked against voltages and currents measured by the Spice Lite engine, at a
+  stated time after power-on. `node scripts/build-project.mjs --catalog` lists
+  every part with its pins and settings, and
+  `node scripts/capture-circuit.mjs <project.chiphippo> --out shot.png` takes a
+  crisp, cropped screenshot of a circuit (optionally running) using any installed
+  Chromium browser.
 - **Optional Drupal integration.** The included Drupal 10.3/11 module adds a
   **Chip Hippo Circuit** CKEditor button, a Chip Hippo Project media type and a
   **Save to site** action in the lab's File toolbar, so circuits built in the

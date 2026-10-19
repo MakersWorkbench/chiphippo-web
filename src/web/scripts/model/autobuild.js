@@ -50,7 +50,12 @@
 // normalizeDocument → buildNetlist → settle. Wrapping it as a design clip for
 // the paste path is the caller's job.
 
-import { openCollectorPins, partDef } from "../catalog/index.js";
+import {
+  footprintOffsets,
+  openCollectorPins,
+  partDef,
+} from "../catalog/index.js";
+import { coerceParams } from "./spec-params.js";
 import { pullDownOhms } from "../catalog/families.js";
 import { isRomChip } from "../sim/chip-eval.js";
 import { BREADBOARD_KITS } from "./board-types.js";
@@ -272,7 +277,31 @@ function resolveSpec(spec) {
       );
       return;
     }
-    parts.set(p.id, { id: p.id, ref: p.ref, def, label: p.label ?? null });
+    // Values and starting state the spec states for this part ("ohms": "4.7k").
+    // Kept ONLY when the spec gave some, so a spec that never mentions params
+    // compiles to exactly what it always did.
+    let params;
+    if (p.params != null) {
+      const given = coerceParams(def, p.params);
+      if (!given.ok) {
+        for (const e of given.errors) {
+          errors.push(
+            err(e.code, `${p.id} (${p.ref}): ${e.message}`, {
+              path: `${path}.params`,
+            }),
+          );
+        }
+        return;
+      }
+      params = given.params;
+    }
+    parts.set(p.id, {
+      id: p.id,
+      ref: p.ref,
+      def,
+      label: p.label ?? null,
+      ...(params ? { params } : {}),
+    });
   });
 
   // Nets. A pin may appear in exactly one net: two nets sharing a pin are the
@@ -465,16 +494,42 @@ function resolveSpec(spec) {
     nets.push({ name, pins, rail });
   });
 
-  return errors.length ? { ok: false, errors } : { ok: true, parts, nets };
+  // The supply the compiler plants: `"supply": {"volts": 9}` sets it (the
+  // same settings the PSU brick's Properties card has).
+  let psuParams;
+  if (spec.supply != null) {
+    const given = coerceParams(partDef("psu"), spec.supply);
+    if (!given.ok) {
+      for (const e of given.errors) {
+        errors.push(err(e.code, `supply: ${e.message}`, { path: "supply" }));
+      }
+    } else {
+      psuParams = given.params;
+    }
+  }
+  if (spec.mode != null && spec.mode !== "digital" && spec.mode !== "analog") {
+    errors.push(
+      err(
+        "BAD_MODE",
+        `mode must be "digital" or "analog", not ${JSON.stringify(spec.mode)}.`,
+        { path: "mode" },
+      ),
+    );
+  }
+
+  return errors.length
+    ? { ok: false, errors }
+    : { ok: true, parts, nets, psuParams, analog: spec.mode === "analog" };
 }
 
 // ── Assemble: layout, power, the resistor rule, routing ─────────────────────
 
 /** Columns a board-seated part occupies. */
-function spanOf(def) {
+function spanOf(def, params = null) {
   if (def.package) return packageSpec(def.package).halfPins;
   if (def.footprint) {
-    const offs = def.footprint.offsets;
+    // A part's size can depend on what the spec set (an inductor's body).
+    const offs = footprintOffsets(def, params ?? {});
     return offs[offs.length - 1] - offs[0] + 1;
   }
   return 0;
@@ -1016,6 +1071,11 @@ function lampLegs(def) {
 
 function assemble(resolved, title, notes) {
   const { parts, nets } = resolved;
+  // ANALOG mode: the circuit is exactly what the spec says. The compiler adds
+  // no series resistor to a lamp, no pull to a switched input and no tie to a
+  // spare CMOS input, because in an analog lesson those ARE the lesson (an LED
+  // with no resistor is meant to burn).
+  const analog = resolved.analog === true;
   const warnings = [];
   // The spec's own parts, before the compiler adds any. Each is written onto
   // the desk under the id the spec gave it (and its `label` as the part's
@@ -1056,7 +1116,7 @@ function assemble(resolved, title, notes) {
   //    mention either. Only inputs nothing uses (spec-lint's
   //    `spareCmosInputs`) — one the part DOES use and the spec left out is a
   //    mistake for L6 to report, not something to paper over.
-  const spare = spareCmosInputs([...parts.values()], nets);
+  const spare = analog ? [] : spareCmosInputs([...parts.values()], nets);
   if (spare.length) {
     let gnd = nets.find((n) => n.rail === "GND");
     if (!gnd) {
@@ -1113,7 +1173,7 @@ function assemble(resolved, title, notes) {
   const bareLegs = []; // …the same, for a bare LED
   for (const p of seated) {
     const { common, junctions } = lampLegs(p.def);
-    if (common) {
+    if (common && !analog) {
       const net = netOf(p.id, common.pin, common.rail);
       if (net) legs.push({ part: p, ...common, net });
     }
@@ -1127,7 +1187,7 @@ function assemble(resolved, title, notes) {
         : a
           ? { part: p, pin: j.anodePin, rail: "VCC", net: a }
           : null;
-      if (leg) (isBareLed(p.def) ? bareLegs : legs).push(leg);
+      if (leg && !analog) (isBareLed(p.def) ? bareLegs : legs).push(leg);
     }
   }
   const nodes = new Map(); // rail net → its lamp legs, one node
@@ -1297,7 +1357,7 @@ function assemble(resolved, title, notes) {
     parts.get(q.partId).def.pins?.find((r) => r.n === q.pin)?.role;
   const pulls = []; // { net, rail } — the rail the pull reaches
   const companionOf = new Map(); // pack id → [{pin, hostId, hostPin}]
-  for (const net of [...nets]) {
+  for (const net of analog ? [] : [...nets]) {
     // Already tied to a supply, already driven, or already pulled: a spec that
     // brought its own resistor network keeps it, rather than getting a second
     // one in parallel doing the same job.
@@ -1454,7 +1514,7 @@ function assemble(resolved, title, notes) {
   // columns a lamp, eight LEDs would book a full board for a design that fits
   // on a half.
   const budget = seated.reduce(
-    (n, p) => n + (plugOf.has(p.id) ? 0 : spanOf(p.def) + GAP),
+    (n, p) => n + (plugOf.has(p.id) ? 0 : spanOf(p.def, p.params) + GAP),
     0,
   );
   const kitKey = budget <= 30 ? "half" : "full";
@@ -1550,7 +1610,7 @@ function assemble(resolved, title, notes) {
     ref: "psu",
     x: boardRight + 4,
     y: 0,
-    params: { volts: 5 },
+    params: resolved.psuParams ?? { volts: 5 },
   });
   // A dropped POWER wire is the one failure here that would be invisible:
   // `wire` skips a null endpoint, so an exhausted supply leaves a chip
@@ -1624,7 +1684,7 @@ function assemble(resolved, title, notes) {
     const parts = [];
     let seq = 0;
     for (const p of order) {
-      const span = spanOf(p.def);
+      const span = spanOf(p.def, p.params);
       if (!span) {
         return {
           ok: false,
@@ -1694,7 +1754,13 @@ function assemble(resolved, title, notes) {
           const start = alloc.reserveColumns(kit.pins, cost, "both", p.id);
           if (start == null) continue;
           const anchor = `${row}${start}`;
-          const r = alloc.seat(kit.pins, p.ref, anchor, seatParams, p.id);
+          const r = alloc.seat(
+            kit.pins,
+            p.ref,
+            anchor,
+            { ...(p.params ?? {}), ...seatParams },
+            p.id,
+          );
           if (!r.ok) continue;
           placed = { boardId: kit.pins, anchor, holes: r.holes, params: seatParams }; // prettier-ignore
           break;
@@ -1788,7 +1854,7 @@ function assemble(resolved, title, notes) {
       splitAcrossBoards(
         order,
         nets,
-        (p) => (companions.has(p.id) ? 0 : spanOf(p.def) + gap),
+        (p) => (companions.has(p.id) ? 0 : spanOf(p.def, p.params) + gap),
         { boards: seating.used.size, capacity: perKit },
       ),
       gap,
@@ -2291,6 +2357,7 @@ function assemble(resolved, title, notes) {
       annotations,
     },
     warnings,
+    analog,
     interposed: interposed.map((i) => i.resistor.id),
     // The resolved nets AFTER interposition — what the compiler actually set
     // out to build. autobuild-verify.js compares these against the partition

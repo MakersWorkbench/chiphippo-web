@@ -78,6 +78,7 @@ import { resolvePin } from "./pin-resolve.js";
 import { floatingInputs } from "./spec-lint.js";
 import { buildNetlist } from "../sim/netlist.js";
 import { settle, tick } from "../sim/engine.js";
+import { ENGINES } from "../sim/engines.js";
 import { isLit, junctionState } from "../sim/junction.js";
 import { channelStates, isAnalogSwitch } from "../sim/chip-eval.js";
 import { H, L, Z } from "../sim/levels.js";
@@ -299,6 +300,20 @@ export function* verifySteps(compiled, spec = null) {
   }
   if (faults.some((f) => f.kind === ABORT)) {
     return { ok: false, faults, document: doc, netlist };
+  }
+
+  // An ANALOG spec ("mode": "analog") is judged by voltages and currents, not
+  // by logic levels: the digital gates below (undriven nets, floating inputs,
+  // levels) do not apply to a resistor divider.
+  if (compiled.analog === true) {
+    return yield* analogLadder({
+      compiled,
+      spec,
+      doc,
+      faults,
+      nameOf,
+      addressOf,
+    });
   }
 
   yield { gate: "L5", label: tf("ai.gate.l5", "Simulating…") };
@@ -1165,4 +1180,343 @@ function runOne({ doc, netlist, partMap, test, namer }) {
   return mismatches.length
     ? { ok: false, detail: mismatches.join("; ") }
     : { ok: true, detail: "" };
+}
+
+// ── ANALOG mode: Spice Lite, voltages and currents ──────────────────────────
+
+/** What an analog expectation may say about a pin. */
+const MEASURE_KEYS = ["volts", "amps", "minus", "tolerancePercent"];
+
+/**
+ * Run the Spice Lite engine over a document at each moment in `times` (seconds
+ * since power-on, ascending) and answer the last result. Several ticks, because
+ * the engine catches a late tick up on what happened between: an RC circuit
+ * read at one second is a circuit that has run for one second.
+ */
+function runSpice(doc, netlist, times, clockLevel = L) {
+  const clocks = doc.components
+    .filter((c) => c.kind === "clock")
+    .map((c) => c.id);
+  const clockPhase = new Map(clocks.map((id) => [id, clockLevel]));
+  let warm = new Map();
+  let state = new Map();
+  let prev = new Map();
+  let analog = null;
+  let result = null;
+  for (const now of times) {
+    result = ENGINES.spice.tick({
+      document: doc,
+      netlist,
+      warmStart: warm,
+      state,
+      prevPinLevels: prev,
+      clockPhase,
+      now,
+      spice: { config: { enabled: true }, analog },
+    });
+    warm = result.netLevels;
+    state = result.state;
+    prev = result.pinLevels;
+    analog = result.analog;
+  }
+  return result;
+}
+
+/** Spice Lite's own netlist: an inductor with an inductance is a branch. */
+const analogNetlist = (doc) =>
+  buildNetlist(doc, new Map(), { inductors: "branch" });
+
+/** Volts as a short string: 6 V, 0.7 V, 12.5 mV. */
+const showVolts = (v) =>
+  Math.abs(v) >= 1 || v === 0
+    ? `${+v.toFixed(3)} V`
+    : `${+(v * 1000).toFixed(2)} mV`;
+
+/** Amps as a short string: 1.5 A, 3 mA, 20 uA. */
+const showAmps = (a) =>
+  Math.abs(a) >= 0.1
+    ? `${+a.toFixed(3)} A`
+    : Math.abs(a) >= 1e-4
+      ? `${+(a * 1000).toFixed(3)} mA`
+      : `${+(a * 1e6).toFixed(2)} uA`;
+
+/**
+ * The analog ladder: the structural gates (L3, L4) have passed; now run the
+ * circuit under Spice Lite and hold it to what physics says (L5) and to the
+ * spec's measurements (L7).
+ *
+ * L5 faults: a lamp that burns (an LED with no current limit is the classic),
+ * an LED driven past its rating, and any engine warning (a short, a transistor
+ * overloaded, an output asked for too much current, an oscillation) unless the
+ * spec lists its type in `allowWarnings` (an oscillator circuit says so).
+ */
+function* analogLadder({ compiled, spec, doc, faults, nameOf, addressOf }) {
+  yield { gate: "L5", label: tf("ai.gate.l5", "Simulating…") };
+  const live = analogNetlist(doc);
+  const where = electricalNamer(
+    nameOf,
+    doc,
+    declaredIds(compiled.nets, addressOf, live),
+  );
+  const allow = new Set(
+    Array.isArray(spec?.allowWarnings) ? spec.allowWarnings : [],
+  );
+  const base = runSpice(doc, live, [0, 0.05]);
+  if (!base) {
+    faults.push(
+      fault(
+        "L5",
+        REPAIR,
+        "SIM_FAILED",
+        "The Spice Lite engine returned nothing.",
+      ),
+    );
+  } else {
+    for (const w of base.warnings ?? []) {
+      if (allow.has(w.type)) continue;
+      faults.push(
+        fault(
+          "L5",
+          REPAIR,
+          `SIM_${String(w.type).toUpperCase().replace(/-/g, "_")}`,
+          describeWarning(w, where),
+        ),
+      );
+    }
+    for (const [compId, lamp] of base.lamps ?? []) {
+      const comp = doc.components.find((c) => c.id === compId);
+      if (!comp) continue;
+      if (lamp.burnt) {
+        faults.push(
+          fault(
+            "L5",
+            REPAIR,
+            "LED_BURNS",
+            `${nameOf(comp)} burns out: nothing limits the current through it. ` +
+              `Put a resistor in series with it.`,
+          ),
+        );
+      } else if (lamp.overdriven && !allow.has("led-overdriven")) {
+        faults.push(
+          fault(
+            "L5",
+            REPAIR,
+            "LED_OVERDRIVEN",
+            `${nameOf(comp)} carries ${showAmps(lamp.amps)}, past its rating. ` +
+              `Raise the series resistor.`,
+          ),
+        );
+      }
+    }
+    for (const [id, status] of base.chipStatus ?? []) {
+      if (status?.status && status.status !== "ok") {
+        faults.push(
+          fault(
+            "L5",
+            REPAIR,
+            "CHIP_NOT_OK",
+            `${where.chip(id)} is ${status.status}.`,
+            {
+              chip: id,
+            },
+          ),
+        );
+      }
+    }
+  }
+
+  const results = yield* analogTestSteps({
+    doc,
+    partMap: compiled.partMap,
+    tests: spec?.tests,
+  });
+  for (const r of results) {
+    if (!r.ok) {
+      faults.push(
+        fault(
+          "L7",
+          REPAIR,
+          r.invalid ? "TEST_INVALID" : "TEST_FAILED",
+          `${r.name}: ${r.detail}`,
+          { test: r.name },
+        ),
+      );
+    }
+  }
+  return {
+    ok: faults.length === 0,
+    faults,
+    document: doc,
+    netlist: live,
+    results,
+  };
+}
+
+/**
+ * The analog test runner. A test is `{name, set?, time?, expect}`:
+ *
+ *   expect  a list of `{target, volts?, amps?, minus?, tolerancePercent?}`
+ *           (folded to a map keyed by target, one entry per pin):
+ *             volts  the voltage at that pin, measured from ground, or, with
+ *                    `minus`, across the two pins (target minus the other);
+ *             amps   the current through that pin's lead (its size, not its
+ *                    direction);
+ *             tolerancePercent  how close counts, default 3 (never tighter
+ *                    than 20 mV or 20 uA, the engine's own resolution).
+ *   set     DIP-bank positions, as in a digital test.
+ *   time    seconds since power-on to read at (default 0.05; give a larger
+ *           one for a capacitor that has to charge).
+ */
+function* analogTestSteps({ doc, partMap, tests }) {
+  if (!Array.isArray(tests) || !tests.length) return [];
+  const results = [];
+  const built = new Map(doc.components.map((c) => [c.id, c.params]));
+  for (const [i, t] of tests.entries()) {
+    const name =
+      typeof t?.name === "string" && t.name.trim() ? t.name : `tests[${i}]`;
+    yield {
+      gate: "L7",
+      label: tf("ai.gate.l7", "Running test {index} of {total}: {name}", {
+        index: i + 1,
+        total: tests.length,
+        name,
+      }),
+      index: i,
+      total: tests.length,
+    };
+    for (const c of doc.components) c.params = built.get(c.id);
+    try {
+      results.push({ name, ...runAnalogOne({ doc, partMap, test: t }) });
+    } catch (e) {
+      results.push({ name, ok: false, detail: e.message, invalid: true });
+    }
+  }
+  for (const c of doc.components) c.params = built.get(c.id);
+  return results;
+}
+
+function runAnalogOne({ doc, partMap, test }) {
+  const expects = Object.entries(test?.expect ?? {});
+  if (!expects.length) {
+    throw new InvalidTest("it expects nothing, so it can never fail");
+  }
+
+  const sets = test?.set && typeof test.set === "object" ? test.set : {};
+  for (const [specId, value] of Object.entries(sets)) {
+    const compId = partMap.get(specId);
+    const comp = compId && doc.components.find((c) => c.id === compId);
+    if (!comp) {
+      throw new InvalidTest(
+        `set names "${specId}", which is not in the circuit`,
+      );
+    }
+    const def = partDef(comp.ref);
+    if (!def?.switchBank) {
+      throw new InvalidTest(
+        `"${specId}" (${comp.ref}) has no switch positions to set`,
+      );
+    }
+    comp.params = {
+      ...comp.params,
+      states: bitsOf(value, def.pins.length / 2, `"${specId}" (${comp.ref})`),
+    };
+  }
+  const time = test?.time ?? 0.05;
+  if (!(typeof time === "number" && time >= 0 && time <= 3600)) {
+    throw new InvalidTest(
+      `time must be seconds between 0 and 3600, not ${JSON.stringify(time)}`,
+    );
+  }
+  const live = analogNetlist(doc);
+  const result = runSpice(doc, live, time > 0 ? [0, time] : [0]);
+  const addresses = pinAddresser(doc, partMap);
+  const addressOfToken = (token, what) => {
+    const dot = String(token).indexOf(".");
+    if (dot <= 0)
+      throw new InvalidTest(`${what} "${token}" is not <part>.<pin>`);
+    const specId = token.slice(0, dot);
+    const compId = partMap.get(specId);
+    const comp = compId && doc.components.find((c) => c.id === compId);
+    if (!comp) {
+      throw new InvalidTest(
+        `${what} names "${specId}", which is not in the circuit`,
+      );
+    }
+    const r = resolvePin(comp.ref, token.slice(dot + 1));
+    if (!r.ok || r.kind !== "pin") {
+      throw new InvalidTest(
+        r.message ?? `"${comp.ref}" has no pin "${token.slice(dot + 1)}"`,
+      );
+    }
+    return addresses({ partId: specId, kind: "pin", pin: r.pin });
+  };
+  const voltsAt = (address) =>
+    result.nodeVolts?.get(live.netOfPoint.get(address));
+
+  const misses = [];
+  for (const [target, want] of expects) {
+    if (
+      !want ||
+      typeof want !== "object" ||
+      (want.volts == null && want.amps == null)
+    ) {
+      throw new InvalidTest(
+        `expect ${target}: an analog test states "volts" and/or "amps" for a pin`,
+      );
+    }
+    for (const key of Object.keys(want)) {
+      if (!MEASURE_KEYS.includes(key)) {
+        throw new InvalidTest(
+          `expect ${target}: "${key}" is not a measurement (use volts, amps, minus, tolerancePercent)`,
+        );
+      }
+    }
+    const pct = want.tolerancePercent ?? 3;
+    if (!(typeof pct === "number" && pct >= 0 && pct <= 100)) {
+      throw new InvalidTest(
+        `expect ${target}: tolerancePercent must be 0 to 100`,
+      );
+    }
+    const address = addressOfToken(target, "expect");
+    if (want.volts != null) {
+      if (typeof want.volts !== "number") {
+        throw new InvalidTest(`expect ${target}: volts must be a number`);
+      }
+      let got = voltsAt(address);
+      let label = target;
+      if (want.minus != null) {
+        const other = voltsAt(addressOfToken(want.minus, "minus"));
+        got =
+          got === undefined || other === undefined ? undefined : got - other;
+        label = `${target} to ${want.minus}`;
+      }
+      const tol = Math.max(0.02, (pct / 100) * Math.abs(want.volts));
+      if (got === undefined) {
+        misses.push(`${label} has no defined voltage (the net floats)`);
+      } else if (Math.abs(got - want.volts) > tol) {
+        misses.push(
+          `${label} is ${showVolts(got)}, expected ${showVolts(want.volts)} (within ${showVolts(tol)})`,
+        );
+      }
+    }
+    if (want.amps != null) {
+      if (typeof want.amps !== "number") {
+        throw new InvalidTest(`expect ${target}: amps must be a number`);
+      }
+      const got = Math.abs(result.currents?.get(address) ?? 0);
+      const wanted = Math.abs(want.amps);
+      const tol = Math.max(2e-5, (pct / 100) * wanted);
+      if (Math.abs(got - wanted) > tol) {
+        misses.push(
+          `current at ${target} is ${showAmps(got)}, expected ${showAmps(wanted)} (within ${showAmps(tol)})`,
+        );
+      }
+    }
+  }
+  return misses.length
+    ? { ok: false, detail: misses.join("; ") }
+    : {
+        ok: true,
+        detail: `${expects.length} measurement${expects.length > 1 ? "s" : ""} hold`,
+      };
 }

@@ -54,7 +54,16 @@ const flag = (name) => {
 };
 if (args.includes("--catalog")) {
   const { buildCatalogCard } = await load("ai/catalog-brief.js");
-  console.log(buildCatalogCard());
+  const { partDef } = await load("catalog/index.js");
+  const { paramHints } = await load("model/spec-params.js");
+  // The builder's card lists parts and pins; a spec may also set a part's
+  // values, so each part that takes settings gets them on the next line.
+  for (const line of buildCatalogCard().split(/\r?\n/)) {
+    console.log(line);
+    const def = partDef(line.split(" ")[0]);
+    const hints = def ? paramHints(def) : [];
+    if (hints.length) console.log(`    settings (params): ${hints.join("; ")}`);
+  }
   process.exit(0);
 }
 const VALUE_FLAGS = new Set([

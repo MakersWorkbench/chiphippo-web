@@ -52,6 +52,27 @@ export const MIN_TESTS = 2;
 export function testSuiteFaults(spec) {
   const tests = Array.isArray(spec?.tests) ? spec.tests : [];
   const faults = [];
+  // An ANALOG spec is checked by measurements, and one circuit has one
+  // operating point, so the "different input state" rule does not apply: it
+  // needs at least ${MIN_TESTS} measurements in all.
+  if (spec?.mode === "analog") {
+    const measured = tests.reduce(
+      (n, t) => n + Object.keys(t?.expect ?? {}).length,
+      0,
+    );
+    if (measured < MIN_TESTS) {
+      faults.push({
+        gate: "L7",
+        kind: "repair",
+        code: "TOO_FEW_TESTS",
+        message:
+          `An analog spec needs at least ${MIN_TESTS} measurements in its ` +
+          `tests (a voltage at a pin, a current through a lead); it has ` +
+          `${measured}.`,
+      });
+    }
+    return faults;
+  }
   if (tests.length < MIN_TESTS) {
     faults.push({
       gate: "L7",
@@ -117,7 +138,14 @@ function pinMap(value) {
     for (const pair of value) {
       if (!pair || typeof pair !== "object") continue;
       if (typeof pair.target !== "string" || !pair.target) continue;
-      out[pair.target] = String(pair.value ?? "");
+      // An analog expectation states a measurement instead of a level:
+      // {target, volts, amps, minus, tolerancePercent}.
+      const measure = ["volts", "amps", "minus", "tolerancePercent"].filter(
+        (k) => pair[k] != null,
+      );
+      out[pair.target] = measure.length
+        ? Object.fromEntries(measure.map((k) => [k, pair[k]]))
+        : String(pair.value ?? "");
     }
     return out;
   }

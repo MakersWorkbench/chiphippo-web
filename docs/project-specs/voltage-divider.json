@@ -1,0 +1,23 @@
+{
+  "title": "Two-resistor voltage divider",
+  "mode": "analog",
+  "supply": { "volts": 9 },
+  "notes": "A 9 V supply feeds two resistors in series, R1 (1 kilohm) on top and R2 (2 kilohms) below it, with the lower end on ground (0 V). The same current flows through both, 9 V divided by their 3 kilohm total, which is 3 milliamps. That current drops 3 V across R1 and 6 V across R2, so the point between them sits at 6 V. Touch a multimeter's probes to that point and to ground to read it.",
+  "parts": [
+    { "id": "R1", "ref": "resistor", "label": "top resistor, 1 kilohm", "params": { "ohms": "1k" } },
+    { "id": "R2", "ref": "resistor", "label": "bottom resistor, 2 kilohms", "params": { "ohms": "2k" } }
+  ],
+  "nets": [
+    { "name": "SUPPLY", "members": ["R1.1", "VCC"] },
+    { "name": "MIDDLE", "members": ["R1.2", "R2.1"] },
+    { "name": "GROUND", "members": ["R2.2", "GND"] }
+  ],
+  "tests": [
+    { "name": "the middle sits at 6 V", "expect": [{ "target": "R1.2", "volts": 6 }] },
+    { "name": "R1 drops 3 V and R2 drops 6 V", "expect": [
+      { "target": "R1.1", "minus": "R1.2", "volts": 3 },
+      { "target": "R2.1", "minus": "R2.2", "volts": 6 }
+    ] },
+    { "name": "3 mA flows through the series pair", "expect": [{ "target": "R1.2", "amps": 0.003 }] }
+  ]
+}
