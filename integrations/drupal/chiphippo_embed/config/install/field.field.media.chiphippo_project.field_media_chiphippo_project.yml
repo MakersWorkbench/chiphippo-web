@@ -1,0 +1,29 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.media.field_media_chiphippo_project
+    - media.type.chiphippo_project
+  module:
+    - file
+  enforced:
+    module:
+      - chiphippo_embed
+id: media.chiphippo_project.field_media_chiphippo_project
+field_name: field_media_chiphippo_project
+entity_type: media
+bundle: chiphippo_project
+label: 'Chip Hippo project file'
+description: ''
+required: true
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:file'
+  handler_settings: {  }
+  file_directory: chiphippo-projects
+  file_extensions: chiphippo
+  max_filesize: ''
+  description_field: false
+field_type: file

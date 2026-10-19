@@ -42,3 +42,4 @@ src/npm-debug.log*
 # Tracked templates live in *.env.example; the real files stay local.
 *.env
 !*.env.example
+

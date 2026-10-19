@@ -1,7 +1,10 @@
 name: Chip Hippo Embed
 type: module
-description: Responsive, origin-validated Chip Hippo lesson and project embeds.
-package: The Makers Workbench
+description: Embeds the Chip Hippo circuit simulator in articles through a CKEditor 5 button, with Save to Media Library from the simulator.
+package: Chip Hippo
 core_version_requirement: ^10.3 || ^11
 dependencies:
   - drupal:filter
+  - drupal:ckeditor5
+  - drupal:file
+  - drupal:media

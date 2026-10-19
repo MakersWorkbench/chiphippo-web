@@ -101,11 +101,16 @@ test("the discretes: every part counts as a connection and carries a Part number
       `${id}: ${def.group}`,
     );
   }
-  // …and nothing else claims to.
-  const claimed = PALETTE_DEFS.filter((d) => d.countsAsConnection).map(
-    (d) => d.id,
+  // …and nothing else claims to, bar the Sensors shelf, whose parts are wired
+  // in as connections too but carry no part number (they are modules).
+  const claimed = PALETTE_DEFS.filter((d) => d.countsAsConnection);
+  assert.deepEqual(
+    claimed
+      .filter((d) => d.group !== "Sensors")
+      .map((d) => d.id)
+      .sort(),
+    [...SHELF].sort(),
   );
-  assert.deepEqual(claimed.sort(), [...SHELF].sort());
 });
 
 test("a part number is trimmed, capped, and stored only when there is one", () => {

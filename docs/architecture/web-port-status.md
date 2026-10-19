@@ -17,26 +17,26 @@ Updated October 17, 2026.
 - Browser tabs for the guide and standard pin assignments, plus
   `BroadcastChannel` transport for memory, chip-designer, and CPU-monitor
   auxiliary interfaces.
-- Fingerprinted production entry assets, CI build/service tests, Oracle ARM
+- Fingerprinted production entry assets, CI build/service tests, ARM
   systemd/Nginx templates, backup/rollback notes, and GPL source guidance.
 - Drupal 10.3/11 text-filter package with responsive, origin-validated lesson
   and Media Library project embeds.
 
 ## Requires external access or decisions
 
-- Install and acceptance-test the Drupal package in the real TMWB codebase;
+- Acceptance-test the Drupal module on a real site;
   connect its token output to the existing CKEditor 5 button/dialog. An
   optional editor-only Save to Drupal action should use the authenticated
   Drupal parent and Media permission, never a password stored in lab code.
 - Choose the final subdomain spelling, add DNS, provision TLS, and deploy to the
-  Oracle server. The templates currently use
-  `breadboardlab.themakersworkbench.com`.
+  server. The templates currently use
+  `breadboardlab.example.com`.
 - Publish a tagged source release and change the in-app Source link to that
   exact tag for the first public deployment.
-- Run the real article acceptance matrix across production Drupal, Safari,
+- Run the real article acceptance matrix across a production Drupal site, Safari,
   Firefox, mobile/touch hardware, and iframe storage/privacy modes.
 - Configure Drupal/Nginx to serve public `.chiphippo` Media files with CORS
   access limited to the lab origin.
 
 These are deployment/integration gates, not missing simulator code. They need
-the Drupal repository, Oracle host, DNS account, and final policy choices.
+the Drupal repository, hosting, DNS account, and final policy choices.

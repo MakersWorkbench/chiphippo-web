@@ -1,6 +1,20 @@
 /*
- * Copyright 2026 Jason Figge
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright 2026 Charles Gantt
+ *
+ * This file is part of Chip Hippo.
+ *
+ * Chip Hippo is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Chip Hippo is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with Chip Hippo. If not, see <https://www.gnu.org/licenses/>.
  */
 
 /** Return the most recent requested edge crossing at or before `before`. */
@@ -93,10 +107,7 @@ export function resampleScopeWindow(
   if (!samples.length || !(end > start)) return [];
   let sourceIndex = 0;
   const held = Object.fromEntries(channels.map((channel) => [channel, null]));
-  while (
-    sourceIndex < samples.length &&
-    samples[sourceIndex].at <= start
-  ) {
+  while (sourceIndex < samples.length && samples[sourceIndex].at <= start) {
     for (const channel of channels) {
       if (Number.isFinite(samples[sourceIndex][channel])) {
         held[channel] = samples[sourceIndex][channel];
@@ -107,10 +118,7 @@ export function resampleScopeWindow(
   const result = [];
   for (let index = 0; index < size; index += 1) {
     const at = start + (index / (size - 1)) * (end - start);
-    while (
-      sourceIndex < samples.length &&
-      samples[sourceIndex].at <= at
-    ) {
+    while (sourceIndex < samples.length && samples[sourceIndex].at <= at) {
       for (const channel of channels) {
         if (Number.isFinite(samples[sourceIndex][channel])) {
           held[channel] = samples[sourceIndex][channel];
@@ -188,15 +196,17 @@ export function scopeMeasurements(
   const period = periods.length
     ? periods.reduce((sum, value) => sum + value, 0) / periods.length
     : null;
-  const completeCycleDuties = rising.slice(0, -1).flatMap((cycleStart, index) => {
-    const cycleEnd = rising[index + 1];
-    const fallingEdge = falling.find(
-      (at) => at > cycleStart && at < cycleEnd,
-    );
-    return fallingEdge == null
-      ? []
-      : [(fallingEdge - cycleStart) / (cycleEnd - cycleStart)];
-  });
+  const completeCycleDuties = rising
+    .slice(0, -1)
+    .flatMap((cycleStart, index) => {
+      const cycleEnd = rising[index + 1];
+      const fallingEdge = falling.find(
+        (at) => at > cycleStart && at < cycleEnd,
+      );
+      return fallingEdge == null
+        ? []
+        : [(fallingEdge - cycleStart) / (cycleEnd - cycleStart)];
+    });
   return {
     min,
     max,

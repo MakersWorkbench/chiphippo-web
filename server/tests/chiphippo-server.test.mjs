@@ -16,6 +16,8 @@ let server;
 let origin;
 
 before(async () => {
+  process.env.CHIPHIPPO_SITE_ORIGINS =
+    "https://site.example, https://www.site.example";
   server = createChipHippoServer({ webRoot });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
@@ -52,12 +54,21 @@ test("serves app and embed shells with different frame policies", async () => {
   assert.equal(embed.status, 200);
   assert.match(
     embed.headers.get("content-security-policy"),
-    /frame-ancestors https:\/\/themakersworkbench\.com/,
+    /frame-ancestors https:\/\/site\.example https:\/\/www\.site\.example/,
   );
   assert.match(
     embed.headers.get("content-security-policy"),
-    /connect-src 'self' https:\/\/themakersworkbench\.com/,
+    /connect-src 'self' https:\/\/site\.example/,
   );
+
+  // With no host site configured nothing may frame the embed or be contacted.
+  const configured = process.env.CHIPHIPPO_SITE_ORIGINS;
+  delete process.env.CHIPHIPPO_SITE_ORIGINS;
+  const standalone = await fetch(`${origin}/embed/74ls00-intro`);
+  process.env.CHIPHIPPO_SITE_ORIGINS = configured;
+  const csp = standalone.headers.get("content-security-policy");
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /connect-src 'self';/);
 
   const head = await fetch(`${origin}/app/`, { method: "HEAD" });
   assert.equal(head.status, 200);

@@ -1,0 +1,13 @@
+chiphippo_embed_chiphippoEmbed:
+  ckeditor5:
+    plugins:
+      - chiphippoEmbed.ChipHippoEmbed
+  drupal:
+    label: "Chip Hippo Circuit"
+    library: chiphippo_embed/ckeditor5.chiphippo
+    admin_library: chiphippo_embed/admin.ckeditor5
+    toolbar_items:
+      ChipHippoEmbed:
+        label: "Insert Chip Hippo Circuit"
+    elements:
+      - <div class="chiphippo-embed-wrapper" data-chiphippo-project data-chiphippo-lesson data-chiphippo-height>

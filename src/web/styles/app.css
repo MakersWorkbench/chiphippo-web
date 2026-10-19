@@ -3202,7 +3202,7 @@
   border: 0;
   background: transparent;
   color: var(--color-muted);
-  font-size: 1.25rem;
+  font-size: calc(var(--font-size) + 7px);
   cursor: pointer;
 }
 
@@ -3262,7 +3262,7 @@
   border-radius: var(--radius-sm);
   background: #c9d5b1;
   color: #172116;
-  font: 700 1.8rem/1.25 var(--font-mono);
+  font: 700 calc(var(--font-size) + 16px)/1.25 var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -3368,7 +3368,7 @@
   border: 0;
   background: transparent;
   color: var(--color-muted);
-  font-size: 1.25rem;
+  font-size: calc(var(--font-size) + 7px);
   cursor: pointer;
 }
 
@@ -3501,7 +3501,11 @@
 }
 
 .oscilloscope-axis-label {
-  font: 8px ui-monospace, SFMono-Regular, Consolas, monospace;
+  font:
+    8px ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
   paint-order: stroke;
   stroke: #071107;
   stroke-width: 3px;
@@ -3559,12 +3563,15 @@
   margin-top: var(--space-1);
   color: var(--color-subtext);
   font: var(--font-size-xs) var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .oscilloscope-measurements {
+  min-height: 2.9em;
   margin-top: var(--space-1);
   color: var(--color-subtext);
   font: var(--font-size-xs) var(--font-mono);
+  font-variant-numeric: tabular-nums;
   line-height: 1.45;
   white-space: pre-line;
 }

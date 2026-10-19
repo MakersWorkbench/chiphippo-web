@@ -121,6 +121,8 @@
   },
   "toolbar": {
     "file": {
+      "saveSite": "保存到网站",
+      "saveSiteTitle": "保存到网站 — 将此电路存入网站媒体库，以便文章嵌入",
       "group": "文件",
       "new": "新建项目",
       "newTitle": "新建项目（{accel}）— 在空白工作台上重新开始",
@@ -1393,6 +1395,7 @@
       "diode": "被省略：Digital 中没有像它这样单向传递电平的二极管",
       "inductor": "被省略，因此它连接的两个网络会被分开导出：Digital 中没有电感",
       "transistor": "被省略：Digital 中没有像它这样开关的晶体管",
+      "sensor": "已省略：Digital 没有传感器模块",
       "transistorPinout": "使用按工作台引脚顺序（E·B·C 或 S·G·D）编号的 TO-92 或 TO-220 封装——请对照实际元件的引脚排列检查",
       "nearestFootprint": "使用 KiCad 库中最接近的封装——其引脚间距与工作台上的略有不同，请对照实际元件检查",
       "customChip": "被省略：它是你自己设计的芯片，Digital 中没有它的模型",
@@ -1576,6 +1579,20 @@
     }
   },
   "oscilloscope": {
+    "horizontal": "水平",
+    "vertical": "垂直",
+    "timeZoomIn": "每格显示更短时间（放大）",
+    "timeZoomOut": "每格显示更长时间（缩小）",
+    "voltageZoomIn": "每格显示更大电压",
+    "voltageZoomOut": "每格显示更小电压",
+    "triggerMode": "触发模式",
+    "triggerAuto": "自动",
+    "triggerNormal": "正常",
+    "triggerRoll": "滚动",
+    "triggerPosition": "触发位置",
+    "position": "位置",
+    "waitingForTrigger": "等待触发…",
+    "acquiringTrigger": "正在采集与触发对齐的帧…",
     "title": "示波器",
     "screen": "示波器电压显示",
     "timeScale": "每格时间",

@@ -1,6 +1,6 @@
 # Chip Hippo web port
 
-This document records the first browser-port seam for The Makers Workbench.
+This document records the first browser-port seam.
 The desktop application remains supported: Electron still supplies
 `window.chiphippo` through `src/app/preload.js`. In an ordinary browser,
 `src/web/scripts/platform/browser-bootstrap.js` detects that the preload bridge
@@ -46,7 +46,7 @@ deployment reproducible and rollback-safe.
   native updates, native serial, and auxiliary Electron windows remain off.
 - Curated `/p/:id` and `/embed/project/:id` routes load a `.chiphippo` file
   uploaded to Drupal Media Library by an authorized editor. The source URL is
-  restricted to exact TMWB origins and the `.chiphippo` extension.
+  restricted to the host sites configured with `CHIPHIPPO_SITE_ORIGINS` and the `.chiphippo` extension.
 - Readers can experiment freely, export a local `.chiphippo` file with **Save
   As**, and import it later with **Open**. They cannot write projects to the lab
   server or Drupal.
@@ -54,7 +54,7 @@ deployment reproducible and rollback-safe.
 This remains a pre-release port. The core browser application, durable project
 files, lesson/curated embeds, read-only server, deployment templates, and
 Drupal text filter are implemented. The real Drupal editor integration and
-Oracle deployment require
+server deployment require
 their external repositories/hosts.
 
 ## Embedded lesson proof of concept
@@ -131,7 +131,7 @@ migration must not delete the prior database.
 5. Reader changes can leave the browser only through explicit local export.
 
 Drupal must add
-`Access-Control-Allow-Origin: https://breadboardlab.themakersworkbench.com` to
+`Access-Control-Allow-Origin: https://breadboardlab.example.com` to
 `.chiphippo` Media responses. No credentials are needed or permitted.
 
 ## Immediate next work
@@ -144,4 +144,4 @@ Drupal must add
    recovery, Open full workbench, and the validated `postMessage` protocol
    inside the real Drupal/CKEditor module.
 5. Acceptance-test the production Nginx, CSP, CORS, and `frame-ancestors`
-   policies on the chosen TMWB lab subdomain.
+   policies on the chosen lab subdomain.

@@ -18,6 +18,7 @@
  */
 
 import { DeskDoc } from "../model/desk-doc.js";
+import { siteOrigins } from "../site-config.js";
 
 const KEYS = Object.freeze({
   settings: "settings",
@@ -63,29 +64,31 @@ const clone = (value) => (value == null ? value : structuredClone(value));
 
 const LESSON_ID = /^[a-z0-9-]+$/i;
 const PROJECT_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const PROJECT_SOURCE_ORIGINS = Object.freeze([
-  "https://themakersworkbench.com",
-  "https://www.themakersworkbench.com",
-  "https://staging.themakersworkbench.com",
-]);
 
-/** Only curated project files on an approved TMWB origin may feed an embed. */
-export function projectSource(value, locationRef = {}) {
+/**
+ * Only project files on a host site configured for this build (site-config.js)
+ * may feed an embed, plus the lab's own origin when it runs locally.
+ */
+export function projectSource(
+  value,
+  locationRef = {},
+  origins = siteOrigins(),
+) {
   if (!value) return null;
   try {
     const source = new URL(String(value));
     const localOrigin =
       ["localhost", "127.0.0.1"].includes(String(locationRef.hostname)) &&
       locationRef.origin;
-    const allowed = [
-      ...PROJECT_SOURCE_ORIGINS,
-      ...(localOrigin ? [localOrigin] : []),
-    ];
+    const allowed = [...origins, ...(localOrigin ? [localOrigin] : [])];
     if (source.username || source.password || source.hash) return null;
     if (source.protocol !== "https:" && source.origin !== localOrigin)
       return null;
     if (!allowed.includes(source.origin)) return null;
-    return source.pathname.toLowerCase().endsWith(".chiphippo")
+    // A .chiphippo file, or the Drupal chiphippo_embed module's Media route.
+    const path = source.pathname.toLowerCase();
+    return path.endsWith(".chiphippo") ||
+      /^\/chiphippo-project\/\d+\/file$/.test(path)
       ? source.href
       : null;
   } catch {
@@ -94,7 +97,7 @@ export function projectSource(value, locationRef = {}) {
 }
 
 /** Resolve a lesson route without accepting path separators or URL syntax. */
-export function browserRoute(locationRef = {}) {
+export function browserRoute(locationRef = {}, origins = siteOrigins()) {
   const pathname = String(locationRef.pathname ?? "");
   const embeddedProject = /^\/embed\/project\/([A-Za-z0-9_-]{1,64})\/?$/.exec(
     pathname,
@@ -106,7 +109,7 @@ export function browserRoute(locationRef = {}) {
   try {
     const params = new URLSearchParams(String(locationRef.search ?? ""));
     queried = params.get("lesson");
-    source = projectSource(params.get("source"), locationRef);
+    source = projectSource(params.get("source"), locationRef, origins);
   } catch {
     // A malformed query simply means there is no lesson route.
   }
@@ -309,6 +312,16 @@ export function createBrowserPlatform({
   const recoveryKey = `${contentKey}.recovery`;
   let activeLessonManifest = null;
   const memKey = (guid) => `memory.${guid}`;
+
+  const portableProject = async (meta) => {
+    const portable = { version: 5, ...clone(meta) };
+    const { images, blobs } = await collectImages(portable);
+    if (Object.keys(images).length) {
+      portable.images = images;
+      portable.blobs = blobs;
+    }
+    return portable;
+  };
 
   const collectImages = async (meta) => {
     const images = {};
@@ -560,19 +573,15 @@ export function createBrowserPlatform({
     },
     openRecent: async () => null,
     regrant: async () => null,
+    /** The project as a self-contained .chiphippo document (memory images inlined). */
+    exportPortable: (meta) => portableProject(meta),
     async save(meta, filePath) {
       const location = filePath || null;
       const saved = { version: 5, ...clone(meta), location };
       await storage.set(projectKey, saved);
       await storage.delete(recoveryKey);
       if (location) {
-        const portable = { version: 5, ...clone(meta) };
-        const { images, blobs } = await collectImages(portable);
-        if (Object.keys(images).length) {
-          portable.images = images;
-          portable.blobs = blobs;
-        }
-        const contents = JSON.stringify(portable, null, 2);
+        const contents = JSON.stringify(await portableProject(meta), null, 2);
         const handle = await handleFor(location);
         if (handle) await writeHandle(handle, contents);
         else {

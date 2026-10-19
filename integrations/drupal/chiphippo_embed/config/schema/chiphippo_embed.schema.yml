@@ -1,0 +1,18 @@
+chiphippo_embed.settings:
+  type: config_object
+  label: 'Chip Hippo Embed settings'
+  mapping:
+    base_url:
+      type: string
+      label: 'Chip Hippo simulator base URL'
+    default_embed_height:
+      type: integer
+      label: 'Default embed height (pixels)'
+    save_api_token_hash:
+      type: string
+      label: 'Hash of the API token that authorizes the save endpoint'
+    save_allowed_origins:
+      type: sequence
+      label: 'Origins allowed to call the save endpoint (CORS)'
+      sequence:
+        type: string

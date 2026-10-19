@@ -1,0 +1,4 @@
+base_url: ''
+default_embed_height: 720
+save_api_token_hash: ''
+save_allowed_origins: []

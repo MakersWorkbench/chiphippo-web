@@ -1,0 +1,16 @@
+langcode: en
+status: true
+dependencies:
+  enforced:
+    module:
+      - chiphippo_embed
+id: chiphippo_project
+label: 'Chip Hippo Project'
+description: 'A .chiphippo circuit project file, embeddable with the Chip Hippo Circuit button in articles.'
+source: file
+queue_thumbnail_downloads: false
+new_revision: true
+source_configuration:
+  source_field: field_media_chiphippo_project
+field_map:
+  name: name

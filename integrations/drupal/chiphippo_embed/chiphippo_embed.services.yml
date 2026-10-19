@@ -1,0 +1,6 @@
+services:
+  chiphippo_embed.save_project_cors_preflight_subscriber:
+    class: Drupal\chiphippo_embed\EventSubscriber\SaveProjectCorsPreflightSubscriber
+    arguments: ['@config.factory']
+    tags:
+      - { name: event_subscriber }

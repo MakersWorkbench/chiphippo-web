@@ -41,6 +41,7 @@ import { packageSpec } from "../footprints.js";
 import { chipMarking } from "../../catalog/index.js";
 import { REGULATOR_DEFS, relayCoilVolts } from "../../catalog/bench-parts.js";
 import { speakerParams } from "../../catalog/speaker.js";
+import { SENSOR_DEFS } from "../../catalog/sensors.js";
 import { formatComponentValueAscii } from "../component-value.js";
 import {
   inductorHoles,
@@ -344,6 +345,19 @@ export const KICAD_PARTS = Object.freeze({
     generic: true,
     value: (comp) => `Relay SPDT ${relayCoilVolts(comp?.params)}V`,
   },
+  // The sensors and controls are modules and switches of every shape: each gets
+  // a header with one pad per pin, to be swapped for the real part's footprint.
+  ...Object.fromEntries(
+    SENSOR_DEFS.map((def) => [
+      def.id,
+      {
+        footprint: HEADER(def.pins.length),
+        shape: "box",
+        generic: true,
+        value: () => def.title,
+      },
+    ]),
+  ),
   // A 12 mm speaker on legs 7.6 mm apart — the desk's 0.3 in is 7.62, so it
   // is only the library's nearest — its square pad 1 the +, as ours is.
   speaker: {

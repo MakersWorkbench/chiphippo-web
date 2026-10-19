@@ -968,6 +968,22 @@ export class ProjectWorkspace {
   }
 
   /**
+   * The whole project as a self-contained document, for "Save to site"
+   * (the web edition's upload to the Drupal Media Library). Writes nothing
+   * to the project's own file and leaves the dirty state alone.
+   *
+   * @returns {Promise<{name: string, project: object}|null>} null when the
+   *   platform cannot export (the desktop app) or no project is open.
+   */
+  async exportForUpload() {
+    if (!this.isOpen || !this.#bridge.project?.exportPortable) return null;
+    this.#stash();
+    const written = projectForFile(this.#project);
+    const project = await this.#bridge.project.exportPortable(written);
+    return { name: this.#project.name || "", project };
+  }
+
+  /**
    * Properties… for the PROJECT: the same shared dialog every part, board, and
    * desktop opens — the universal Name/Description pair, plus the read-only
    * Location of the file it is kept in (blank while it lives in the working

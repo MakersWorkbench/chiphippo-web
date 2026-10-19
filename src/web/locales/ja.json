@@ -121,6 +121,8 @@
   },
   "toolbar": {
     "file": {
+      "saveSite": "サイトに保存",
+      "saveSiteTitle": "サイトに保存 — この回路をサイトのメディアライブラリに保存し、記事に埋め込めるようにします",
       "group": "ファイル",
       "new": "新規プロジェクト",
       "newTitle": "新規プロジェクト（{accel}）— 空のデスクでやり直します",
@@ -1393,6 +1395,7 @@
       "diode": "省略されます。Digital にはこの部品のように一方向にだけレベルを伝えるダイオードがありません",
       "inductor": "省略されるため、つないでいる 2 つのネットは分かれたまま書き出されます。Digital にはインダクタがありません",
       "transistor": "省略されます。Digital にはこの部品のようにスイッチするトランジスタがありません",
+      "sensor": "は除外されます：Digital にはセンサーモジュールがありません",
       "transistorPinout": "デスク上のピン順（E·B·C または S·G·D）で番号付けした TO-92 または TO-220 フットプリントになります。実際の部品のピン配置と照合してください",
       "nearestFootprint": "KiCad ライブラリで最も近いフットプリントになります。リード間隔がデスク上と少し異なるため、実際の部品と照合してください",
       "customChip": "省略されます。自分で設計したチップのため、Digital にはそのモデルがありません",
@@ -1576,6 +1579,20 @@
     }
   },
   "oscilloscope": {
+    "horizontal": "水平",
+    "vertical": "垂直",
+    "timeZoomIn": "1目盛あたりの時間を短く表示（拡大）",
+    "timeZoomOut": "1目盛あたりの時間を長く表示（縮小）",
+    "voltageZoomIn": "1目盛あたりの電圧を大きく表示",
+    "voltageZoomOut": "1目盛あたりの電圧を小さく表示",
+    "triggerMode": "トリガーモード",
+    "triggerAuto": "自動",
+    "triggerNormal": "ノーマル",
+    "triggerRoll": "ロール",
+    "triggerPosition": "トリガー位置",
+    "position": "位置",
+    "waitingForTrigger": "トリガー待機中…",
+    "acquiringTrigger": "トリガーに揃えたフレームを取得中…",
     "title": "オシロスコープ",
     "screen": "オシロスコープ電圧表示",
     "timeScale": "時間/div",

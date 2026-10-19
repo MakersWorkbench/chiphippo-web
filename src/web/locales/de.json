@@ -121,6 +121,8 @@
   },
   "toolbar": {
     "file": {
+      "saveSite": "Auf Website speichern",
+      "saveSiteTitle": "Auf Website speichern — diese Schaltung in der Medienbibliothek der Website ablegen, damit ein Artikel sie einbetten kann",
       "group": "Datei",
       "new": "Neues Projekt",
       "newTitle": "Neues Projekt ({accel}) — auf einer leeren Arbeitsfläche neu beginnen",
@@ -1414,6 +1416,7 @@
       "diode": "wird weggelassen: Digital hat keine Diode, die einen Pegel so in eine Richtung weitergibt wie diese",
       "inductor": "wird weggelassen, sodass die beiden Netze, die sie verbindet, getrennt ankommen: Digital hat keine Induktivität",
       "transistor": "wird weggelassen: Digital hat keinen Transistor, der so schaltet wie dieser",
+      "sensor": "wird ausgelassen: Digital hat kein Sensormodul",
       "transistorPinout": "erhält einen TO-92- oder TO-220-Footprint in der Pinreihenfolge auf dem Tisch (E·B·C bzw. S·G·D) – prüfen Sie ihn gegen die Pinbelegung des echten Bauteils",
       "nearestFootprint": "erhält den nächstliegenden Footprint aus der KiCad-Bibliothek – sein Rastermaß weicht etwas von dem auf dem Tisch ab; prüfen Sie ihn gegen das echte Bauteil",
       "customChip": "wird weggelassen: Es ist ein selbst entworfener Chip, und Digital hat kein Modell dafür",
@@ -1601,6 +1604,20 @@
     }
   },
   "oscilloscope": {
+    "horizontal": "Horizontal",
+    "vertical": "Vertikal",
+    "timeZoomIn": "Weniger Zeit pro Division anzeigen (hineinzoomen)",
+    "timeZoomOut": "Mehr Zeit pro Division anzeigen (herauszoomen)",
+    "voltageZoomIn": "Mehr Volt pro Division anzeigen",
+    "voltageZoomOut": "Weniger Volt pro Division anzeigen",
+    "triggerMode": "Triggermodus",
+    "triggerAuto": "Auto",
+    "triggerNormal": "Normal",
+    "triggerRoll": "Roll",
+    "triggerPosition": "Triggerposition",
+    "position": "Position",
+    "waitingForTrigger": "Warten auf Trigger…",
+    "acquiringTrigger": "Triggerausgerichtetes Bild wird erfasst…",
     "title": "Oszilloskop",
     "screen": "Oszilloskop-Spannungsanzeige",
     "timeScale": "Zeit pro Division",

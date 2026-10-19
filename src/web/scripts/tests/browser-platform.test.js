@@ -165,25 +165,53 @@ test("browser routes accept only safe lesson identifiers", () => {
     projectSource: null,
   });
   assert.deepEqual(
-    browserRoute({
-      pathname: "/embed/project/nand-intro",
-      search:
-        "?source=https%3A%2F%2Fthemakersworkbench.com%2Fsites%2Fdefault%2Ffiles%2Fnand.chiphippo",
-    }),
+    browserRoute(
+      {
+        pathname: "/embed/project/nand-intro",
+        search:
+          "?source=https%3A%2F%2Fsite.example%2Fsites%2Fdefault%2Ffiles%2Fnand.chiphippo",
+      },
+      ["https://site.example"],
+    ),
     {
       mode: "embed",
       lessonId: null,
       projectId: "nand-intro",
-      projectSource:
-        "https://themakersworkbench.com/sites/default/files/nand.chiphippo",
+      projectSource: "https://site.example/sites/default/files/nand.chiphippo",
     },
   );
   assert.equal(
-    browserRoute({
-      pathname: "/embed/project/nand-intro",
-      search: "?source=https%3A%2F%2Fevil.example%2Fnand.chiphippo",
-    }).projectSource,
+    browserRoute(
+      {
+        pathname: "/embed/project/nand-intro",
+        search: "?source=https%3A%2F%2Fevil.example%2Fnand.chiphippo",
+      },
+      ["https://site.example"],
+    ).projectSource,
     null,
+  );
+  // With no host site configured (a stock build), no outside source is trusted.
+  assert.equal(
+    browserRoute(
+      {
+        pathname: "/embed/project/nand-intro",
+        search: "?source=https%3A%2F%2Fsite.example%2Ffiles%2Fnand.chiphippo",
+      },
+      [],
+    ).projectSource,
+    null,
+  );
+  // The Drupal chiphippo_embed media route is accepted without a file extension.
+  assert.equal(
+    browserRoute(
+      {
+        pathname: "/embed/project/7",
+        search:
+          "?source=https%3A%2F%2Fsite.example%2Fchiphippo-project%2F7%2Ffile",
+      },
+      ["https://site.example"],
+    ).projectSource,
+    "https://site.example/chiphippo-project/7/file",
   );
 });
 
@@ -252,9 +280,11 @@ test("curated project routes load a Drupal media file and keep edits isolated", 
   const requested = [];
   const bridge = platform(storage, {
     locationRef: {
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:4173",
       pathname: "/p/counter",
       search:
-        "?source=https%3A%2F%2Fthemakersworkbench.com%2Fsites%2Fdefault%2Ffiles%2Fcounter.chiphippo",
+        "?source=http%3A%2F%2F127.0.0.1%3A4173%2Ffiles%2Fcounter.chiphippo",
     },
     fetchRef: async (path) => {
       requested.push(path);
@@ -264,7 +294,7 @@ test("curated project routes load a Drupal media file and keep edits isolated", 
 
   assert.equal((await bridge.project.boot()).name, "Shared counter");
   assert.deepEqual(requested, [
-    "https://themakersworkbench.com/sites/default/files/counter.chiphippo",
+    "http://127.0.0.1:4173/files/counter.chiphippo",
   ]);
   await bridge.project.save({ ...remote, name: "My variation" }, null);
   assert.equal((await bridge.project.boot()).name, "My variation");

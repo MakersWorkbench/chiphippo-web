@@ -3,10 +3,10 @@
  * Keeps Chip Hippo iframes responsive and validates their messages.
  */
 
-(function (Drupal, once) {
+(function (Drupal, once, drupalSettings) {
   "use strict";
 
-  const simulatorOrigin = "https://breadboardlab.themakersworkbench.com";
+  const simulatorOrigin = drupalSettings.chiphippoEmbed?.origin ?? "";
 
   Drupal.behaviors.chipHippoEmbed = {
     attach(context) {
@@ -35,4 +35,4 @@
       );
     },
   };
-})(Drupal, once);
+})(Drupal, once, drupalSettings);

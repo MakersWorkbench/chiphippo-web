@@ -121,6 +121,8 @@
   },
   "toolbar": {
     "file": {
+      "saveSite": "Salva sul sito",
+      "saveSiteTitle": "Salva sul sito — archivia questo circuito nella libreria multimediale del sito perché un articolo possa incorporarlo",
       "group": "File",
       "new": "Nuovo progetto",
       "newTitle": "Nuovo progetto ({accel}) — ricomincia su un piano di lavoro vuoto",
@@ -1415,6 +1417,7 @@
       "diode": "viene omesso: Digital non ha un diodo che passi un livello in un solo verso come questo",
       "inductor": "viene omesso, quindi le due reti che unisce arrivano separate: Digital non ha induttori",
       "transistor": "viene omesso: Digital non ha un transistor che commuti come questo",
+      "sensor": "viene lasciato fuori: Digital non ha alcun modulo sensore",
       "transistorPinout": "riceve un footprint TO-92 o TO-220 numerato nell'ordine dei pin sulla scrivania (E·B·C o S·G·D): verificalo con la piedinatura del componente reale",
       "nearestFootprint": "riceve il footprint più vicino della libreria KiCad: il suo passo differisce un po' da quello sulla scrivania; verificalo con il componente reale",
       "customChip": "viene escluso: è un chip progettato da te e Digital non ne ha un modello",
@@ -1604,6 +1607,20 @@
     }
   },
   "oscilloscope": {
+    "horizontal": "Orizzontale",
+    "vertical": "Verticale",
+    "timeZoomIn": "Mostra meno tempo per divisione (ingrandisci)",
+    "timeZoomOut": "Mostra più tempo per divisione (riduci)",
+    "voltageZoomIn": "Mostra più volt per divisione",
+    "voltageZoomOut": "Mostra meno volt per divisione",
+    "triggerMode": "Modalità trigger",
+    "triggerAuto": "Auto",
+    "triggerNormal": "Normale",
+    "triggerRoll": "Roll",
+    "triggerPosition": "Posizione del trigger",
+    "position": "Posizione",
+    "waitingForTrigger": "In attesa del trigger…",
+    "acquiringTrigger": "Acquisizione del fotogramma allineato al trigger…",
     "title": "Oscilloscopio",
     "screen": "Display di tensione dell'oscilloscopio",
     "timeScale": "Tempo per divisione",

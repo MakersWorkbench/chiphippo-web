@@ -121,6 +121,8 @@
   },
   "toolbar": {
     "file": {
+      "saveSite": "Enregistrer sur le site",
+      "saveSiteTitle": "Enregistrer sur le site — classe ce circuit dans la médiathèque du site pour qu’un article puisse l’intégrer",
       "group": "Fichier",
       "new": "Nouveau projet",
       "newTitle": "Nouveau projet ({accel}) — repartir sur un plan de travail vide",
@@ -1415,6 +1417,7 @@
       "diode": "est omise : Digital n'a pas de diode qui transmette un niveau dans un seul sens comme celle-ci",
       "inductor": "est omise, si bien que les deux réseaux qu'elle relie arrivent séparés : Digital n'a pas d'inductance",
       "transistor": "est omis : Digital n'a pas de transistor qui commute comme celui-ci",
+      "sensor": "est laissé de côté : Digital n’a aucun module capteur",
       "transistorPinout": "reçoit une empreinte TO-92 ou TO-220 numérotée dans l'ordre des broches du bureau (E·B·C ou S·G·D) — vérifiez-la avec le brochage du vrai composant",
       "nearestFootprint": "reçoit l'empreinte la plus proche de la bibliothèque KiCad — son pas diffère un peu de celui du bureau ; vérifiez-la avec le vrai composant",
       "customChip": "est omise : c'est une puce que vous avez conçue, et Digital n'en a pas de modèle",
@@ -1604,6 +1607,20 @@
     }
   },
   "oscilloscope": {
+    "horizontal": "Horizontal",
+    "vertical": "Vertical",
+    "timeZoomIn": "Afficher moins de temps par division (zoom avant)",
+    "timeZoomOut": "Afficher plus de temps par division (zoom arrière)",
+    "voltageZoomIn": "Afficher plus de volts par division",
+    "voltageZoomOut": "Afficher moins de volts par division",
+    "triggerMode": "Mode de déclenchement",
+    "triggerAuto": "Auto",
+    "triggerNormal": "Normal",
+    "triggerRoll": "Défilement",
+    "triggerPosition": "Position du déclenchement",
+    "position": "Position",
+    "waitingForTrigger": "En attente du déclenchement…",
+    "acquiringTrigger": "Acquisition d’une image alignée sur le déclenchement…",
     "title": "Oscilloscope",
     "screen": "Affichage de tension de l'oscilloscope",
     "timeScale": "Temps par division",

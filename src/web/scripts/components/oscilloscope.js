@@ -1,6 +1,20 @@
 /*
- * Copyright 2026 Jason Figge
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright 2026 Charles Gantt
+ *
+ * This file is part of Chip Hippo.
+ *
+ * Chip Hippo is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Chip Hippo is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with Chip Hippo. If not, see <https://www.gnu.org/licenses/>.
  */
 
 import { el } from "../dom.js";
@@ -24,6 +38,10 @@ const X_DIVS = 10;
 const Y_DIVS = 8;
 const CHANNELS = ["ch1", "ch2"];
 const PROBES = ["ch1", "ch2", "ground"];
+// Real DSOs deliberately update numeric measurements more slowly than the
+// trace. Rewriting them at animation-frame speed makes the least-significant
+// digits shimmer and causes incomplete acquisitions to flash the rows away.
+const READOUT_INTERVAL_MS = 500;
 const TIME_STEPS = [
   1e-9, 10e-9, 100e-9, 1e-6, 10e-6, 100e-6, 1e-3, 10e-3, 100e-3, 250e-3, 500e-3,
   1,
@@ -96,6 +114,8 @@ export class Oscilloscope {
   #screen;
   #readout;
   #measurements;
+  #lastReadoutUpdate = -Infinity;
+  #lastMeasurementText = "";
   #cursorControls;
   #cursorReadout;
   #timeSelect;
@@ -160,8 +180,7 @@ export class Oscilloscope {
       if (running) {
         this.#onTick(event.detail);
         this.#animateRoll();
-      }
-      else {
+      } else {
         this.#wasRunning = false;
         this.#rollAnchor = null;
         if (this.#visible) this.#scheduleRender();
@@ -285,6 +304,8 @@ export class Oscilloscope {
     // and clear it again.
     if (!this.#wasRunning) {
       this.#samples = [];
+      this.#lastReadoutUpdate = -Infinity;
+      this.#lastMeasurementText = "";
       this.#wasRunning = true;
     }
     const ground = voltageAt(this.#probes.ground, detail) ?? 0;
@@ -365,7 +386,10 @@ export class Oscilloscope {
       },
       [
         el("option", { value: "auto", text: t("oscilloscope.triggerAuto") }),
-        el("option", { value: "normal", text: t("oscilloscope.triggerNormal") }),
+        el("option", {
+          value: "normal",
+          text: t("oscilloscope.triggerNormal"),
+        }),
         el("option", { value: "roll", text: t("oscilloscope.triggerRoll") }),
       ],
     );
@@ -415,7 +439,9 @@ export class Oscilloscope {
 
     const scaleStep = (values, current, direction) => {
       const index = Math.max(0, values.indexOf(current));
-      return values[Math.max(0, Math.min(values.length - 1, index + direction))];
+      return values[
+        Math.max(0, Math.min(values.length - 1, index + direction))
+      ];
     };
     const scaleButton = (text, title, onClick) =>
       el("button", {
@@ -549,6 +575,8 @@ export class Oscilloscope {
     });
     const clear = action("clear", () => {
       this.#samples = [];
+      this.#lastReadoutUpdate = -Infinity;
+      this.#lastMeasurementText = "";
       this.#scheduleRender();
     });
     const auto = action("auto", () => this.#autoScale());
@@ -795,7 +823,8 @@ export class Oscilloscope {
       return;
     }
     const frame =
-      globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 16));
+      globalThis.requestAnimationFrame ??
+      ((callback) => setTimeout(callback, 16));
     this.#rollFrame = frame(() => {
       this.#rollFrame = null;
       if (
@@ -812,11 +841,7 @@ export class Oscilloscope {
   }
 
   #displaySamples() {
-    if (
-      this.#triggerMode !== "roll" ||
-      !this.#running ||
-      !this.#rollAnchor
-    ) {
+    if (this.#triggerMode !== "roll" || !this.#running || !this.#rollAnchor) {
       return this.#samples;
     }
     const wall = globalThis.performance?.now?.() ?? Date.now();
@@ -856,6 +881,8 @@ export class Oscilloscope {
     if (!displaySamples.length) {
       this.#readout.textContent = t("oscilloscope.runHint");
       this.#measurements.textContent = "";
+      this.#lastMeasurementText = "";
+      this.#lastReadoutUpdate = -Infinity;
       this.#cursorReadout.textContent = "";
       return;
     }
@@ -870,7 +897,8 @@ export class Oscilloscope {
     });
     if (!window) {
       this.#readout.textContent = t("oscilloscope.waitingForTrigger");
-      this.#measurements.textContent = "";
+      // Keep the most recent complete measurement visible while Normal mode
+      // waits for another trigger, just as a storage scope holds its display.
       return;
     }
     const { start, end, trigger, acquiring = false } = window;
@@ -942,8 +970,7 @@ export class Oscilloscope {
       ]) {
         if (!this.#channels[channel].enabled) continue;
         const volts =
-          ((centerY - y) / pixelsPerDivision -
-            this.#channels[channel].offset) *
+          ((centerY - y) / pixelsPerDivision - this.#channels[channel].offset) *
           this.#voltsPerDiv;
         this.#screen.append(
           svgText(signedLabel(volts, "V"), {
@@ -1043,9 +1070,15 @@ export class Oscilloscope {
         ? `${formatNumber(value, { maximumFractionDigits: 3 })} V`
         : "—";
     const levels = `CH1 ${fmt(last.ch1)} · CH2 ${fmt(last.ch2)}`;
-    this.#readout.textContent = acquiring
-      ? `${t("oscilloscope.acquiringTrigger")} · ${levels}`
-      : levels;
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    const updateReadout =
+      now - this.#lastReadoutUpdate >= READOUT_INTERVAL_MS ||
+      this.#lastReadoutUpdate === -Infinity;
+    if (updateReadout) {
+      this.#readout.textContent = acquiring
+        ? `${t("oscilloscope.acquiringTrigger")} · ${levels}`
+        : levels;
+    }
     const measurementText = [];
     for (const channel of acquiring ? [] : CHANNELS) {
       if (!this.#channels[channel].enabled) continue;
@@ -1057,6 +1090,15 @@ export class Oscilloscope {
         `${t(`oscilloscope.${channel}`)} ${t("oscilloscope.vpp")} ${scaledLabel(measured.peakToPeak, "V")} · ${t("oscilloscope.average")} ${scaledLabel(measured.average, "V")} · ${t("oscilloscope.frequency")} ${scaledLabel(measured.frequency, "Hz")} · ${t("oscilloscope.period")} ${scaledLabel(measured.period, "s")} · ${t("oscilloscope.duty")} ${Number.isFinite(measured.dutyCycle) ? `${formatNumber(measured.dutyCycle, { maximumFractionDigits: 1 })}%` : "—"}`,
       );
     }
-    this.#measurements.textContent = measurementText.join("\n");
+    if (!acquiring && (updateReadout || !this.#lastMeasurementText)) {
+      const nextMeasurementText = measurementText.join("\n");
+      this.#lastMeasurementText = nextMeasurementText;
+      this.#measurements.textContent = nextMeasurementText;
+    } else if (this.#lastMeasurementText) {
+      // Never blink complete measurements out while the next acquisition is
+      // being assembled between frames.
+      this.#measurements.textContent = this.#lastMeasurementText;
+    }
+    if (updateReadout) this.#lastReadoutUpdate = now;
   }
 }

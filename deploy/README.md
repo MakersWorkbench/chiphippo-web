@@ -1,61 +1,68 @@
-# Oracle ARM deployment
+# Deploying Chip Hippo Web
 
-The Node service is dependency-free and runs on ARM64. Simulation stays in each
-visitor's browser; the service is read-only and stores no user projects. The
-examples use `breadboardlab.themakersworkbench.com`. Replace that
-name in the environment and Nginx files if the final DNS name differs.
+The web edition is a fingerprinted static tree plus a small dependency-free,
+read-only Node server (`server/chiphippo-server.mjs`). Simulation runs in each
+visitor's browser, so the server needs very little CPU, and it stores no user
+projects. It runs on a small ARM64 or x86 host. The names below
+(`lab.example.com`, `www.example.com`) are placeholders.
 
-## One-time host setup
+## Choose which sites it works with
 
-1. Point the subdomain's `A`/`AAAA` records at the Oracle instance. In the
-   Oracle VCN security list and the host firewall, expose only TCP 22, 80, and 443. Port 4173 remains bound to localhost.
-2. Install Node.js 20 or newer, Nginx, Certbot, Git, and rsync from the OS
-   packages or NodeSource's ARM64 repository.
-3. Create a locked service account and release directory:
-
-   ```sh
-   sudo useradd --system --no-create-home --shell /usr/sbin/nologin chiphippo
-   sudo install -d -o chiphippo -g chiphippo /opt/chiphippo/releases
-   sudo install -d -m 0750 /etc/chiphippo
-   ```
-
-4. In the release checkout run `cd src && npm ci && npm run web:build`. Place
-   the checkout at `/opt/chiphippo/releases/<tag>` and point
-   `/opt/chiphippo/current` at it. Copy `deploy/chiphippo.env.example` to
-   `/etc/chiphippo/chiphippo.env`, then install the systemd and Nginx files.
-5. Obtain the certificate before enabling the TLS virtual host:
-
-   ```sh
-   sudo certbot certonly --nginx -d breadboardlab.themakersworkbench.com
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now chiphippo nginx
-   ```
-
-Verify `/api/health`, `/app/`, one `/embed/...` URL, a Drupal Media Library
-project embed, and the browser console before switching article embeds.
-
-## Release and rollback
-
-Deploy immutable tagged directories. Run the test suite before changing the
-symlink, then restart and health-check:
+By default a build is a **standalone workbench**: no outside website may embed it,
+supply project files to it, or receive saved circuits, and the **Save to site**
+button is hidden. To work with your own website, set `CHIPHIPPO_SITE_ORIGINS`
+to a comma-separated list of its origins, **identically at build time and when
+starting the server**:
 
 ```sh
-sudo ln -sfn /opt/chiphippo/releases/tmwb-web-v0.1.0 /opt/chiphippo/current
-sudo systemctl restart chiphippo
-curl --fail https://breadboardlab.themakersworkbench.com/api/health
+export CHIPHIPPO_SITE_ORIGINS=https://www.example.com,https://staging.example.com
+cd src && npm ci && npm run web:build
+CHIPHIPPO_SITE_ORIGINS=$CHIPHIPPO_SITE_ORIGINS node ../server/chiphippo-server.mjs
 ```
 
-Rollback points `current` to the previous tag and restarts the service. Curated
-project files stay in Drupal Media Library, independently of this release.
+The build bakes the list into the page (a `<meta name="chiphippo-site-origins">`
+and the page's connection policy). The server uses it for `frame-ancestors` on
+`/embed/*` and for `connect-src`. The first origin is the one **Save to site**
+proposes. If you run the server in a container or service, pass the variable there.
 
-## Backup and monitoring
+## Serve it
 
-Use the existing Drupal Media Library backup policy for curated `.chiphippo`
-files. Monitor the systemd unit, Nginx 5xx responses, disk usage, certificate
-renewal, and `/api/health`. The lab service has no project-write endpoint.
+Run the server (it listens on `127.0.0.1:${PORT:-4173}`; set `CHIPHIPPO_WEB_ROOT`
+to the built `dist/web`) behind a TLS-terminating reverse proxy.
+
+- **Caddy** (certificates are automatic):
+
+  ```
+  lab.example.com {
+      encode gzip
+      reverse_proxy 127.0.0.1:4173
+  }
+  ```
+- **Nginx**: see `nginx/chiphippo.conf`, plus `systemd/chiphippo.service` and
+  `chiphippo.env.example` if you run the server as a systemd service.
+- **Docker**: any Node 20+ image works, for example
+  `docker run -d --restart unless-stopped --network host --read-only --cap-drop ALL \
+  -e PORT=4173 -e CHIPHIPPO_WEB_ROOT=/app/dist/web -e CHIPHIPPO_SITE_ORIGINS=... \
+  -v /opt/chiphippo/current:/app:ro -w /app node:22-slim node server/chiphippo-server.mjs`.
+
+Point your DNS at the host. If the DNS provider can proxy, use "DNS only" until
+the certificate is issued.
+
+## Releases and rollback
+
+Unpack each build into its own directory (`/opt/chiphippo/releases/<tag>`) and
+point `/opt/chiphippo/current` at it. Rolling back is re-pointing the link and
+restarting the server. Verify `/api/health`, `/app/`, one `/embed/...` URL and the
+browser console after every release.
+
+## Backups and monitoring
+
+Watch the service, proxy 5xx responses, disk usage, certificate renewal and
+`/api/health`. The lab has no write endpoint; circuit files you save to a Drupal
+site live in that site's Media Library and follow its backups.
 
 ## GPL source release
 
-Tag the exact deployed commit, publish that tag and its complete build/deploy
-scripts, and keep the in-app Source Code link pointed at the matching public
-repository. Preserve `LICENSE`, `NOTICE`, history, and upstream attribution.
+Tag the exact deployed commit, publish that tag and these deployment notes, and
+keep the in-app Source link pointed at the matching public repository. Preserve
+`LICENSE`, `NOTICE`, history and upstream attribution.

@@ -129,7 +129,9 @@
       "save": "Save",
       "saveTitle": "Save ({accel}) — write the project back to its file",
       "saveAs": "Save As",
-      "saveAsTitle": "Save As… ({accel}) — write the project to a new file"
+      "saveAsTitle": "Save As… ({accel}) — write the project to a new file",
+      "saveSite": "Save to site",
+      "saveSiteTitle": "Save to site — file this circuit in the website's Media Library so an article can embed it"
     },
     "tools": {
       "group": "Desk tools"
@@ -1414,6 +1416,7 @@
       "diode": "is left out: Digital has no diode that passes a level one way as this one does",
       "inductor": "is left out, so the two nets it joins come across apart: Digital has no inductor",
       "transistor": "is left out: Digital has no transistor that switches as this one does",
+      "sensor": "is left out: Digital has no sensor module",
       "transistorPinout": "gets a TO-92 or TO-220 footprint numbered in the desk's pin order (E·B·C or S·G·D) — check it against the real part's pinout",
       "nearestFootprint": "gets the nearest footprint KiCad's library has — its lead pitch differs a little from the desk's; check it against the real part",
       "customChip": "is left out: it is a chip you designed, and Digital has no model of it",

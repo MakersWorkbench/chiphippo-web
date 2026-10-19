@@ -1,0 +1,9 @@
+# Tests and generated pages compare exact bytes, so keep LF endings on every platform
+# (Windows checkouts otherwise get CRLF from core.autocrlf and tests fail).
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.woff2 binary
+*.bin binary

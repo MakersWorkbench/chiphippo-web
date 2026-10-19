@@ -256,7 +256,7 @@ export class SimHost {
     // why: undo/redo re-baselines on it).
     this.#clearAllDamage();
     this.#onTransportChange?.(this.#mode);
-    window.dispatchEvent(new CustomEvent("chiphippo:sim-state", { detail: stoppedDetail() })); // prettier-ignore
+    window.dispatchEvent(new CustomEvent("chiphippo:sim-state", { detail: { ...stoppedDetail(), speed: this.#speed } })); // prettier-ignore
     window.dispatchEvent(
       new CustomEvent("chiphippo:mem-state", {
         detail: { running: false, images: finalImages },

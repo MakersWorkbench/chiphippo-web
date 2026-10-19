@@ -17,12 +17,16 @@
  * with Chip Hippo. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { siteOrigins } from "./site-config.js";
+
 export const EMBED_PROTOCOL_VERSION = 1;
 
+/**
+ * Pages allowed to drive an embed: the host sites configured for this build
+ * (see site-config.js; none by default) plus the local dev server.
+ */
 export const DEFAULT_PARENT_ORIGINS = Object.freeze([
-  "https://themakersworkbench.com",
-  "https://www.themakersworkbench.com",
-  "https://staging.themakersworkbench.com",
+  ...siteOrigins(),
   "http://127.0.0.1:4173",
   "http://localhost:4173",
 ]);

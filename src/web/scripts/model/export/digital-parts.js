@@ -17,6 +17,8 @@
  * with Chip Hippo. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { SENSOR_DEFS } from "../../catalog/sensors.js";
+
 // digital-parts.js — which catalog parts the Digital export can place, and as
 // what (Feature 390).
 //
@@ -209,4 +211,7 @@ export const DIGITAL_UNSUPPORTED = Object.freeze({
   load: "benchInstrument",
   // A tone is a voltage across a coil, timed; Digital has neither.
   speaker: "speaker",
+  // Sensors and controls (catalog/sensors.js): modules whose readings are set
+  // on the desk; Digital has nothing to place for any of them.
+  ...Object.fromEntries(SENSOR_DEFS.map((def) => [def.id, "sensor"])),
 });

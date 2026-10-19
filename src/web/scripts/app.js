@@ -26,7 +26,9 @@
 
 import { el } from "./dom.js";
 import * as i18n from "./i18n.js";
-import { t } from "./i18n.js";
+import { t, tf } from "./i18n.js";
+import { saveToSite } from "./drupal-save.js";
+import { siteOrigins } from "./site-config.js";
 import {
   applyFontSize,
   scaleStepForEvent,
@@ -164,6 +166,13 @@ const SAVE_AS_SVG =
   '<path d="M13 19H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l4 4v3"/>' +
   '<polyline points="7 3 7 8 13 8"/>' +
   '<path d="M19 13a1.8 1.8 0 0 1 2.5 2.5L16.5 20.5l-3.5 1 1-3.5z"/></svg>';
+
+/** Save to site — a tray with an arrow leaving it for the web. */
+const SAVE_SITE_SVG =
+  ICON_SVG_OPEN +
+  '<path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>' +
+  '<polyline points="8 8 12 4 16 8"/>' +
+  '<line x1="12" y1="4" x2="12" y2="16"/></svg>';
 
 /** Connectivity-probe icon for the Probe toolbar toggle: a probe tip landing
  * on a digital rising edge, with a cable trailing off the handle end. */
@@ -468,6 +477,21 @@ function buildFilePill(getWorkspace) {
       onClick: fileAction("project-save-as"),
     }),
   };
+  const segments = [buttons.new, buttons.open, buttons.save, buttons.saveAs];
+  // Web edition only, in the full workbench (never inside an article), and only
+  // when this build names a host site to save to (CHIPHIPPO_SITE_ORIGINS).
+  if (window.chiphippo?.web?.mode === "app" && siteOrigins().length) {
+    buttons.site = fileSegment({
+      icon: SAVE_SITE_SVG,
+      label: tf("toolbar.file.saveSite", "Save to site"),
+      title: tf(
+        "toolbar.file.saveSiteTitle",
+        "Save to site — file this circuit in the website's Media Library so an article can embed it",
+      ),
+      onClick: () => void saveToSite(getWorkspace()),
+    });
+    segments.push(buttons.site);
+  }
   const pill = el(
     "div",
     {
@@ -475,7 +499,7 @@ function buildFilePill(getWorkspace) {
       role: "group",
       "aria-label": t("toolbar.file.group"),
     },
-    [buttons.new, buttons.open, buttons.save, buttons.saveAs],
+    segments,
   );
   return { pill, buttons };
 }

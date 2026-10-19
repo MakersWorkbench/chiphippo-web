@@ -8,3 +8,18 @@ embed:
   dependencies:
     - core/drupal
     - core/once
+    - core/drupalSettings
+
+ckeditor5.chiphippo:
+  js:
+    js/build/chiphippoEmbed.js: { preprocess: false, minified: true }
+  dependencies:
+    - core/ckeditor5
+    - core/drupal
+    - core/drupal.ajax
+    - editor/drupal.editor.dialog
+
+admin.ckeditor5:
+  css:
+    theme:
+      css/chiphippo-admin.css: {}

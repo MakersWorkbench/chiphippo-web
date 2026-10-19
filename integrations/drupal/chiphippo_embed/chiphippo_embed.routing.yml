@@ -1,0 +1,40 @@
+chiphippo_embed.settings:
+  path: '/admin/config/content/chiphippo'
+  defaults:
+    _form: '\Drupal\chiphippo_embed\Form\ChipHippoSettingsForm'
+    _title: 'Chip Hippo Embed settings'
+  requirements:
+    _permission: 'administer site configuration'
+
+chiphippo_embed.embed_dialog:
+  path: '/admin/config/content/chiphippo/embed-dialog'
+  defaults:
+    _form: '\Drupal\chiphippo_embed\Form\ChipHippoEmbedDialogForm'
+    _title: 'Insert Chip Hippo Circuit'
+  requirements:
+    _permission: 'access content'
+  options:
+    _admin_route: TRUE
+
+chiphippo_embed.project_file:
+  path: '/chiphippo-project/{media}/file'
+  defaults:
+    _controller: '\Drupal\chiphippo_embed\Controller\ProjectFileController::serve'
+  requirements:
+    _entity_access: 'media.view'
+  options:
+    parameters:
+      media:
+        type: entity:media
+
+chiphippo_embed.save_project:
+  path: '/api/chiphippo/save-project'
+  defaults:
+    _controller: '\Drupal\chiphippo_embed\Controller\SaveProjectController::save'
+  methods: [POST, OPTIONS]
+  requirements:
+    # Authorized inside the controller by bearer token (the simulator runs on
+    # another origin and has no Drupal session).
+    _access: 'TRUE'
+  options:
+    no_cache: TRUE

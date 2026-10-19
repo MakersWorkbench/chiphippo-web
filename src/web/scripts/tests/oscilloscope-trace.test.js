@@ -1,6 +1,20 @@
 /*
- * Copyright 2026 Jason Figge
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright 2026 Charles Gantt
+ *
+ * This file is part of Chip Hippo.
+ *
+ * Chip Hippo is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Chip Hippo is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with Chip Hippo. If not, see <https://www.gnu.org/licenses/>.
  */
 
 import test from "node:test";
@@ -337,6 +351,32 @@ test("oscilloscope lesson renders both signals as square waves", async () => {
     viewport.querySelectorAll(".oscilloscope-zero-marker").length,
     2,
   );
+
+  const measurements = viewport.querySelector(".oscilloscope-measurements");
+  assert.match(measurements.textContent, /CH1 Vpp 5 V/);
+  assert.match(measurements.textContent, /CH2 Vpp/);
+  const completedMeasurements = measurements.textContent;
+  const triggerMode = viewport.querySelector(
+    'select[aria-label="Trigger mode"]',
+  );
+  const triggerLevel = viewport.querySelector(
+    'input[aria-label="Trigger voltage"]',
+  );
+  triggerMode.value = "normal";
+  triggerMode.dispatchEvent(new Event("change", { bubbles: true }));
+  triggerLevel.value = "50";
+  triggerLevel.dispatchEvent(new Event("change", { bubbles: true }));
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  assert.equal(
+    measurements.textContent,
+    completedMeasurements,
+    "completed measurements stay visible while Normal waits for a trigger",
+  );
+  triggerLevel.value = "2.5";
+  triggerLevel.dispatchEvent(new Event("change", { bubbles: true }));
+  triggerMode.value = "auto";
+  triggerMode.dispatchEvent(new Event("change", { bubbles: true }));
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
   const trace = (channel) =>
     viewport.querySelector(`.oscilloscope-trace--${channel}`).getAttribute("d");

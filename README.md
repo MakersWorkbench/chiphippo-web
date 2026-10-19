@@ -1,15 +1,17 @@
-# Chip Hippo Web — The Makers Workbench Port
+# Chip Hippo Web
 
 [![CI](https://github.com/MakersWorkbench/chiphippo-web/actions/workflows/ci.yml/badge.svg)](https://github.com/MakersWorkbench/chiphippo-web/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
 [![GitHub stars](https://img.shields.io/github/stars/MakersWorkbench/chiphippo-web?style=social)](https://github.com/MakersWorkbench/chiphippo-web/stargazers)
 
-> This is The Makers Workbench browser-focused fork of
+> This is a browser-focused fork of
 > [jfigge/chiphippo](https://github.com/jfigge/chiphippo), not the official
 > upstream project. The original desktop application remains supported here,
-> while this fork adds the self-hosted web lab, embeds, instruments, sensors,
-> Drupal integration and Oracle ARM deployment described below.
+> while this fork adds a self-hostable web edition, embeds, instruments,
+> sensors, an optional Drupal integration and server deployment notes described
+> below. It is not tied to any one website: you choose which sites may embed it
+> (see "Run and build the browser edition").
 
 Design and simulate **74LS TTL and CD4000 CMOS logic circuits on virtual
 solderless breadboards**, laid out on an infinitely pannable, zoomable desk.
@@ -35,12 +37,11 @@ with its siblings [Rest Hippo](https://github.com/jfigge/resthippo) and Port Hip
 🌐 **[chiphippo.com](https://chiphippo.com)** &nbsp;·&nbsp;
 📖 **[User guide](https://chiphippo.com/docs/)** ([PDF](docs/chip-hippo-user-guide.pdf))
 
-## TMWB browser edition
+## Browser edition
 
-This fork contains the self-hosted browser port built for **The Makers
-Workbench Breadboard Lab**. It runs the existing editor and both simulation
-engines directly in a browser, without Electron and without moving simulation
-work to the server.
+This fork contains a self-hosted browser port. It runs the existing editor and
+both simulation engines directly in a browser, without Electron and without
+moving simulation work to the server.
 
 ### What the web port adds
 
@@ -51,8 +52,8 @@ work to the server.
 - **Portable projects** using the same `.chiphippo` extension. Visitors can
   export a project to their own computer and import it when they return.
   Browser-local IndexedDB holds settings, recovery data, memory images and the
-  current working copy, but the Breadboard Lab server has no project-write API
-  and stores no visitor projects.
+  current working copy, but the web server has no project-write API and stores
+  no visitor projects.
 - **Article-ready interactive embeds.** `/embed/:lesson` loads a bundled,
   versioned lesson; `/p/:id` and `/embed/project/:id` load a curated public
   `.chiphippo` project. Embedded readers can run, pause, edit, experiment,
@@ -60,11 +61,11 @@ work to the server.
 - **Safe iframe integration** through a versioned, origin-checked
   `postMessage` protocol. Embeds report ready/loaded/dirty/run/height state and
   accept only known commands from an explicitly allowed parent origin.
-- **Drupal publishing integration.** The included Drupal 10.3/11 text-filter
-  module turns lesson or Media Library project tokens into responsive embeds.
-  Only an authenticated Drupal editor with Media Library permission can
-  publish curated projects; public readers never receive a Drupal credential
-  or a save-to-Drupal capability.
+- **Optional Drupal integration.** The included Drupal 10.3/11 module adds a
+  **Chip Hippo Circuit** CKEditor button, a Chip Hippo Project media type and a
+  **Save to site** action in the lab's File toolbar, so circuits built in the
+  lab land in your Media Library and embed in articles. Saving needs a token
+  only the site owner generates; public readers never receive a credential.
 - **A draggable multimeter** with visible red and black probes and DC voltage,
   DC current, resistance, continuity, capacitance and inductance modes. It uses
   live simulator data, understands passive series/parallel networks, works in
@@ -91,9 +92,9 @@ work to the server.
 - **Curated lesson fixtures**, including the NAND-gate introduction and the
   oscilloscope clock lab, with compact embed chrome and lesson-specific reset.
 - **Production packaging** with a fingerprinted static build, dependency-free
-  read-only Node service, health endpoint, Nginx configuration, systemd unit,
-  CSP/frame policy, immutable release layout and rollback instructions for an
-  Oracle Free Tier ARM64 server.
+  read-only Node service, health endpoint, CSP/frame policy, immutable release
+  layout and rollback instructions, with sample Nginx, systemd and Docker
+  setups (it runs on a small ARM64 server).
 - **Responsive browser chrome and security boundaries.** Unsupported native
   desktop services are explicit inert adapters instead of browser crashes;
   project imports are size-limited, curated project sources are origin and
@@ -116,6 +117,21 @@ npm run web:build       # fingerprinted production tree in dist/web
 npm run web:test-server # server and route tests
 ```
 
+By default the web edition is a standalone workbench: no outside website may
+embed it, supply project files or receive saved circuits. To work with your own
+website, set `CHIPHIPPO_SITE_ORIGINS` to a comma-separated list of its origins
+(for example `https://www.example.com`), identically when building and when
+starting the server:
+
+```bash
+CHIPHIPPO_SITE_ORIGINS=https://www.example.com npm run web:build
+CHIPHIPPO_SITE_ORIGINS=https://www.example.com npm run web:serve
+```
+
+That list controls who may frame `/embed/*`, which sites a project `source` may
+come from, and where **Save to site** may send circuits (the button only appears
+when the list is not empty).
+
 Useful local routes include:
 
 ```text
@@ -125,7 +141,7 @@ http://127.0.0.1:4173/embed/oscilloscope-demo
 http://127.0.0.1:4173/api/health
 ```
 
-Architecture, Oracle ARM deployment, and Drupal integration are documented in
+Architecture, deployment, and Drupal integration are documented in
 [`docs/architecture/web-port.md`](docs/architecture/web-port.md),
 [`deploy/README.md`](deploy/README.md), and
 [`integrations/drupal/README.md`](integrations/drupal/README.md). Instrument
@@ -307,7 +323,7 @@ the compiler, the 3D renderer, the Verilog interpreter — is first-party.
 ```
 Chip Hippo/
 ├── Makefile               # Build orchestration (authoritative command list)
-├── deploy/                # Oracle ARM64 systemd, Nginx, environment + release guide
+├── deploy/                # Sample Nginx, systemd and environment files + deployment guide
 ├── integrations/drupal/   # Drupal text filter and responsive embed behavior
 ├── server/                # Read-only dependency-free browser host + route tests
 ├── features/              # Numbered implementation plans; finished ones in done/

@@ -103,6 +103,7 @@ export function modelKind(def) {
   if (def.regulator) return "regulator";
   if (def.contacts) return "relay";
   if (def.speaker) return "speaker";
+  if (def.group === "Sensors") return "sensor";
   if (def.switchBank) return "dip-switch";
   if (def.rotatable) return "span";
   if (def.can) return "can";
@@ -947,6 +948,32 @@ function buildSpeaker(sb, doc, comp, def, params) {
   });
 }
 
+/** A sensor or control module: a small dark board standing on its legs over
+    the box of its pins, printed with its name. They are modules of every shape
+    (two legs to a sixteen-pin keypad), so the board is sized from the pins. */
+function buildSensor(sb, doc, comp, def) {
+  const pins = pinsOf(doc, comp);
+  if (!pins.length) return false;
+  const p = sb.palette;
+  const xs = pins.map((q) => q.x);
+  const zs = pins.map((q) => q.y);
+  const x0 = Math.min(...xs) - 0.8;
+  const x1 = Math.max(...xs) + 0.8;
+  const z0 = Math.min(...zs) - 1.2;
+  const z1 = Math.max(...zs) + 1.2;
+  const Y1 = 1.6;
+  for (const pin of pins) stub(sb, pin.x, pin.y, 0.35);
+  slab(sb, { x: 0, z: 0 }, x0, z0, x1, z1, 0.3, Y1, p.partBody, 0.3);
+  sb.label({
+    text: def.sensor?.label ?? def.title,
+    center: [(x0 + x1) / 2, Y1 + INK, (z0 + z1) / 2],
+    ...ON_TOP,
+    height: 0.5,
+    maxWidth: Math.max(1.2, x1 - x0 - 0.4),
+    color: p.psuBadge,
+  });
+}
+
 /** A transistor, in whichever package it is: a TO-92's D standing on its
     three legs, or a TO-220's moulding and metal tab. Either carries a lamp
     the simulation lights while it conducts. */
@@ -1440,6 +1467,7 @@ const BUILDERS = Object.freeze({
   regulator: buildRegulator,
   relay: buildRelay,
   speaker: buildSpeaker,
+  sensor: buildSensor,
 });
 
 /** Every model kind there is — a test holds BUILDERS and modelKind to it. */

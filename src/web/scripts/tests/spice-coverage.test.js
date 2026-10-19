@@ -147,9 +147,14 @@ test("every palette part runs under Spice Lite with nothing but numbers", () => 
         assert.ok(Number.isFinite(v), `${ref}: ${what} is ${v}`);
       }
     }
-    // A part with supply pins is powered by them: the bench reached it.
+    // A part with supply pins is powered by them: the bench reached it. (A
+    // sensor module's VCC is a voltage divider's end, not a chip's supply: it
+    // is a discrete, so the engine reports no chip status for it.)
     const status = results.at(-1).chipStatus.get("u1")?.status;
-    if (partDef(ref).pins?.some((p) => p.role === "vcc")) {
+    if (
+      partDef(ref).group !== "Sensors" &&
+      partDef(ref).pins?.some((p) => p.role === "vcc")
+    ) {
       assert.equal(status, "ok", `${ref} powered`);
     }
   }

@@ -38,7 +38,7 @@ test("embed protocol accepts commands only from its parent and allowlist", () =>
   const parent = {};
   const message = {
     source: parent,
-    origin: "https://themakersworkbench.com",
+    origin: "http://127.0.0.1:4173",
     data: protocolMessage("chiphippo.reset"),
   };
   assert.equal(validParentMessage(message, parent), true);

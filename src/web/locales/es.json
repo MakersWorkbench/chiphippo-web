@@ -121,6 +121,8 @@
   },
   "toolbar": {
     "file": {
+      "saveSite": "Guardar en el sitio",
+      "saveSiteTitle": "Guardar en el sitio — archiva este circuito en la mediateca del sitio web para que un artículo pueda incrustarlo",
       "group": "Archivo",
       "new": "Nuevo proyecto",
       "newTitle": "Nuevo proyecto ({accel}) — empezar de nuevo en una mesa vacía",
@@ -1415,6 +1417,7 @@
       "diode": "se omite: Digital no tiene un diodo que pase un nivel en un solo sentido como este",
       "inductor": "se omite, así que las dos redes que une llegan separadas: Digital no tiene inductores",
       "transistor": "se omite: Digital no tiene un transistor que conmute como este",
+      "sensor": "se deja fuera: Digital no tiene ningún módulo sensor",
       "transistorPinout": "recibe una huella TO-92 o TO-220 numerada en el orden de patillas del escritorio (E·B·C o S·G·D): compruébala con el patillaje de la pieza real",
       "nearestFootprint": "recibe la huella más parecida de la biblioteca de KiCad: su paso entre patillas difiere un poco del del escritorio; compruébala con la pieza real",
       "customChip": "se omite: es un chip que has diseñado y Digital no tiene un modelo de él",
@@ -1604,6 +1607,20 @@
     }
   },
   "oscilloscope": {
+    "horizontal": "Horizontal",
+    "vertical": "Vertical",
+    "timeZoomIn": "Mostrar menos tiempo por división (acercar)",
+    "timeZoomOut": "Mostrar más tiempo por división (alejar)",
+    "voltageZoomIn": "Mostrar más voltios por división",
+    "voltageZoomOut": "Mostrar menos voltios por división",
+    "triggerMode": "Modo de disparo",
+    "triggerAuto": "Auto",
+    "triggerNormal": "Normal",
+    "triggerRoll": "Roll",
+    "triggerPosition": "Posición de disparo",
+    "position": "Posición",
+    "waitingForTrigger": "Esperando disparo…",
+    "acquiringTrigger": "Capturando fotograma alineado con el disparo…",
     "title": "Osciloscopio",
     "screen": "Pantalla de voltaje del osciloscopio",
     "timeScale": "Tiempo por división",
