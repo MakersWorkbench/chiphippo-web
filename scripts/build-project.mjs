@@ -22,6 +22,8 @@
 //   node scripts/build-project.mjs <spec.json> [--out <file.chiphippo>] [--name "Project name"]
 //   ... add --library [--category "Logic gates"] [--examples-dir <dir>] to also file the built project in the
 //       Example Library (src/web/examples: <name>.chiphippo + an entry in index.json)
+//   ... add --route to run the lab's auto-router on the built circuit, so wires bend around parts
+//       instead of crossing them (drawing only: the circuit is checked to be electrically identical)
 //   node scripts/build-project.mjs --catalog        (print every part a spec may use, with its pins)
 //
 // The spec is the same coordinate-free `{title, notes, parts, nets, tests}`
@@ -108,6 +110,54 @@ if (!built.ok) {
   process.exit(1);
 }
 
+// --route: bend the wires around the parts with the lab's own auto-router. A
+// waypoint is only a drawing, and the router's one address change (a power lead
+// moved along its rail) is meant to be invisible electrically, but this does
+// not take that on trust: the circuit's pin-to-pin connectivity is compared
+// before and after, and nothing is written if it differs.
+if (args.includes("--route")) {
+  const { DeskDoc } = await load("model/desk-doc.js");
+  const { routeDesk, routePlan, SKIP_BUS_MEMBER } = await load(
+    "model/autoroute.js",
+  );
+  const { partBodyBox } = await load("components/part-body-box.js");
+  const { buildNetlist } = await load("sim/netlist.js");
+  const connectivity = (doc) =>
+    JSON.stringify(
+      [...buildNetlist(doc).nets.values()]
+        .map((net) =>
+          [...(net.pins ?? []), ...(net.terminals ?? [])]
+            .map((m) => JSON.stringify(m))
+            .sort(),
+        )
+        .filter((members) => members.length > 0)
+        .sort((x, y) => (x.join() < y.join() ? -1 : 1)),
+    );
+  const before = connectivity(built.document);
+  const result = routeDesk(structuredClone(built.document), {
+    bodyBox: partBodyBox,
+  });
+  const plan = routePlan(result);
+  if (plan.length) {
+    const desk = new DeskDoc(structuredClone(built.document));
+    desk.applyRoutes(plan);
+    const routed = desk.toJSON();
+    if (connectivity(routed) !== before) {
+      console.error("FAULT ROUTE_CHANGED_CIRCUIT: routing altered the connections");
+      console.error("not written: the router changed what is connected");
+      process.exit(1);
+    }
+    built.document = routed;
+  }
+  const unrouted = result.skipped.filter((s) => s.reason !== SKIP_BUS_MEMBER);
+  console.log(
+    `routed ${plan.length} wire(s), moved ${result.reseats.length + result.swaps.length} end(s), left ${unrouted.length} straight`,
+  );
+  for (const s of unrouted) {
+    console.log(`  note: wire ${s.wireId ?? s.id ?? "?"} left as drawn (${s.reason})`);
+  }
+}
+
 const name = flag("--name") ?? (built.title || basename(specPath, ".json"));
 const project = normalizeProject({
   version: PROJECT_VERSION,
@@ -115,7 +165,15 @@ const project = normalizeProject({
   description: built.notes ?? "",
   activeTab: "t1",
   nextIndex: 2,
-  tabs: [{ id: "t1", name: name.slice(0, 64), doc: built.document }],
+  tabs: [
+    {
+      id: "t1",
+      name: name.slice(0, 64),
+      // Optional: the meter or scope the spec asked to open with the circuit.
+      instruments: built.instruments,
+      doc: built.document,
+    },
+  ],
 });
 
 const out = resolve(

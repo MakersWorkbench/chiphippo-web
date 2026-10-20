@@ -32,6 +32,7 @@
 import { tf } from "../i18n.js";
 import { compileNetlist, designClipOf } from "../model/autobuild.js";
 import { verifySteps } from "../model/autobuild-verify.js";
+import { resolveInstruments } from "../model/spec-instruments.js";
 
 /**
  * How many tests a generated design must carry. The prompt quotes this
@@ -294,6 +295,18 @@ export function* buildStepsFromSpec(spec) {
     };
   }
 
+  // The instruments the spec wants open (optional): resolved against the
+  // verified document, and a probe that points at nothing is a fault.
+  const opened = resolveInstruments(
+    spec.instruments,
+    spec,
+    verdict.document,
+    compiled.partMap,
+  );
+  if (opened.faults.length) {
+    return { ok: false, faults: opened.faults, document: verdict.document };
+  }
+
   // The clip comes from the VERIFIED document, not the compiled one: the
   // loader is what the desk will read, so anything it normalised away must be
   // absent from what gets placed too.
@@ -317,6 +330,7 @@ export function* buildStepsFromSpec(spec) {
     document: verdict.document,
     warnings: compiled.warnings ?? [],
     results: verdict.results ?? [],
+    ...(opened.instruments ? { instruments: opened.instruments } : {}),
     title: typeof spec.title === "string" ? spec.title : "",
     // Also stamped on the desk as a caption (autobuild.js); handed back here so
     // the panel can say it at the moment the design is offered, when the user

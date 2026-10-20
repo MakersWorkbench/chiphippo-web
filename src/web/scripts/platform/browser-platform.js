@@ -496,11 +496,12 @@ export function createBrowserPlatform({
   const settings = {
     async get() {
       const loaded = { ...clone(SETTINGS_DEFAULTS), ...clone((await storage.get(KEYS.settings)) ?? {}) }; // prettier-ignore
-      // A curated lesson must behave the same for every reader, including a
-      // first-time embed that has no access to the Settings dialog. Use the
-      // electrical engine so its meter has real voltage/current data. A user
-      // can still change the setting after opening the full workbench.
-      return route.lessonId
+      // A curated lesson, or a published project (an article's embed and the
+      // page "Open full workbench" leads to), must behave the same for every
+      // reader, including a first-time embed that has no access to the Settings
+      // dialog. Use the electrical engine so its meter has real voltage/current
+      // data. A user can still change the setting in their own workbench.
+      return route.lessonId || route.projectId
         ? {
             ...loaded,
             spiceLite: { ...clone(loaded.spiceLite), enabled: true },

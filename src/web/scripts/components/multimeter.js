@@ -138,6 +138,26 @@ export class Multimeter {
     this.#onStateChange?.({ visible: this.#visible, armed: this.armed });
   }
 
+  /**
+   * Open the meter the way a lesson or a project's desktop left it: a mode,
+   * and the two points the probes sit on. Like the scope's setup this is
+   * runtime state, never part of the circuit document. An address that no
+   * longer exists is harmless: the normal refresh path leaves its marker
+   * hidden. `visible: false` closes the meter.
+   *
+   * @param {{visible?: boolean, mode?: string, red?: string, black?: string}} [setup]
+   */
+  loadSetup(setup = {}) {
+    if (MODES.includes(setup.mode)) this.#mode = setup.mode;
+    if (typeof setup.red === "string" && setup.red) this.#red = setup.red;
+    if (typeof setup.black === "string" && setup.black) {
+      this.#black = setup.black;
+    }
+    this.setVisible(setup.visible !== false);
+    if (this.#red && this.#black) this.disarmPlacement();
+    this.refresh();
+  }
+
   arm(lead) {
     if (!this.#visible || !["red", "black"].includes(lead)) return;
     this.#activeLead = lead;

@@ -1,0 +1,325 @@
+{
+  "version": 5,
+  "name": "How-Voltage-Works-Four-Step-Ladder-v3",
+  "description": "A 12 volt supply feeds four 1 kilohm resistors in a row, so the voltage steps down 3 volts at each resistor. That puts the points between them at 9, 6, and 3 volts above ground (the 0 volt reference). Voltage is always measured between two points, so try different pairs with the multimeter: one resistor reads 3 volts, two in a row read 6, and the whole stack reads 12.",
+  "wheelLocked": false,
+  "activeTab": "t1",
+  "nextIndex": 2,
+  "tabs": [
+    {
+      "id": "t1",
+      "name": "How-Voltage-Works-Four-Step-Ladder-v3",
+      "instruments": {
+        "multimeter": {
+          "mode": "voltage",
+          "red": "bb2.a6",
+          "black": "bb2.a19"
+        }
+      },
+      "doc": {
+        "version": 15,
+        "boards": [
+          {
+            "id": "bb1",
+            "type": "rail-half",
+            "x": 0,
+            "y": 0,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb2",
+            "type": "pins-half",
+            "x": 0,
+            "y": 3.5,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb3",
+            "type": "rail-half",
+            "x": 0,
+            "y": 17.52,
+            "rot": 0,
+            "group": "g1"
+          }
+        ],
+        "components": [
+          {
+            "id": "psu1",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 0,
+            "params": {
+              "volts": 12
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a1",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R2",
+            "description": "step 2, 1 kilohm"
+          },
+          {
+            "id": "c2",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a6",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R1",
+            "description": "step 1, 1 kilohm"
+          },
+          {
+            "id": "c3",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a11",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R3",
+            "description": "step 3, 1 kilohm"
+          },
+          {
+            "id": "c4",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a16",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R4",
+            "description": "step 4, 1 kilohm"
+          }
+        ],
+        "wires": [
+          {
+            "id": "w1",
+            "from": "psu1.+",
+            "to": "bb1.+25",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 30.33,
+                "y": 4
+              },
+              {
+                "x": 30.33,
+                "y": 1.25
+              }
+            ]
+          },
+          {
+            "id": "w2",
+            "from": "psu1.-",
+            "to": "bb1.-25",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 74,
+                "y": 4.34
+              },
+              {
+                "x": 30,
+                "y": 4.34
+              }
+            ]
+          },
+          {
+            "id": "w3",
+            "from": "bb1.+24",
+            "to": "bb3.+24",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 28.67,
+                "y": 1.25
+              },
+              {
+                "x": 28.67,
+                "y": 18.77
+              }
+            ]
+          },
+          {
+            "id": "w4",
+            "from": "bb3.-24",
+            "to": "bb1.-24",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 29.33,
+                "y": 19.77
+              },
+              {
+                "x": 29.33,
+                "y": 2.25
+              }
+            ]
+          },
+          {
+            "id": "w5",
+            "from": "bb3.+5",
+            "to": "bb2.b6",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 5.67,
+                "y": 18.77
+              },
+              {
+                "x": 5.67,
+                "y": 15.01
+              }
+            ]
+          },
+          {
+            "id": "w6",
+            "from": "bb2.c9",
+            "to": "bb2.c1",
+            "color": "orange",
+            "layout": "routed"
+          },
+          {
+            "id": "w7",
+            "from": "bb2.d4",
+            "to": "bb2.d11",
+            "color": "green",
+            "layout": "routed"
+          },
+          {
+            "id": "w8",
+            "from": "bb2.b14",
+            "to": "bb2.b16",
+            "color": "green",
+            "layout": "routed"
+          },
+          {
+            "id": "w9",
+            "from": "bb3.-17",
+            "to": "bb2.b19",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 21,
+                "y": 15.01
+              }
+            ]
+          }
+        ],
+        "buses": [],
+        "netNames": [],
+        "annotations": [
+          {
+            "id": "an1",
+            "kind": "label",
+            "x": 0,
+            "y": -14.6,
+            "text": "Four-step voltage ladder on 12 V",
+            "anchor": "c1"
+          },
+          {
+            "id": "an2",
+            "kind": "label",
+            "x": 0,
+            "y": -12.8,
+            "text": "A 12 volt supply feeds four 1 kilohm resistors in a row, so the",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an3",
+            "kind": "label",
+            "x": 0,
+            "y": -11,
+            "text": "voltage steps down 3 volts at each resistor. That puts the",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an4",
+            "kind": "label",
+            "x": 0,
+            "y": -9.2,
+            "text": "points between them at 9, 6, and 3 volts above ground (the 0",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an5",
+            "kind": "label",
+            "x": 0,
+            "y": -7.4,
+            "text": "volt reference). Voltage is always measured between two points,",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an6",
+            "kind": "label",
+            "x": 0,
+            "y": -5.6,
+            "text": "so try different pairs with the multimeter: one resistor reads 3",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an7",
+            "kind": "label",
+            "x": 0,
+            "y": -3.8,
+            "text": "volts, two in a row read 6, and the whole stack reads 12.",
+            "color": "#808080",
+            "anchor": "c1"
+          }
+        ],
+        "scopeChannels": [],
+        "signals": [],
+        "integrations": [],
+        "nextBoardId": 4,
+        "nextGroupId": 2,
+        "nextComponentId": 5,
+        "nextPsuId": 2,
+        "nextClockId": 1,
+        "nextWireId": 10,
+        "nextBusId": 1,
+        "nextAnnotationId": 8,
+        "nextScopeChannelId": 1,
+        "nextSignalId": 1,
+        "nextOutputId": 1,
+        "nextInputId": 1
+      }
+    }
+  ],
+  "connections": [],
+  "codegen": {},
+  "cpuBreakpoints": {},
+  "customChips": [],
+  "location": null
+}

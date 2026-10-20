@@ -2055,6 +2055,22 @@ export class DeskController {
     this.#oscilloscope.loadSetup(setup);
   }
 
+  loadMultimeterSetup(setup) {
+    this.#meter.loadSetup(setup);
+  }
+
+  /**
+   * Open the instruments a desktop (or a lesson) carries: `{multimeter?,
+   * oscilloscope?}`. Anything absent is left as the reader has it.
+   */
+  loadInstruments(instruments) {
+    if (!instruments || typeof instruments !== "object") return;
+    if (instruments.multimeter) this.loadMultimeterSetup(instruments.multimeter);
+    if (instruments.oscilloscope) {
+      this.loadOscilloscopeSetup(instruments.oscilloscope);
+    }
+  }
+
   /** Centre + scale the camera so every board, part, and wire fits on
       screen — how a lost component gets found again. The desk itself is
       recentred on the origin first (see #recentreDesk), so fitting is also

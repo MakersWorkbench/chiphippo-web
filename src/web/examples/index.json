@@ -9,6 +9,27 @@
       "parts": 11
     },
     {
+      "id": "How-Electric-Current-Works-Switched-LED-Loop-v3",
+      "title": "LED loop with a switch on a 3 V supply",
+      "description": "A 3 volt supply pushes current around one loop made of a switch, a 330 ohm resistor, and a red LED (a light-emitting diode, a part that glows when current flows through it). The switch starts closed, so the loop is complete, the LED glows, and about 3.7 milliamps (thousandths of an amp) flows. Because there is only one path, the same current passes through every part. Click the switch to open the loop and the current drops to zero everywhere at once, even though the supply is still connected. Current needs a complete loop, and the multimeter shows it.",
+      "category": "Electrical Theory and Principles",
+      "parts": 4
+    },
+    {
+      "id": "How-Electrical-Resistance-Works-Resistor-And-Thermistor-v3",
+      "title": "Fixed resistor beside a thermistor on 5 V",
+      "description": "Two separate loops share one 5 volt supply. The first holds a 10 kilohm fixed resistor, whose resistance stays put. The second holds an NTC thermistor, a part whose resistance falls as it gets hotter (NTC stands for negative temperature coefficient). At 25 degrees Celsius the thermistor is also 10 kilohms, so both loops carry 5 volts divided by 10,000 ohms, which is 0.5 milliamps (half of a thousandth of an amp). Resistance is the ratio of voltage to current, so you can find it by reading both. Open the thermistor's Properties card and raise its temperature to 75 degrees Celsius: its resistanc",
+      "category": "Electrical Theory and Principles",
+      "parts": 3
+    },
+    {
+      "id": "How-Kirchhoffs-Circuit-Laws-Work-Two-Source-v3",
+      "title": "Two-source circuit with three branches",
+      "description": "Three branches meet at one junction. The left branch is a 9 volt source (E1) in series with a 1 kilohm resistor (R1). The middle branch is a 3 kilohm resistor (R2) down to ground. The right branch is a 5 volt source (E2) in series with a 1 kilohm resistor (R3). Working it out with Kirchhoff's two laws puts the junction at 6 volts. That makes R1 carry 3 milliamps toward the junction, R2 carry 2 milliamps to ground, and R3 carry 1 milliamp the wrong way, back into the 5 volt source, which is therefore being charged. The current entering the junction (3 mA) equals the current leaving it (2 mA plu",
+      "category": "Circuit Theory and Analysis",
+      "parts": 5
+    },
+    {
       "id": "How-Logic-Gates-Work-NAND-Gate",
       "title": "NAND gate lab",
       "description": "One gate of a 74LS00 quad NAND chip. A two-position DIP switch feeds the gate's A and B inputs, and one LED shows the output. Switch up (on) puts a HIGH on that input. The LED lights when the output is HIGH, which is every combination except both inputs HIGH. The other three gates on the chip are not used.",
@@ -16,11 +37,25 @@
       "parts": 6
     },
     {
+      "id": "How-Ohms-Law-Works-Resistor-And-Pot-v3",
+      "title": "Fixed resistor and variable resistor on 5 V",
+      "description": "Two separate loops share one 5 volt supply, so each resistor sees the full 5 volts. The first loop holds a 1 kilohm fixed resistor, which carries 5 volts divided by 1,000 ohms, or 5 milliamps (thousandths of an amp). The second loop holds a potentiometer (a variable resistor with a knob) set to 5 kilohms, which carries 1 milliamp. Ohm's law says current equals voltage divided by resistance, so changing the pot's setting in its Properties card changes its current in a way you can predict and then check with the multimeter.",
+      "category": "Circuit Theory and Analysis",
+      "parts": 3
+    },
+    {
       "id": "How-Voltage-Dividers-Work-Two-Resistors",
       "title": "Two-resistor voltage divider",
       "description": "A 9 V supply feeds two resistors in series, R1 (1 kilohm) on top and R2 (2 kilohms) below it, with the lower end on ground (0 V). The same current flows through both, 9 V divided by their 3 kilohm total, which is 3 milliamps. That current drops 3 V across R1 and 6 V across R2, so the point between them sits at 6 V. Touch a multimeter's probes to that point and to ground to read it.",
       "category": "Circuit Theory and Analysis",
       "parts": 3
+    },
+    {
+      "id": "How-Voltage-Works-Four-Step-Ladder-v3",
+      "title": "Four-step voltage ladder on 12 V",
+      "description": "A 12 volt supply feeds four 1 kilohm resistors in a row, so the voltage steps down 3 volts at each resistor. That puts the points between them at 9, 6, and 3 volts above ground (the 0 volt reference). Voltage is always measured between two points, so try different pairs with the multimeter: one resistor reads 3 volts, two in a row read 6, and the whole stack reads 12.",
+      "category": "Electrical Theory and Principles",
+      "parts": 5
     }
   ]
 }

@@ -1,7 +1,6 @@
 .chiphippo-embed {
   width: 100%;
-  min-height: 32rem;
-  aspect-ratio: 16 / 10;
+  margin: 1.5rem 0;
 }
 
 .chiphippo-embed iframe {

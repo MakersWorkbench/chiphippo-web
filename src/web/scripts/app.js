@@ -2063,6 +2063,17 @@ async function init() {
   if (bridge.web?.manifest?.oscilloscope) {
     controller.loadOscilloscopeSetup(bridge.web.manifest.oscilloscope);
   }
+  if (bridge.web?.manifest?.multimeter) {
+    controller.loadMultimeterSetup(bridge.web.manifest.multimeter);
+  }
+  // The booted desktop's own instruments (a project that carries them). A
+  // lesson's manifest above wins, being the more specific statement.
+  if (projectBoot?.project && !bridge.web?.manifest) {
+    const booted = projectBoot.project;
+    controller.loadInstruments(
+      booted.tabs.find((tab) => tab.id === booted.activeTab)?.instruments,
+    );
+  }
 
   wireEditMenu(controller);
 

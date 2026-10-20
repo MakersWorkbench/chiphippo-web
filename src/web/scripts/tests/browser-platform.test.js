@@ -56,6 +56,20 @@ function platform(storage = new MemoryStorage(), options = {}) {
   });
 }
 
+test("a published project's embed runs on the electrical engine; a plain workbench does not", async () => {
+  const embed = platform(new MemoryStorage(), {
+    locationRef: {
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:4173",
+      pathname: "/embed/project/7",
+      search: "",
+    },
+  });
+  assert.equal((await embed.settings.get()).spiceLite.enabled, true);
+  const plain = platform(new MemoryStorage());
+  assert.notEqual((await plain.settings.get()).spiceLite?.enabled, true);
+});
+
 test("browser platform creates and persists a usable blank project", async () => {
   const storage = new MemoryStorage();
   const bridge = platform(storage);

@@ -139,10 +139,78 @@ function breakpointsFor(raw, tabs) {
   return out;
 }
 
-/** A tab record with the omit-when-empty description convention. */
-function makeTab(id, name, description, doc) {
+const METER_MODES = [
+  "voltage",
+  "resistance",
+  "continuity",
+  "current",
+  "capacitance",
+  "inductance",
+];
+const ADDRESS = /^[A-Za-z0-9_.+-]{1,32}$/;
+const SCOPE_PROBES = ["ch1", "ch2", "ground"];
+
+const address = (v) => (typeof v === "string" && ADDRESS.test(v) ? v : null);
+
+/**
+ * The instruments a desktop opens with: `{multimeter?, oscilloscope?}`. A
+ * desktop may carry them so a published circuit arrives with its meter or scope
+ * already open and connected. Runtime setup only, never part of the circuit
+ * document, and left off entirely when there is nothing to say (the same
+ * omit-when-empty convention as a description), so a project that never uses
+ * them round-trips byte-identical. Unknown keys are dropped.
+ *
+ * @returns {object|null} the cleaned setup, or null when nothing survives
+ */
+export function normalizeInstruments(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  const m = raw.multimeter;
+  if (m && typeof m === "object") {
+    const meter = {};
+    if (METER_MODES.includes(m.mode)) meter.mode = m.mode;
+    const red = address(m.red);
+    const black = address(m.black);
+    if (red) meter.red = red;
+    if (black) meter.black = black;
+    if (typeof m.visible === "boolean") meter.visible = m.visible;
+    if (Object.keys(meter).length) out.multimeter = meter;
+  }
+  const o = raw.oscilloscope;
+  if (o && typeof o === "object") {
+    const scope = {};
+    if (typeof o.visible === "boolean") scope.visible = o.visible;
+    for (const key of ["timePerDiv", "voltsPerDiv"]) {
+      if (Number.isFinite(o[key]) && o[key] > 0) scope[key] = o[key];
+    }
+    if (["ch1", "ch2"].includes(o.triggerChannel)) {
+      scope.triggerChannel = o.triggerChannel;
+    }
+    if (["auto", "normal", "roll"].includes(o.triggerMode)) {
+      scope.triggerMode = o.triggerMode;
+    }
+    const probes = {};
+    for (const probe of SCOPE_PROBES) {
+      const a = address(o.probes?.[probe]);
+      if (a) probes[probe] = a;
+    }
+    if (Object.keys(probes).length) scope.probes = probes;
+    if (Object.keys(scope).length) out.oscilloscope = scope;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** A tab record with the omit-when-empty description and instruments. */
+function makeTab(id, name, description, doc, instruments = null) {
   const desc = text(description);
-  return { id, name, ...(desc ? { description: desc } : {}), doc };
+  const inst = normalizeInstruments(instruments);
+  return {
+    id,
+    name,
+    ...(desc ? { description: desc } : {}),
+    ...(inst ? { instruments: inst } : {}),
+    doc,
+  };
 }
 
 /**
@@ -165,7 +233,9 @@ export function normalizeProject(raw) {
     const doc = tab.doc;
     if (!id || ids.has(id) || !doc || typeof doc !== "object") continue;
     ids.add(id);
-    tabs.push(makeTab(id, text(tab.name) || id, tab.description, doc));
+    tabs.push(
+      makeTab(id, text(tab.name) || id, tab.description, doc, tab.instruments),
+    );
   }
   if (tabs.length === 0) return null;
   return {

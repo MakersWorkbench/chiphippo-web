@@ -242,6 +242,16 @@ function text(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** A non-empty plain object (the renderer cleans the keys; main only carries them). */
+function plain(value) {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).length > 0
+  );
+}
+
 class ProjectStore {
   /**
    * @param {string} dataDir - the app's userData directory.
@@ -415,6 +425,10 @@ class ProjectStore {
         id: tab.id,
         name: tab.name,
         ...(tab.description ? { description: tab.description } : {}),
+        // The instruments a desktop opens with (see project-doc.js's
+        // normalizeInstruments): written only when present, so a project that
+        // never used them keeps the bytes it always had.
+        ...(plain(tab.instruments) ? { instruments: tab.instruments } : {}),
         doc: tab.doc,
       })),
       // `images` is non-empty exactly when `blobs` is, so one guard covers the
@@ -525,6 +539,7 @@ class ProjectStore {
         ...(text(tab.description)
           ? { description: text(tab.description) }
           : {}),
+        ...(plain(tab.instruments) ? { instruments: tab.instruments } : {}),
         doc: fromDisk ? migrateDeskDocument(doc) : doc,
       });
     }

@@ -1,0 +1,133 @@
+{
+  "title": "Four-step voltage ladder on 12 V",
+  "mode": "analog",
+  "supply": {
+    "volts": 12
+  },
+  "notes": "A 12 volt supply feeds four 1 kilohm resistors in a row, so the voltage steps down 3 volts at each resistor. That puts the points between them at 9, 6, and 3 volts above ground (the 0 volt reference). Voltage is always measured between two points, so try different pairs with the multimeter: one resistor reads 3 volts, two in a row read 6, and the whole stack reads 12.",
+  "parts": [
+    {
+      "id": "R1",
+      "ref": "resistor",
+      "label": "step 1, 1 kilohm",
+      "params": {
+        "ohms": "1k"
+      }
+    },
+    {
+      "id": "R2",
+      "ref": "resistor",
+      "label": "step 2, 1 kilohm",
+      "params": {
+        "ohms": "1k"
+      }
+    },
+    {
+      "id": "R3",
+      "ref": "resistor",
+      "label": "step 3, 1 kilohm",
+      "params": {
+        "ohms": "1k"
+      }
+    },
+    {
+      "id": "R4",
+      "ref": "resistor",
+      "label": "step 4, 1 kilohm",
+      "params": {
+        "ohms": "1k"
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "TOP",
+      "members": [
+        "R1.1",
+        "VCC"
+      ]
+    },
+    {
+      "name": "NINE_VOLT_POINT",
+      "members": [
+        "R1.2",
+        "R2.1"
+      ]
+    },
+    {
+      "name": "SIX_VOLT_POINT",
+      "members": [
+        "R2.2",
+        "R3.1"
+      ]
+    },
+    {
+      "name": "THREE_VOLT_POINT",
+      "members": [
+        "R3.2",
+        "R4.1"
+      ]
+    },
+    {
+      "name": "GROUND",
+      "members": [
+        "R4.2",
+        "GND"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "name": "the points sit at 12, 9, 6, and 3 V above ground",
+      "expect": [
+        {
+          "target": "R1.1",
+          "volts": 12
+        },
+        {
+          "target": "R1.2",
+          "volts": 9
+        },
+        {
+          "target": "R2.2",
+          "volts": 6
+        },
+        {
+          "target": "R3.2",
+          "volts": 3
+        }
+      ]
+    },
+    {
+      "name": "each resistor drops 3 V and two in a row drop 6 V",
+      "expect": [
+        {
+          "target": "R2.1",
+          "minus": "R2.2",
+          "volts": 3
+        },
+        {
+          "target": "R1.2",
+          "minus": "R3.2",
+          "volts": 6
+        }
+      ]
+    },
+    {
+      "name": "3 mA flows through the whole ladder",
+      "expect": [
+        {
+          "target": "R2.1",
+          "amps": 0.003
+        }
+      ]
+    }
+  ],
+  "instruments": {
+    "multimeter": {
+      "mode": "voltage",
+      "red": "R1.1",
+      "black": "R4.2"
+    }
+  }
+}

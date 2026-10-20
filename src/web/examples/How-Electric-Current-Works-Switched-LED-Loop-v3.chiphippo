@@ -1,0 +1,330 @@
+{
+  "version": 5,
+  "name": "How-Electric-Current-Works-Switched-LED-Loop-v3",
+  "description": "A 3 volt supply pushes current around one loop made of a switch, a 330 ohm resistor, and a red LED (a light-emitting diode, a part that glows when current flows through it). The switch starts closed, so the loop is complete, the LED glows, and about 3.7 milliamps (thousandths of an amp) flows. Because there is only one path, the same current passes through every part. Click the switch to open the loop and the current drops to zero everywhere at once, even though the supply is still connected. Current needs a complete loop, and the multimeter shows it.",
+  "wheelLocked": false,
+  "activeTab": "t1",
+  "nextIndex": 2,
+  "tabs": [
+    {
+      "id": "t1",
+      "name": "How-Electric-Current-Works-Switched-LED-Loop-v3",
+      "instruments": {
+        "multimeter": {
+          "mode": "current",
+          "red": "bb2.a1",
+          "black": "bb2.a4"
+        }
+      },
+      "doc": {
+        "version": 15,
+        "boards": [
+          {
+            "id": "bb1",
+            "type": "rail-half",
+            "x": 0,
+            "y": 0,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb2",
+            "type": "pins-half",
+            "x": 0,
+            "y": 3.5,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb3",
+            "type": "rail-half",
+            "x": 0,
+            "y": 17.52,
+            "rot": 0,
+            "group": "g1"
+          }
+        ],
+        "components": [
+          {
+            "id": "psu1",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 0,
+            "params": {
+              "volts": 3
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a1",
+            "params": {
+              "ohms": 330,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R1",
+            "description": "current-limiting resistor, 330 ohms"
+          },
+          {
+            "id": "c2",
+            "kind": "discrete",
+            "ref": "sw-toggle",
+            "board": "bb2",
+            "anchor": "h6",
+            "params": {
+              "on": true
+            },
+            "name": "S1",
+            "description": "loop switch, closed"
+          },
+          {
+            "id": "c3",
+            "kind": "discrete",
+            "ref": "led",
+            "board": "bb2",
+            "anchor": "a10",
+            "params": {
+              "color": "red",
+              "flip": false,
+              "rot": 0,
+              "end": null
+            },
+            "name": "D1",
+            "description": "red LED"
+          }
+        ],
+        "wires": [
+          {
+            "id": "w1",
+            "from": "psu1.+",
+            "to": "bb1.+25",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 30.33,
+                "y": 4
+              },
+              {
+                "x": 30.33,
+                "y": 1.25
+              }
+            ]
+          },
+          {
+            "id": "w2",
+            "from": "psu1.-",
+            "to": "bb1.-25",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 74,
+                "y": 4.34
+              },
+              {
+                "x": 30,
+                "y": 4.34
+              }
+            ]
+          },
+          {
+            "id": "w3",
+            "from": "bb1.+24",
+            "to": "bb3.+24",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 28.67,
+                "y": 1.25
+              },
+              {
+                "x": 28.67,
+                "y": 18.77
+              }
+            ]
+          },
+          {
+            "id": "w4",
+            "from": "bb3.-24",
+            "to": "bb1.-24",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 29.33,
+                "y": 19.77
+              },
+              {
+                "x": 29.33,
+                "y": 2.25
+              }
+            ]
+          },
+          {
+            "id": "w5",
+            "from": "bb1.+5",
+            "to": "bb2.j6",
+            "color": "red",
+            "layout": "routed"
+          },
+          {
+            "id": "w6",
+            "from": "bb2.f8",
+            "to": "bb2.e1",
+            "color": "green",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 8,
+                "y": 12.01
+              }
+            ]
+          },
+          {
+            "id": "w7",
+            "from": "bb2.c4",
+            "to": "bb2.c10",
+            "color": "purple",
+            "layout": "routed"
+          },
+          {
+            "id": "w8",
+            "from": "bb3.-9",
+            "to": "bb2.b11",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 10.67,
+                "y": 19.77
+              },
+              {
+                "x": 10.67,
+                "y": 15.01
+              }
+            ]
+          }
+        ],
+        "buses": [],
+        "netNames": [],
+        "annotations": [
+          {
+            "id": "an1",
+            "kind": "label",
+            "x": 0,
+            "y": -20,
+            "text": "LED loop with a switch on a 3 V supply",
+            "anchor": "c1"
+          },
+          {
+            "id": "an2",
+            "kind": "label",
+            "x": 0,
+            "y": -18.2,
+            "text": "A 3 volt supply pushes current around one loop made of a switch,",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an3",
+            "kind": "label",
+            "x": 0,
+            "y": -16.4,
+            "text": "a 330 ohm resistor, and a red LED (a light-emitting diode, a",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an4",
+            "kind": "label",
+            "x": 0,
+            "y": -14.6,
+            "text": "part that glows when current flows through it). The switch",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an5",
+            "kind": "label",
+            "x": 0,
+            "y": -12.8,
+            "text": "starts closed, so the loop is complete, the LED glows, and about",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an6",
+            "kind": "label",
+            "x": 0,
+            "y": -11,
+            "text": "3.7 milliamps (thousandths of an amp) flows. Because there is",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an7",
+            "kind": "label",
+            "x": 0,
+            "y": -9.2,
+            "text": "only one path, the same current passes through every part. Click",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an8",
+            "kind": "label",
+            "x": 0,
+            "y": -7.4,
+            "text": "the switch to open the loop and the current drops to zero",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an9",
+            "kind": "label",
+            "x": 0,
+            "y": -5.6,
+            "text": "everywhere at once, even though the supply is still connected.",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an10",
+            "kind": "label",
+            "x": 0,
+            "y": -3.8,
+            "text": "Current needs a complete loop, and the multimeter shows it.",
+            "color": "#808080",
+            "anchor": "c1"
+          }
+        ],
+        "scopeChannels": [],
+        "signals": [],
+        "integrations": [],
+        "nextBoardId": 4,
+        "nextGroupId": 2,
+        "nextComponentId": 4,
+        "nextPsuId": 2,
+        "nextClockId": 1,
+        "nextWireId": 9,
+        "nextBusId": 1,
+        "nextAnnotationId": 11,
+        "nextScopeChannelId": 1,
+        "nextSignalId": 1,
+        "nextOutputId": 1,
+        "nextInputId": 1
+      }
+    }
+  ],
+  "connections": [],
+  "codegen": {},
+  "cpuBreakpoints": {},
+  "customChips": [],
+  "location": null
+}

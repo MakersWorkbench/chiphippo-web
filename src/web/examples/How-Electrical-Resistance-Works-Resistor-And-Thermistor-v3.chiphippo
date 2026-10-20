@@ -1,0 +1,362 @@
+{
+  "version": 5,
+  "name": "How-Electrical-Resistance-Works-Resistor-And-Thermistor-v3",
+  "description": "Two separate loops share one 5 volt supply. The first holds a 10 kilohm fixed resistor, whose resistance stays put. The second holds an NTC thermistor, a part whose resistance falls as it gets hotter (NTC stands for negative temperature coefficient). At 25 degrees Celsius the thermistor is also 10 kilohms, so both loops carry 5 volts divided by 10,000 ohms, which is 0.5 milliamps (half of a thousandth of an amp). Resistance is the ratio of voltage to current, so you can find it by reading both. Open the thermistor's Properties card and raise its temperature to 75 degrees Celsius: its resistance drops to roughly 1.5 kilohms and its current climbs to about 3.4 milliamps, while the fixed resistor's current stays at 0.5 milliamps.",
+  "wheelLocked": false,
+  "activeTab": "t1",
+  "nextIndex": 2,
+  "tabs": [
+    {
+      "id": "t1",
+      "name": "How-Electrical-Resistance-Works-Resistor-And-Thermistor-v3",
+      "instruments": {
+        "multimeter": {
+          "mode": "voltage",
+          "red": "bb2.a1",
+          "black": "bb2.a4"
+        }
+      },
+      "doc": {
+        "version": 15,
+        "boards": [
+          {
+            "id": "bb1",
+            "type": "rail-half",
+            "x": 0,
+            "y": 0,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb2",
+            "type": "pins-half",
+            "x": 0,
+            "y": 3.5,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb3",
+            "type": "rail-half",
+            "x": 0,
+            "y": 17.52,
+            "rot": 0,
+            "group": "g1"
+          }
+        ],
+        "components": [
+          {
+            "id": "psu1",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 0,
+            "params": {
+              "volts": 5
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a1",
+            "params": {
+              "ohms": 10000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R1",
+            "description": "fixed resistor, 10 kilohms"
+          },
+          {
+            "id": "c2",
+            "kind": "discrete",
+            "ref": "sensor-ntc",
+            "board": "bb2",
+            "anchor": "a6",
+            "params": {
+              "celsius": 25
+            },
+            "name": "T1",
+            "description": "thermistor, 10 kilohms at 25 C"
+          }
+        ],
+        "wires": [
+          {
+            "id": "w1",
+            "from": "psu1.+",
+            "to": "bb1.+25",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 30.33,
+                "y": 4
+              },
+              {
+                "x": 30.33,
+                "y": 1.25
+              }
+            ]
+          },
+          {
+            "id": "w2",
+            "from": "psu1.-",
+            "to": "bb1.-25",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 74,
+                "y": 4.34
+              },
+              {
+                "x": 30,
+                "y": 4.34
+              }
+            ]
+          },
+          {
+            "id": "w3",
+            "from": "bb1.+24",
+            "to": "bb3.+24",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 28.67,
+                "y": 1.25
+              },
+              {
+                "x": 28.67,
+                "y": 18.77
+              }
+            ]
+          },
+          {
+            "id": "w4",
+            "from": "bb3.-24",
+            "to": "bb1.-24",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 29.33,
+                "y": 19.77
+              },
+              {
+                "x": 29.33,
+                "y": 2.25
+              }
+            ]
+          },
+          {
+            "id": "w5",
+            "from": "bb3.+1",
+            "to": "bb2.b1",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 2,
+                "y": 15.01
+              }
+            ]
+          },
+          {
+            "id": "w6",
+            "from": "bb3.-3",
+            "to": "bb2.b4",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 3.67,
+                "y": 19.77
+              },
+              {
+                "x": 3.67,
+                "y": 15.01
+              }
+            ]
+          },
+          {
+            "id": "w7",
+            "from": "bb3.+5",
+            "to": "bb2.b6",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 5.67,
+                "y": 18.77
+              },
+              {
+                "x": 5.67,
+                "y": 15.01
+              }
+            ]
+          },
+          {
+            "id": "w8",
+            "from": "bb3.-6",
+            "to": "bb2.b8",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 7.67,
+                "y": 19.77
+              },
+              {
+                "x": 7.67,
+                "y": 15.01
+              }
+            ]
+          }
+        ],
+        "buses": [],
+        "netNames": [],
+        "annotations": [
+          {
+            "id": "an1",
+            "kind": "label",
+            "x": 0,
+            "y": -25.400000000000002,
+            "text": "Fixed resistor beside a thermistor on 5 V",
+            "anchor": "c1"
+          },
+          {
+            "id": "an2",
+            "kind": "label",
+            "x": 0,
+            "y": -23.6,
+            "text": "Two separate loops share one 5 volt supply. The first holds a 10",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an3",
+            "kind": "label",
+            "x": 0,
+            "y": -21.8,
+            "text": "kilohm fixed resistor, whose resistance stays put. The second",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an4",
+            "kind": "label",
+            "x": 0,
+            "y": -20,
+            "text": "holds an NTC thermistor, a part whose resistance falls as it",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an5",
+            "kind": "label",
+            "x": 0,
+            "y": -18.2,
+            "text": "gets hotter (NTC stands for negative temperature coefficient).",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an6",
+            "kind": "label",
+            "x": 0,
+            "y": -16.4,
+            "text": "At 25 degrees Celsius the thermistor is also 10 kilohms, so both",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an7",
+            "kind": "label",
+            "x": 0,
+            "y": -14.6,
+            "text": "loops carry 5 volts divided by 10,000 ohms, which is 0.5",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an8",
+            "kind": "label",
+            "x": 0,
+            "y": -12.8,
+            "text": "milliamps (half of a thousandth of an amp). Resistance is the",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an9",
+            "kind": "label",
+            "x": 0,
+            "y": -11,
+            "text": "ratio of voltage to current, so you can find it by reading both.",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an10",
+            "kind": "label",
+            "x": 0,
+            "y": -9.2,
+            "text": "Open the thermistor's Properties card and raise its temperature",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an11",
+            "kind": "label",
+            "x": 0,
+            "y": -7.4,
+            "text": "to 75 degrees Celsius: its resistance drops to roughly 1.5",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an12",
+            "kind": "label",
+            "x": 0,
+            "y": -5.6,
+            "text": "kilohms and its current climbs to about 3.4 milliamps, while the",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an13",
+            "kind": "label",
+            "x": 0,
+            "y": -3.8,
+            "text": "fixed resistor's current stays at 0.5 milliamps.",
+            "color": "#808080",
+            "anchor": "c1"
+          }
+        ],
+        "scopeChannels": [],
+        "signals": [],
+        "integrations": [],
+        "nextBoardId": 4,
+        "nextGroupId": 2,
+        "nextComponentId": 3,
+        "nextPsuId": 2,
+        "nextClockId": 1,
+        "nextWireId": 9,
+        "nextBusId": 1,
+        "nextAnnotationId": 14,
+        "nextScopeChannelId": 1,
+        "nextSignalId": 1,
+        "nextOutputId": 1,
+        "nextInputId": 1
+      }
+    }
+  ],
+  "connections": [],
+  "codegen": {},
+  "cpuBreakpoints": {},
+  "customChips": [],
+  "location": null
+}

@@ -1,0 +1,406 @@
+{
+  "version": 5,
+  "name": "How-Kirchhoffs-Circuit-Laws-Work-Two-Source-v3",
+  "description": "Three branches meet at one junction. The left branch is a 9 volt source (E1) in series with a 1 kilohm resistor (R1). The middle branch is a 3 kilohm resistor (R2) down to ground. The right branch is a 5 volt source (E2) in series with a 1 kilohm resistor (R3). Working it out with Kirchhoff's two laws puts the junction at 6 volts. That makes R1 carry 3 milliamps toward the junction, R2 carry 2 milliamps to ground, and R3 carry 1 milliamp the wrong way, back into the 5 volt source, which is therefore being charged. The current entering the junction (3 mA) equals the current leaving it (2 mA plus 1 mA).",
+  "wheelLocked": false,
+  "activeTab": "t1",
+  "nextIndex": 2,
+  "tabs": [
+    {
+      "id": "t1",
+      "name": "How-Kirchhoffs-Circuit-Laws-Work-Two-Source-v3",
+      "instruments": {
+        "multimeter": {
+          "mode": "voltage",
+          "red": "bb2.a6",
+          "black": "bb2.a9"
+        }
+      },
+      "doc": {
+        "version": 15,
+        "boards": [
+          {
+            "id": "bb1",
+            "type": "rail-half",
+            "x": 0,
+            "y": 0,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb2",
+            "type": "pins-half",
+            "x": 0,
+            "y": 3.5,
+            "rot": 0,
+            "group": "g1"
+          },
+          {
+            "id": "bb3",
+            "type": "rail-half",
+            "x": 0,
+            "y": 17.52,
+            "rot": 0,
+            "group": "g1"
+          }
+        ],
+        "components": [
+          {
+            "id": "psu1",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 0,
+            "params": {
+              "volts": 9
+            }
+          },
+          {
+            "id": "psu2",
+            "kind": "psu",
+            "ref": "psu",
+            "x": 68,
+            "y": 12,
+            "params": {
+              "volts": 5
+            },
+            "name": "E2",
+            "description": "second source E2, 5 volts"
+          },
+          {
+            "id": "c1",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a1",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R1",
+            "description": "R1, 1 kilohm"
+          },
+          {
+            "id": "c2",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a6",
+            "params": {
+              "ohms": 3000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R2",
+            "description": "R2, 3 kilohms"
+          },
+          {
+            "id": "c3",
+            "kind": "discrete",
+            "ref": "resistor",
+            "board": "bb2",
+            "anchor": "a11",
+            "params": {
+              "ohms": 1000,
+              "rot": 0,
+              "end": null
+            },
+            "name": "R3",
+            "description": "R3, 1 kilohm"
+          }
+        ],
+        "wires": [
+          {
+            "id": "w1",
+            "from": "psu1.+",
+            "to": "bb1.+25",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 30,
+                "y": 4
+              }
+            ]
+          },
+          {
+            "id": "w2",
+            "from": "psu1.-",
+            "to": "bb1.-23",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 74,
+                "y": 4.34
+              },
+              {
+                "x": 29.33,
+                "y": 4.34
+              },
+              {
+                "x": 29.33,
+                "y": 1.92
+              },
+              {
+                "x": 28,
+                "y": 1.92
+              }
+            ]
+          },
+          {
+            "id": "w3",
+            "from": "bb1.+24",
+            "to": "bb3.+24",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 27.67,
+                "y": 1.25
+              },
+              {
+                "x": 27.67,
+                "y": 18.77
+              }
+            ]
+          },
+          {
+            "id": "w4",
+            "from": "bb3.-24",
+            "to": "bb1.-24",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 29.67,
+                "y": 19.77
+              },
+              {
+                "x": 29.67,
+                "y": 4.67
+              },
+              {
+                "x": 29,
+                "y": 4.67
+              }
+            ]
+          },
+          {
+            "id": "w5",
+            "from": "bb3.+1",
+            "to": "bb2.b1",
+            "color": "red",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 2,
+                "y": 15.01
+              }
+            ]
+          },
+          {
+            "id": "w6",
+            "from": "bb2.b4",
+            "to": "bb2.b6",
+            "color": "blue",
+            "layout": "routed"
+          },
+          {
+            "id": "w7",
+            "from": "bb2.d4",
+            "to": "bb2.d11",
+            "color": "blue",
+            "layout": "routed"
+          },
+          {
+            "id": "w8",
+            "from": "bb2.b14",
+            "to": "psu2.+",
+            "color": "yellow",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 14,
+                "y": 15.34
+              },
+              {
+                "x": 70,
+                "y": 15.34
+              }
+            ]
+          },
+          {
+            "id": "w9",
+            "from": "bb3.-7",
+            "to": "bb2.b9",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 8.67,
+                "y": 19.77
+              },
+              {
+                "x": 8.67,
+                "y": 15.01
+              }
+            ]
+          },
+          {
+            "id": "w10",
+            "from": "bb3.-23",
+            "to": "psu2.-",
+            "color": "black",
+            "layout": "routed",
+            "points": [
+              {
+                "x": 28,
+                "y": 19.1
+              },
+              {
+                "x": 29.33,
+                "y": 19.1
+              },
+              {
+                "x": 29.33,
+                "y": 16.36
+              },
+              {
+                "x": 73.67,
+                "y": 16.36
+              },
+              {
+                "x": 73.67,
+                "y": 16
+              }
+            ]
+          }
+        ],
+        "buses": [],
+        "netNames": [],
+        "annotations": [
+          {
+            "id": "an1",
+            "kind": "label",
+            "x": 0,
+            "y": -21.8,
+            "text": "Two-source circuit with three branches",
+            "anchor": "c1"
+          },
+          {
+            "id": "an2",
+            "kind": "label",
+            "x": 0,
+            "y": -20,
+            "text": "Three branches meet at one junction. The left branch is a 9 volt",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an3",
+            "kind": "label",
+            "x": 0,
+            "y": -18.2,
+            "text": "source (E1) in series with a 1 kilohm resistor (R1). The middle",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an4",
+            "kind": "label",
+            "x": 0,
+            "y": -16.4,
+            "text": "branch is a 3 kilohm resistor (R2) down to ground. The right",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an5",
+            "kind": "label",
+            "x": 0,
+            "y": -14.6,
+            "text": "branch is a 5 volt source (E2) in series with a 1 kilohm",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an6",
+            "kind": "label",
+            "x": 0,
+            "y": -12.8,
+            "text": "resistor (R3). Working it out with Kirchhoff's two laws puts the",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an7",
+            "kind": "label",
+            "x": 0,
+            "y": -11,
+            "text": "junction at 6 volts. That makes R1 carry 3 milliamps toward the",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an8",
+            "kind": "label",
+            "x": 0,
+            "y": -9.2,
+            "text": "junction, R2 carry 2 milliamps to ground, and R3 carry 1",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an9",
+            "kind": "label",
+            "x": 0,
+            "y": -7.4,
+            "text": "milliamp the wrong way, back into the 5 volt source, which is",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an10",
+            "kind": "label",
+            "x": 0,
+            "y": -5.6,
+            "text": "therefore being charged. The current entering the junction (3",
+            "color": "#808080",
+            "anchor": "c1"
+          },
+          {
+            "id": "an11",
+            "kind": "label",
+            "x": 0,
+            "y": -3.8,
+            "text": "mA) equals the current leaving it (2 mA plus 1 mA).",
+            "color": "#808080",
+            "anchor": "c1"
+          }
+        ],
+        "scopeChannels": [],
+        "signals": [],
+        "integrations": [],
+        "nextBoardId": 4,
+        "nextGroupId": 2,
+        "nextComponentId": 4,
+        "nextPsuId": 3,
+        "nextClockId": 1,
+        "nextWireId": 11,
+        "nextBusId": 1,
+        "nextAnnotationId": 12,
+        "nextScopeChannelId": 1,
+        "nextSignalId": 1,
+        "nextOutputId": 1,
+        "nextInputId": 1
+      }
+    }
+  ],
+  "connections": [],
+  "codegen": {},
+  "cpuBreakpoints": {},
+  "customChips": [],
+  "location": null
+}

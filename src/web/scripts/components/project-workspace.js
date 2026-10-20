@@ -1964,9 +1964,13 @@ export class ProjectWorkspace {
       state = { history: new HistoryStore(), camera: null };
       this.#state.set(id, state);
     }
-    this.#controller.loadDocument(findDesktop(this.#project, id).doc, {
+    const desktop = findDesktop(this.#project, id);
+    this.#controller.loadDocument(desktop.doc, {
       history: state.history,
     });
+    // A desktop that carries instruments opens them (a published circuit with
+    // its meter already connected). Runtime setup, never part of the document.
+    this.#controller.loadInstruments?.(desktop.instruments);
     if (state.camera) this.#setCamera?.(state.camera);
   }
 
